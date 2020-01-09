@@ -22,9 +22,11 @@ $  compile_options="/nodebug/optimize/prefix=all/warning=(disable=rightshiftovr)
 $endif
 $
 $write sys$output "Making Magick..."
+$call Make accelerate.c
 $call Make animate.c
 $call Make annotate.c
 $call Make artifact.c
+$call Make attribute.c
 $call Make blob.c
 $call Make cache.c
 $call Make cache-view.c
@@ -32,6 +34,7 @@ $call Make cipher.c
 $call Make client.c
 $call Make coder.c
 $call Make color.c
+$call Make colormap.c
 $call Make colorspace.c
 $call Make compare.c
 $call Make composite.c
@@ -47,12 +50,16 @@ $call Make draw.c
 $call Make effect.c
 $call Make enhance.c
 $call Make exception.c
+$call Make feature.c
+$call Make fourier.c
 $call Make fx.c
 $call Make gem.c
 $call Make geometry.c
 $call Make hashmap.c
+$call Make histogram.c
 $call Make identify.c
 $call Make image.c
+$call Make image-view.c
 $call Make layer.c
 $call Make list.c
 $call Make locale.c
@@ -65,9 +72,11 @@ $call Make mime.c
 $call Make module.c
 $call Make monitor.c
 $call Make montage.c
+$call Make morphology.c
 $call Make option.c
 $call Make paint.c
 $call Make pixel.c
+$call Make policy.c
 $call Make prepress.c
 $call Make property.c
 $call Make PreRvIcccm.c
@@ -107,7 +116,7 @@ $ call Make analyze.c
 $ set default [-.wand]
 $ call Make drawing-wand.c
 $ call Make pixel-wand.c
-$ call Make pixel-view.c
+$ call Make wand-view.c
 $ call Make conjure.c
 $ call Make convert.c
 $ call Make import.c
@@ -128,18 +137,18 @@ $ set default [-.magick]
 $ deass magick
 $ deass wand
 $library/create libMagick.olb -
-  animate, annotate, artifact, blob, cache, cache-view, cipher, client, coder, -
-  color, colorspace, compare, composite, compress, configure, -
-  constitute, decorate, delegate, deprecate, display, distort, draw, -
-  effect, enhance, exception, fx, gem, geometry, hashmap, identify, image, -
-  layer, list, locale, log, magic, magick, matrix, memory, mime, module, -
-  monitor, montage, option, paint, pixel, PreRvIcccm, profile, quantize, -
-  quantum,quantum-export,quantum-import,random, registry, resample, resize, -
-  resource, segment, semaphore, -
-  shear, signature, splay-tree, static, stream, string, thread, timer, token, -
-  transform, threshold, type, utility, version, vms, widget, xwindow, -
-	statistic, prepress, property, xml-tree, -
-	[-.filters]analyze,[-.wand]drawing-wand, pixel-wand, pixel-view, conjure, -
+  accelerate, animate, annotate, artifact, attribute, blob, cache, cache-view, -
+  cipher, client, coder, color, colormap, colorspace, compare, composite, -
+  compress, configure, constitute, decorate, delegate, deprecate, display, -
+  distort, draw, effect, enhance, exception, feature, fourier, fx, gem, -
+  geometry, hashmap, histogram, identify, image, image-view, layer, list, -
+  locale, log, magic, magick, matrix, memory, mime, module, monitor, montage, -
+  morphology, option, paint, pixel, PreRvIcccm, profile, quantize, quantum, -
+  quantum-export, quantum-import,random, registry, resample, resize, resource, -
+  segment, semaphore, shear, signature, splay-tree, static, stream, string, -
+  thread, timer, token, transform, threshold, type, utility, version, vms, -
+  widget, xwindow, statistic, policy, prepress, property, xml-tree, -
+	[-.filters]analyze,[-.wand]drawing-wand, pixel-wand, wand-view, conjure, -
   convert,import, mogrify, animate-wand, compare-wand, composite-wand, -
   display-wand,identify-wand,montage-wand
 $exit

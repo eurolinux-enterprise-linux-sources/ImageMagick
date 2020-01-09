@@ -1,12 +1,12 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
-  
+
   You may not use this file except in compliance with the License.
   obtain a copy of the License at
-  
+
     http://www.imagemagick.org/script/license.php
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,11 +27,11 @@ extern "C" {
 static inline ResampleFilter **DestroyResampleFilterThreadSet(
   ResampleFilter **filter)
 {
-  register long
+  register ssize_t
     i;
 
   assert(filter != (ResampleFilter **) NULL);
-  for (i=0; i < (long) GetOpenMPMaximumThreads(); i++)
+  for (i=0; i < (ssize_t) GetOpenMPMaximumThreads(); i++)
     if (filter[i] != (ResampleFilter *) NULL)
       filter[i]=DestroyResampleFilter(filter[i]);
   filter=(ResampleFilter **) RelinquishAlignedMemory(filter);
@@ -39,16 +39,16 @@ static inline ResampleFilter **DestroyResampleFilterThreadSet(
 }
 
 static inline ResampleFilter **AcquireResampleFilterThreadSet(
-  const Image *image,const MagickBooleanType interpolate,
-  ExceptionInfo *exception)
+  const Image *image,const VirtualPixelMethod method,
+  const MagickBooleanType interpolate,ExceptionInfo *exception)
 {
-  register long
+  register ssize_t
     i;
 
   ResampleFilter
     **filter;
 
-  unsigned long
+  size_t
     number_threads;
 
   number_threads=GetOpenMPMaximumThreads();
@@ -57,11 +57,13 @@ static inline ResampleFilter **AcquireResampleFilterThreadSet(
   if (filter == (ResampleFilter **) NULL)
     return((ResampleFilter **) NULL);
   (void) ResetMagickMemory(filter,0,number_threads*sizeof(*filter));
-  for (i=0; i < (long) number_threads; i++)
+  for (i=0; i < (ssize_t) number_threads; i++)
   {
     filter[i]=AcquireResampleFilter(image,exception);
     if (filter[i] == (ResampleFilter *) NULL)
       return(DestroyResampleFilterThreadSet(filter));
+    if (method != UndefinedVirtualPixelMethod)
+      (void) SetResampleFilterVirtualPixelMethod(filter[i],method);
     if (interpolate != MagickFalse)
       SetResampleFilter(filter[i],PointFilter,1.0);
   }

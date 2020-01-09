@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -50,12 +50,13 @@
 #include "magick/list.h"
 #include "magick/magick.h"
 #include "magick/memory_.h"
+#include "magick/module.h"
 #include "magick/monitor.h"
 #include "magick/monitor-private.h"
 #include "magick/quantum-private.h"
 #include "magick/static.h"
 #include "magick/string_.h"
-#include "magick/module.h"
+#include "magick/string-private.h"
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -125,9 +126,6 @@ static Image *ReadSCTImage(const ImageInfo *image_info,ExceptionInfo *exception)
   Image
     *image;
 
-  long
-    y;
-
   MagickBooleanType
     status;
 
@@ -141,7 +139,7 @@ static Image *ReadSCTImage(const ImageInfo *image_info,ExceptionInfo *exception)
   register IndexPacket
     *indexes;
 
-  register long
+  register ssize_t
     i,
     x;
 
@@ -149,12 +147,13 @@ static Image *ReadSCTImage(const ImageInfo *image_info,ExceptionInfo *exception)
     *q;
 
   ssize_t
-    count;
+    count,
+    y;
 
   unsigned char
     buffer[768];
 
-  unsigned long
+  size_t
     separations,
     separations_mask,
     units;
@@ -180,6 +179,7 @@ static Image *ReadSCTImage(const ImageInfo *image_info,ExceptionInfo *exception)
     Read control block.
   */
   count=ReadBlob(image,80,buffer);
+  (void) count;
   count=ReadBlob(image,2,(unsigned char *) magick);
   if ((LocaleNCompare((char *) magick,"CT",2) != 0) &&
       (LocaleNCompare((char *) magick,"LW",2) != 0) &&
@@ -204,14 +204,14 @@ static Image *ReadSCTImage(const ImageInfo *image_info,ExceptionInfo *exception)
   separations_mask=ReadBlobMSBShort(image);
   count=ReadBlob(image,14,buffer);
   buffer[14]='\0';
-  height=atof((char *) buffer);
+  height=InterpretLocaleValue((char *) buffer,(char **) NULL);
   count=ReadBlob(image,14,buffer);
-  width=atof((char *) buffer);
+  width=InterpretLocaleValue((char *) buffer,(char **) NULL);
   count=ReadBlob(image,12,buffer);
   buffer[12]='\0';
-  image->rows=1UL*atol((char *) buffer);
+  image->rows=StringToUnsignedLong((char *) buffer);
   count=ReadBlob(image,12,buffer);
-  image->columns=1UL*atol((char *) buffer);
+  image->columns=StringToUnsignedLong((char *) buffer);
   count=ReadBlob(image,200,buffer);
   count=ReadBlob(image,768,buffer);
   if (separations_mask == 0x0f)
@@ -226,15 +226,15 @@ static Image *ReadSCTImage(const ImageInfo *image_info,ExceptionInfo *exception)
   /*
     Convert SCT raster image to pixel packets.
   */
-  for (y=0; y < (long) image->rows; y++)
+  for (y=0; y < (ssize_t) image->rows; y++)
   {
-    for (i=0; i < (long) separations; i++)
+    for (i=0; i < (ssize_t) separations; i++)
     {
       q=GetAuthenticPixels(image,0,y,image->columns,1,exception);
       if (q == (PixelPacket *) NULL)
         break;
       indexes=GetAuthenticIndexQueue(image);
-      for (x=0; x < (long) image->columns; x++)
+      for (x=0; x < (ssize_t) image->columns; x++)
       {
         pixel=(Quantum) ScaleCharToQuantum((unsigned char) ReadBlobByte(image));
         if (image->colorspace == CMYKColorspace)
@@ -243,25 +243,25 @@ static Image *ReadSCTImage(const ImageInfo *image_info,ExceptionInfo *exception)
         {
           case 0:
           {
-            q->red=pixel;
-            q->green=pixel;
-            q->blue=pixel;
+            SetPixelRed(q,pixel);
+            SetPixelGreen(q,pixel);
+            SetPixelBlue(q,pixel);
             break;
           }
           case 1:
           {
-            q->green=pixel;
+            SetPixelGreen(q,pixel);
             break;
           }
           case 2:
           {
-            q->blue=pixel; break;
+            SetPixelBlue(q,pixel);
             break;
           }
           case 3: 
           {
             if (image->colorspace == CMYKColorspace)
-              indexes[x]=(IndexPacket) pixel;
+              SetPixelBlack(indexes+x,pixel);
             break;
           }
         }
@@ -272,7 +272,8 @@ static Image *ReadSCTImage(const ImageInfo *image_info,ExceptionInfo *exception)
       if ((image->columns % 2) != 0)
         (void) ReadBlobByte(image);  /* pad */
     }
-    status=SetImageProgress(image,LoadImageTag,y,image->rows);
+    status=SetImageProgress(image,LoadImageTag,(MagickOffsetType) y,
+      image->rows);
     if (status == MagickFalse)
       break;
   }
@@ -303,10 +304,10 @@ static Image *ReadSCTImage(const ImageInfo *image_info,ExceptionInfo *exception)
 %
 %  The format of the RegisterSCTImage method is:
 %
-%      unsigned long RegisterSCTImage(void)
+%      size_t RegisterSCTImage(void)
 %
 */
-ModuleExport unsigned long RegisterSCTImage(void)
+ModuleExport size_t RegisterSCTImage(void)
 {
   MagickInfo
     *entry;

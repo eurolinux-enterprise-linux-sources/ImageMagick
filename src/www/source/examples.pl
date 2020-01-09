@@ -67,6 +67,18 @@ $example->Annotate(text=>'Magick',geometry=>'+0+20',font=>'Generic.ttf',
   fill=>'gold',gravity=>'North',pointsize=>14);
 push(@$images,$example);
 
+print "Auto-gamma...\n";
+$example=$model->Clone();
+$example->Label('Auto Gamma');
+$example->AutoGamma();
+push(@$images,$example);
+
+print "Auto-level...\n";
+$example=$model->Clone();
+$example->Label('Auto Level');
+$example->AutoLevel();
+push(@$images,$example);
+
 print "Blur...\n";
 $example=$model->Clone();
 $example->Label('Blur');
@@ -89,6 +101,12 @@ print "Charcoal...\n";
 $example=$model->Clone();
 $example->Label('Charcoal');
 $example->Charcoal('0x1');
+push(@$images,$example);
+
+print "ColorMatrix...\n";
+$example=$model->Clone();
+$example->Label('ColorMatrix');
+$example->ColorMatrix([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0.5, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1]);
 push(@$images,$example);
 
 print "Composite...\n";
@@ -211,7 +229,7 @@ push(@$images,$gradient);
 print "Grayscale...\n";
 $example=$model->Clone();
 $example->Label('Grayscale');
-$example->Quantize(colorspace=>'gray');
+$example->Set(type=>'grayscale');
 push(@$images,$example);
 
 print "Implode...\n";
@@ -240,8 +258,15 @@ push(@$images,$example);
 $example=$model->Clone();
 
 print "Monochrome...\n";
+$example=$model->Clone();
 $example->Label('Monochrome');
 $example->Quantize(colorspace=>'gray',colors=>2,dither=>'false');
+push(@$images,$example);
+
+print "Morphology...\n";
+$example=$model->Clone();
+$example->Label('Morphology');
+$example->Morphology(method=>'Dilate',kernel=>'Diamond',iterations=>3);
 push(@$images,$example);
 
 print "Motion Blur...\n";
@@ -298,12 +323,6 @@ print "Raise...\n";
 $example=$model->Clone();
 $example->Label('Raise');
 $example->Raise('10x10');
-push(@$images,$example);
-
-print "Recolor...\n";
-$example=$model->Clone();
-$example->Label('Recolor');
-$example->Recolor([1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0.5, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1]);
 push(@$images,$example);
 
 print "Reduce Noise...\n";

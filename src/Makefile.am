@@ -1,4 +1,4 @@
-#  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+#  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
 #  dedicated to making software imaging solutions freely available.
 #
 #  You may not use this file except in compliance with the License.  You may
@@ -17,7 +17,7 @@
 #  Top-Level Makefile for building ImageMagick.
 #
 
-AUTOMAKE_OPTIONS = 1.11 subdir-objects parallel-tests color-tests dist-zip dist-bzip2 dist-lzma foreign
+AUTOMAKE_OPTIONS = 1.11 subdir-objects parallel-tests color-tests dist-zip dist-bzip2 dist-xz foreign
 
 topincludedir = @includedir@/ImageMagick
 
@@ -25,13 +25,15 @@ AM_CPPFLAGS = -I$(top_builddir) -I$(top_srcdir)
 
 ACLOCAL_AMFLAGS = -I m4
 
-MODULECOMMONFLAGS = -no-undefined -export-symbols-regex ".*" -module -avoid-version
+MODULECOMMONFLAGS = -no-undefined -export-symbols-regex ".*" -shared -module -avoid-version
 
 # Options to pass when running configure in the distcheck target.
 #
 # We want to preserve user-provided option variables so the same
 # compiler, headers, and libraries are used as for a normal build.
 DISTCHECK_CONFIGURE_FLAGS=$(DISTCHECK_CONFIG_FLAGS)
+
+DISTCLEANFILES = _configs.sed magick/magick-config.h
 
 ## Make sure these will be cleaned even when they're not built by default.
 CLEANFILES = \
@@ -66,13 +68,14 @@ endif
 
 # Environment parameters to be used during tests
 TESTS_ENVIRONMENT = \
-  COMPARE="$(MEMCHECK) @abs_top_builddir@/utilities/compare" \
-  COMPOSITE="$(MEMCHECK) @abs_top_builddir@/utilities/composite" \
-  CONJURE="$(MEMCHECK) @abs_top_builddir@/utilities/conjure" \
-  CONVERT="$(MEMCHECK) @abs_top_builddir@/utilities/convert" \
-  DISPLAY="$(MEMCHECK) @abs_top_builddir@/utilities/display" \
-  MONTAGE="$(MEMCHECK) @abs_top_builddir@/utilities/montage" \
-  VALIDATE="$(MEMCHECK) @abs_top_builddir@/tests/validate" \
+	COMPARE="$(MEMCHECK) @abs_top_builddir@/utilities/compare" \
+	COMPOSITE="$(MEMCHECK) @abs_top_builddir@/utilities/composite" \
+	CONJURE="$(MEMCHECK) @abs_top_builddir@/utilities/conjure" \
+	CONVERT="$(MEMCHECK) @abs_top_builddir@/utilities/convert" \
+	DISPLAY="$(MEMCHECK) @abs_top_builddir@/utilities/display" \
+	IDENTIFY="$(MEMCHECK) @abs_top_builddir@/utilities/identify" \
+	MONTAGE="$(MEMCHECK) @abs_top_builddir@/utilities/montage" \
+	VALIDATE="$(MEMCHECK) @abs_top_builddir@/tests/validate" \
 	LD_LIBRARY_PATH="@abs_top_builddir@/magick/.libs:${LD_LIBRARY_PATH}" \
 	MAGICK_CODER_MODULE_PATH='@MAGICK_CODER_MODULE_PATH@' \
 	MAGICK_CONFIGURE_PATH='@MAGICK_CONFIGURE_BUILD_PATH@@DIRSEP@@MAGICK_CONFIGURE_SRC_PATH@' \
@@ -169,14 +172,17 @@ man_MANS = \
 	$(UTILITIES_MANS)
 
 # Architecture independent data files installed in the package's data directory
-docdir = $(SHARE_PATH)
+docdir = $(DOCUMENTATION_PATH)
 doc_DATA = \
 	LICENSE \
 	ChangeLog \
 	NEWS.txt
 
 if MAINTAINER_MODE
-MAINTAINER_TARGETS = magick-version
+MAINTAINER_TARGETS = \
+	magick-version \
+  ImageMagick.spec \
+  $(PERLMAGICK_MAINTAINER_TARGETS)
 endif
 
 all-local: $(MAGICKPP_LOCAL_TARGETS) $(PERLMAGICK_ALL_LOCAL_TARGETS) $(MAINTAINER_TARGETS)
@@ -195,15 +201,23 @@ maintainer-clean-local: $(PERLMAGICK_MAINTAINER_CLEAN_LOCAL_TARGETS)
 
 check-local: $(PERLMAGICK_CHECK_LOCAL_TARGETS)
 
+# drd: valgrind's newer thread error detector
 drd:
-	$(MAKE) MEMCHECK='valgrind --tool=drd --check-stack-var=yes --var-info=yes --quiet $(VALGRIND_EXTRA_OPTS)' check
+	$(MAKE) MEMCHECK='valgrind --tool=drd --check-stack-var=yes --var-info=yes \
+	  --quiet $(VALGRIND_EXTRA_OPTS)' check
 
+# helgrind: valgrind's older thread error detector
 helgrind:
-	$(MAKE) MEMCHECK='valgrind --tool=helgrind --quiet $(VALGRIND_EXTRA_OPTS)' check
+	$(MAKE) MEMCHECK='valgrind --tool=helgrind --error-exitcode=2 --quiet \
+	$(VALGRIND_EXTRA_OPTS)' check
 
+# memcheck: valgrind's memory access checker
 memcheck:
-	$(MAKE) MEMCHECK='valgrind --tool=memcheck --leak-check=full --num-callers=12 --quiet $(VALGRIND_EXTRA_OPTS)' check
+	$(MAKE) MEMCHECK='valgrind --tool=memcheck --leak-check=full --read-var-info=yes \
+	--error-exitcode=2 --track-origins=yes --num-callers=12 \
+	--quiet $(VALGRIND_EXTRA_OPTS)' check
 
+# ptrcheck: valgrind's experimental pointer checking tool.
 ptrcheck:
 	$(MAKE) MEMCHECK='valgrind --tool=exp-ptrcheck --quiet $(VALGRIND_EXTRA_OPTS)' check
 
@@ -227,7 +241,7 @@ dist-hook:
 
 # Install HTML files
 pkgdocdir = $(DOCUMENTATION_PATH)
-DOCDIRS = images www www/api www/api/MagickCore www/api/MagickWand www/Magick++
+DOCDIRS = images images/patterns www www/api www/source www/api/MagickCore www/api/MagickWand www/Magick++
 HTML_INSTALL_DATA_TARGETS = install-data-html
 install-data-html:
 	$(mkinstalldirs) $(DESTDIR)$(pkgdocdir)
@@ -264,7 +278,7 @@ magick-version: magick/version.h
 
 ${srcdir}/configure: ${srcdir}/version.sh
 
-# Automatically reconfigure libtool
+# Automagically reconfigure libtool
 LIBTOOL_DEPS = @LIBTOOL_DEPS@
 libtool: $(LIBTOOL_DEPS)
 	$(SHELL) ./config.status --recheck
@@ -278,64 +292,63 @@ html:
 # Build Windows source Zip and 7Zip balls
 #
 if ZIP_DELEGATE
-DIST_WINDOWS_SRC_ZIP=$(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION)-windows.zip
+DIST_WINDOWS_SRC_ZIP=$(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM)-windows.zip
 else
 DIST_WINDOWS_SRC_ZIP=
 endif
 if P7ZIP_DELEGATE
-DIST_WINDOWS_SRC_7ZIP=$(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION)-windows.7z
+DIST_WINDOWS_SRC_7ZIP=$(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM)-windows.7z
 else
 DIST_WINDOWS_SRC_7ZIP=
 endif
 $(DIST_WINDOWS_SRC_ZIP) $(DIST_WINDOWS_SRC_7ZIP) windows-dist:
-	if test -d $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION) ; then \
-	  chmod -R u+w $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION) ; \
-	  rm -rf $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION) ; \
+	if test -d $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM) ; then \
+	  chmod -R u+w $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM) ; \
+	  rm -rf $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM) ; \
 	fi
+  svn export https://subversion.imagemagick.org/subversion/ImageMagick-Windows/trunk $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM)
 if ZIP_DELEGATE
 	rm -f $(DIST_WINDOWS_SRC_ZIP)
-	$(ZIP) -r -9 -q  $(DIST_WINDOWS_SRC_ZIP) $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION)
+	$(ZIP) -r -9 -q  $(DIST_WINDOWS_SRC_ZIP) $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM)
 endif # ZIP_DELEGATE
 if P7ZIP_DELEGATE
 	rm -f $(DIST_WINDOWS_SRC_7ZIP)
-	$(P7ZIP) a -t7z -mx=9 $(DIST_WINDOWS_SRC_7ZIP) $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION)
+	$(P7ZIP) a -t7z -mx=9 $(DIST_WINDOWS_SRC_7ZIP) $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM)
 	chmod 644 $(DIST_WINDOWS_SRC_7ZIP)
 endif # P7ZIP_DELEGATE
-	rm -rf $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION)
+	rm -rf $(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM)
 
 #
 # RPM build support
 #
 if RPM_DELEGATE
 
-DIST_ARCHIVE_SRPM=$(distdir)-$(PACKAGE_RELEASE).src.rpm
+DIST_ARCHIVE_SRPM=$(distdir)-1.src.rpm
 .PHONY: srpm
-$(DIST_ARCHIVE_SRPM) srpm: dist-bzip2
+$(DIST_ARCHIVE_SRPM) srpm: dist
 	rm -f $(DIST_ARCHIVE_SRPM)
 	$(RPM) --define="_sourcedir `pwd`" --define="_srcrpmdir `pwd`" --nodeps --bs ImageMagick.spec
 	@echo ==============================================================
 	@echo $(DIST_ARCHIVE_SRPM) is ready for distribution.
 	@echo ==============================================================
 
-RPMDIR=redhat
-RPMARCH=i386
+RPMDIR=rpmbuild
+RPMARCH=$(MAGICK_TARGET_CPU)
 
 DIST_ARCHIVE_RPM= \
-	$(RPMDIR)/$(RPMARCH)/$(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION)-$(PACKAGE_RELEASE).$(RPMARCH).rpm \
-	$(RPMDIR)/$(RPMARCH)/$(PACKAGE_NAME)-c++-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION)-$(PACKAGE_RELEASE).$(RPMARCH).rpm \
-	$(RPMDIR)/$(RPMARCH)/$(PACKAGE_NAME)-c++-devel-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION)-$(PACKAGE_RELEASE).$(RPMARCH).rpm \
-	$(RPMDIR)/$(RPMARCH)/$(PACKAGE_NAME)-devel-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION)-$(PACKAGE_RELEASE).$(RPMARCH).rpm \
-	$(RPMDIR)/$(RPMARCH)/$(PACKAGE_NAME)-perl-$(PACKAGE_VERSION)$(PACKAGE_LIB_SUBVERSION)-$(PACKAGE_RELEASE).$(RPMARCH).rpm
+	$(RPMDIR)/$(RPMARCH)/$(PACKAGE_NAME)-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM)-$(PACKAGE_RELEASE).$(RPMARCH).rpm \
+	$(RPMDIR)/$(RPMARCH)/$(PACKAGE_NAME)-c++-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM)-$(PACKAGE_RELEASE).$(RPMARCH).rpm \
+	$(RPMDIR)/$(RPMARCH)/$(PACKAGE_NAME)-c++-devel-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM)-$(PACKAGE_RELEASE).$(RPMARCH).rpm \
+	$(RPMDIR)/$(RPMARCH)/$(PACKAGE_NAME)-devel-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM)-$(PACKAGE_RELEASE).$(RPMARCH).rpm \
+	$(RPMDIR)/$(RPMARCH)/$(PACKAGE_NAME)-perl-$(PACKAGE_VERSION)$(PACKAGE_VERSION_ADDENDUM)-$(PACKAGE_RELEASE).$(RPMARCH).rpm
 
 .PHONY: rpm
-rpm:
+rpm:	dist
 	rm -rf $(RPMDIR)
-	mkdir $(RPMDIR)
-	mkdir $(RPMDIR)/BUILD
-	mkdir $(RPMDIR)/RPMS
-	$(MAKE) distcheck
+	$(MKDIR_P) $(RPMDIR)
+	$(MKDIR_P) $(RPMDIR)/BUILD
+	$(MKDIR_P) $(RPMDIR)/RPMS
 	$(RPM) --define="_sourcedir `pwd`" --define="_rpmdir `pwd`/$(RPMDIR)/RPMS" --define="_builddir `pwd`/$(RPMDIR)/BUILD" --nodeps -bb ImageMagick.spec
-	rm -rf rpmbuild
 	@echo ==============================================================
 	@echo $(DIST_ARCHIVE_RPM) is ready for distribution.
 	@echo ==============================================================

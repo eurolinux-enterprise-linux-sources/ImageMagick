@@ -17,7 +17,7 @@
 %                               December 2003                                 %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -34,7 +34,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %  Use the compare program to mathematically and visually annotate the
-%  difference between an image and its reconstruction. 
+%  difference between an image and its reconstruction.
 %
 */
 
@@ -44,6 +44,7 @@
 #include "wand/studio.h"
 #include "wand/MagickWand.h"
 #include "wand/mogrify-private.h"
+#include "magick/string-private.h"
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -109,7 +110,7 @@ static MagickBooleanType CompareUsage(void)
       "-density geometry    horizontal and vertical density of the image",
       "-depth value         image depth",
       "-dissimilarity-threshold value",
-      "                     maximum RMSE for (sub)image match",
+      "                     maximum distortion for (sub)image match",
       "-encipher filename   convert plain pixels to cipher pixels",
       "-extract geometry    extract area from image",
       "-format \"string\"     output formatted image characteristics",
@@ -136,6 +137,7 @@ static MagickBooleanType CompareUsage(void)
       "-set attribute value set an image attribute",
       "-quality value       JPEG/MIFF/PNG compression level",
       "-size geometry       width and height of image",
+      "-subimage-search     search for subimage",
       "-transparent-color color",
       "                     transparent color",
       "-type type           image type",
@@ -146,8 +148,9 @@ static MagickBooleanType CompareUsage(void)
       (char *) NULL
     };
 
-  (void) printf("Version: %s\n",GetMagickVersion((unsigned long *) NULL));
-  (void) printf("Copyright: %s\n\n",GetMagickCopyright());
+  (void) printf("Version: %s\n",GetMagickVersion((size_t *) NULL));
+  (void) printf("Copyright: %s\n",GetMagickCopyright());
+  (void) printf("Features: %s\n\n",GetMagickFeatures());
   (void) printf("Usage: %s [options ...] image reconstruct difference\n",
     GetClientName());
   (void) printf("\nImage Settings:\n");
@@ -171,7 +174,7 @@ static MagickBooleanType CompareUsage(void)
 WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
   int argc,char **argv,char **metadata,ExceptionInfo *exception)
 {
-#define DefaultDissimilarityThreshold  0.2
+#define DefaultDissimilarityThreshold  0.31830988618379067154
 #define DestroyCompare() \
 { \
   if (similarity_image != (Image *) NULL) \
@@ -179,7 +182,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
   if (difference_image != (Image *) NULL) \
     difference_image=DestroyImageList(difference_image); \
   DestroyImageStack(); \
-  for (i=0; i < (long) argc; i++) \
+  for (i=0; i < (ssize_t) argc; i++) \
     argv[i]=DestroyString(argv[i]); \
   argv=(char **) RelinquishMagickMemory(argv); \
 }
@@ -223,13 +226,11 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
   ImageStack
     image_stack[MaxImageStackDepth+1];
 
-  long
-    j,
-    k;
-
   MagickBooleanType
     fire,
-    pend;
+    pend,
+    respect_parenthesis,
+    subimage_search;
 
   MagickStatusType
     status;
@@ -240,8 +241,12 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
   RectangleInfo
     offset;
 
-  register long
+  register ssize_t
     i;
+
+  ssize_t
+    j,
+    k;
 
   /*
     Set defaults.
@@ -257,18 +262,18 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
       if ((LocaleCompare("version",option+1) == 0) ||
           (LocaleCompare("-version",option+1) == 0))
         {
-          (void) fprintf(stdout,"Version: %s\n",
-            GetMagickVersion((unsigned long *) NULL));
-          (void) fprintf(stdout,"Copyright: %s\n\n",GetMagickCopyright());
+          (void) FormatLocaleFile(stdout,"Version: %s\n",
+            GetMagickVersion((size_t *) NULL));
+          (void) FormatLocaleFile(stdout,"Copyright: %s\n",
+            GetMagickCopyright());
+          (void) FormatLocaleFile(stdout,"Features: %s\n\n",
+            GetMagickFeatures());
           return(MagickFalse);
         }
     }
   if (argc < 3)
-    {
-      (void) CompareUsage();
-      return(MagickTrue);
-    }
-  channels=AllChannels;
+    return(CompareUsage());
+  channels=CompositeChannels;
   difference_image=NewImageList();
   similarity_image=NewImageList();
   dissimilarity_threshold=DefaultDissimilarityThreshold;
@@ -281,7 +286,9 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
   option=(char *) NULL;
   pend=MagickFalse;
   reconstruct_image=NewImageList();
+  respect_parenthesis=MagickFalse;
   status=MagickTrue;
+  subimage_search=MagickFalse;
   /*
     Compare an image.
   */
@@ -290,7 +297,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
   if (status == MagickFalse)
     ThrowCompareException(ResourceLimitError,"MemoryAllocationFailed",
       GetExceptionMessage(errno));
-  for (i=1; i < (long) (argc-1); i++)
+  for (i=1; i < (ssize_t) (argc-1); i++)
   {
     option=argv[i];
     if (LocaleCompare(option,"(") == 0)
@@ -310,7 +317,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
         PopImageStack();
         continue;
       }
-    if (IsMagickOption(option) == MagickFalse)
+    if (IsCommandOption(option) == MagickFalse)
       {
         Image
           *images;
@@ -320,7 +327,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
         */
         FireImageStack(MagickFalse,MagickFalse,pend);
         filename=argv[i];
-        if ((LocaleCompare(filename,"--") == 0) && (i < (argc-1)))
+        if ((LocaleCompare(filename,"--") == 0) && (i < (ssize_t) (argc-1)))
           filename=argv[++i];
         (void) CopyMagickString(image_info->filename,filename,MaxTextExtent);
         images=ReadImages(image_info,exception);
@@ -338,15 +345,15 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
       {
         if (LocaleCompare("alpha",option+1) == 0)
           {
-            long
+            ssize_t
               type;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
-            type=ParseMagickOption(MagickAlphaOptions,MagickFalse,argv[i]);
+            type=ParseCommandOption(MagickAlphaOptions,MagickFalse,argv[i]);
             if (type < 0)
               ThrowCompareException(OptionError,"UnrecognizedAlphaChannelType",
                 argv[i]);
@@ -357,7 +364,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             break;
           }
@@ -370,7 +377,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowCompareInvalidArgumentException(option,argv[i]);
@@ -378,13 +385,13 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("channel",option+1) == 0)
           {
-            long
+            ssize_t
               channel;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
             channel=ParseChannelOption(argv[i]);
             if (channel < 0)
@@ -395,15 +402,15 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("colorspace",option+1) == 0)
           {
-            long
+            ssize_t
               colorspace;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
-            colorspace=ParseMagickOption(MagickColorspaceOptions,MagickFalse,
+            colorspace=ParseCommandOption(MagickColorspaceOptions,MagickFalse,
               argv[i]);
             if (colorspace < 0)
               ThrowCompareException(OptionError,"UnrecognizedColorspace",
@@ -412,15 +419,15 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("compose",option+1) == 0)
           {
-            long
+            ssize_t
               compose;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
-            compose=ParseMagickOption(MagickComposeOptions,MagickFalse,
+            compose=ParseCommandOption(MagickComposeOptions,MagickFalse,
               argv[i]);
             if (compose < 0)
               ThrowCompareException(OptionError,"UnrecognizedComposeOperator",
@@ -429,21 +436,23 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("compress",option+1) == 0)
           {
-            long
+            ssize_t
               compress;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
-            compress=ParseMagickOption(MagickCompressOptions,MagickFalse,
+            compress=ParseCommandOption(MagickCompressOptions,MagickFalse,
               argv[i]);
             if (compress < 0)
               ThrowCompareException(OptionError,"UnrecognizedImageCompression",
                 argv[i]);
             break;
           }
+        if (LocaleCompare("concurrent",option+1) == 0)
+          break;
         ThrowCompareException(OptionError,"UnrecognizedOption",option)
       }
       case 'd':
@@ -456,7 +465,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             event_mask=SetLogEventMask(argv[i]);
             if (event_mask == UndefinedEvents)
@@ -469,14 +478,14 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
             break;
           }
         if (LocaleCompare("define",option+1) == 0)
           {
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (*option == '+')
               {
@@ -495,7 +504,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowCompareInvalidArgumentException(option,argv[i]);
@@ -506,7 +515,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowCompareInvalidArgumentException(option,argv[i]);
@@ -517,14 +526,26 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowCompareInvalidArgumentException(option,argv[i]);
             if (*option == '+')
               dissimilarity_threshold=DefaultDissimilarityThreshold;
             else
-              dissimilarity_threshold=atof(argv[i]);
+              dissimilarity_threshold=InterpretLocaleValue(argv[i],
+                (char **) NULL);
+            break;
+          }
+        if (LocaleCompare("duration",option+1) == 0)
+          {
+            if (*option == '+')
+              break;
+            i++;
+            if (i == (ssize_t) (argc-1))
+              ThrowCompareException(OptionError,"MissingArgument",option);
+            if (IsGeometry(argv[i]) == MagickFalse)
+              ThrowCompareInvalidArgumentException(option,argv[i]);
             break;
           }
         ThrowCompareException(OptionError,"UnrecognizedOption",option)
@@ -536,7 +557,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
             break;
           }
@@ -545,7 +566,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowCompareInvalidArgumentException(option,argv[i]);
@@ -560,7 +581,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             format=argv[i];
             break;
@@ -570,7 +591,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowCompareInvalidArgumentException(option,argv[i]);
@@ -588,7 +609,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
             break;
           }
@@ -600,15 +621,15 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
           break;
         if (LocaleCompare("interlace",option+1) == 0)
           {
-            long
+            ssize_t
               interlace;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
-            interlace=ParseMagickOption(MagickInterlaceOptions,MagickFalse,
+            interlace=ParseCommandOption(MagickInterlaceOptions,MagickFalse,
               argv[i]);
             if (interlace < 0)
               ThrowCompareException(OptionError,"UnrecognizedInterlaceType",
@@ -627,51 +648,52 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             double
               value;
 
-            long
+            ssize_t
               resource;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
-            resource=ParseMagickOption(MagickResourceOptions,MagickFalse,
+            resource=ParseCommandOption(MagickResourceOptions,MagickFalse,
               argv[i]);
             if (resource < 0)
               ThrowCompareException(OptionError,"UnrecognizedResourceType",
                 argv[i]);
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
-            value=strtod(argv[i],&p);
+            value=InterpretLocaleValue(argv[i],&p);
+            (void) value;
             if ((p == argv[i]) && (LocaleCompare("unlimited",argv[i]) != 0))
               ThrowCompareInvalidArgumentException(option,argv[i]);
             break;
           }
         if (LocaleCompare("list",option+1) == 0)
           {
-            long
+            ssize_t
               list;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
-            list=ParseMagickOption(MagickListOptions,MagickFalse,argv[i]);
+            list=ParseCommandOption(MagickListOptions,MagickFalse,argv[i]);
             if (list < 0)
               ThrowCompareException(OptionError,"UnrecognizedListType",argv[i]);
-            (void) MogrifyImageInfo(image_info,(int) (i-j+1),(const char **)
+            status=MogrifyImageInfo(image_info,(int) (i-j+1),(const char **)
               argv+j,exception);
             DestroyCompare();
-            return(MagickTrue);
+            return(status != 0 ? MagickFalse : MagickTrue);
           }
         if (LocaleCompare("log",option+1) == 0)
           {
             if (*option == '+')
               break;
             i++;
-            if ((i == (long) argc) || (strchr(argv[i],'%') == (char *) NULL))
+            if ((i == (ssize_t) argc) || (strchr(argv[i],'%') == (char *) NULL))
               ThrowCompareException(OptionError,"MissingArgument",option);
             break;
           }
@@ -680,7 +702,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
             break;
           }
@@ -692,15 +714,15 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
           break;
         if (LocaleCompare("metric",option+1) == 0)
           {
-            long
+            ssize_t
               type;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
-            type=ParseMagickOption(MagickMetricOptions,MagickTrue,argv[i]);
+            type=ParseCommandOption(MagickMetricOptions,MagickTrue,argv[i]);
             if (type < 0)
               ThrowCompareException(OptionError,"UnrecognizedMetricType",
                 argv[i]);
@@ -718,14 +740,14 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             break;
           }
         if (LocaleCompare("profile",option+1) == 0)
           {
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
             break;
           }
@@ -738,7 +760,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowCompareInvalidArgumentException(option,argv[i]);
@@ -746,15 +768,15 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("quantize",option+1) == 0)
           {
-            long
+            ssize_t
               colorspace;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
-            colorspace=ParseMagickOption(MagickColorspaceOptions,
+            colorspace=ParseCommandOption(MagickColorspaceOptions,
               MagickFalse,argv[i]);
             if (colorspace < 0)
               ThrowCompareException(OptionError,"UnrecognizedColorspace",
@@ -783,7 +805,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowCompareInvalidArgumentException(option,argv[i]);
@@ -794,7 +816,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowCompareInvalidArgumentException(option,argv[i]);
@@ -803,12 +825,12 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
         if (LocaleCompare("set",option+1) == 0)
           {
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             break;
           }
@@ -817,36 +839,50 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowCompareInvalidArgumentException(option,argv[i]);
             break;
           }
+        if (LocaleCompare("subimage-search",option+1) == 0)
+          {
+            if (*option == '+')
+              {
+                subimage_search=MagickFalse;
+                break;
+              }
+            subimage_search=MagickTrue;
+            break;
+          }
+        if (LocaleCompare("synchronize",option+1) == 0)
+          break;
         ThrowCompareException(OptionError,"UnrecognizedOption",option)
       }
       case 't':
       {
+        if (LocaleCompare("taint",option+1) == 0)
+          break;
         if (LocaleCompare("transparent-color",option+1) == 0)
           {
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
             break;
           }
         if (LocaleCompare("type",option+1) == 0)
           {
-            long
+            ssize_t
               type;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowCompareException(OptionError,"MissingArgument",option);
-            type=ParseMagickOption(MagickTypeOptions,MagickFalse,argv[i]);
+            type=ParseCommandOption(MagickTypeOptions,MagickFalse,argv[i]);
             if (type < 0)
               ThrowCompareException(OptionError,"UnrecognizedImageType",
                 argv[i]);
@@ -861,22 +897,25 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
         if ((LocaleCompare("version",option+1) == 0) ||
             (LocaleCompare("-version",option+1) == 0))
           {
-            (void) fprintf(stdout,"Version: %s\n",
-              GetMagickVersion((unsigned long *) NULL));
-            (void) fprintf(stdout,"Copyright: %s\n\n",GetMagickCopyright());
+            (void) FormatLocaleFile(stdout,"Version: %s\n",
+              GetMagickVersion((size_t *) NULL));
+            (void) FormatLocaleFile(stdout,"Copyright: %s\n",
+              GetMagickCopyright());
+            (void) FormatLocaleFile(stdout,"Features: %s\n\n",
+              GetMagickFeatures());
             break;
           }
         if (LocaleCompare("virtual-pixel",option+1) == 0)
           {
-            long
+            ssize_t
               method;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowCompareException(OptionError,"MissingArgument",option);
-            method=ParseMagickOption(MagickVirtualPixelOptions,MagickFalse,
+            method=ParseCommandOption(MagickVirtualPixelOptions,MagickFalse,
               argv[i]);
             if (method < 0)
               ThrowCompareException(OptionError,
@@ -890,30 +929,38 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
       default:
         ThrowCompareException(OptionError,"UnrecognizedOption",option)
     }
-    fire=ParseMagickOption(MagickImageListOptions,MagickFalse,option+1) < 0 ?
-      MagickFalse : MagickTrue;
+    fire=(GetCommandOptionFlags(MagickCommandOptions,MagickFalse,option) &
+      FireOptionFlag) == 0 ?  MagickFalse : MagickTrue;
     if (fire != MagickFalse)
       FireImageStack(MagickTrue,MagickTrue,MagickTrue);
   }
   if (k != 0)
     ThrowCompareException(OptionError,"UnbalancedParenthesis",argv[i]);
-  if (i-- != (long) (argc-1))
+  if (i-- != (ssize_t) (argc-1))
     ThrowCompareException(OptionError,"MissingAnImageFilename",argv[i]);
   if ((image == (Image *) NULL) || (GetImageListLength(image) < 2))
     ThrowCompareException(OptionError,"MissingAnImageFilename",argv[i]);
   FinalizeImageSettings(image_info,image,MagickTrue);
+  if ((image == (Image *) NULL) || (GetImageListLength(image) < 2))
+    ThrowCompareException(OptionError,"MissingAnImageFilename",argv[i]);
   image=GetImageFromList(image,0);
   reconstruct_image=GetImageFromList(image,1);
-  similarity_image=SimilarityImage(image,reconstruct_image,&offset,
-    &similarity_metric,exception);
-  if (similarity_metric > dissimilarity_threshold)
-    ThrowCompareException(ImageError,"ImagesTooDissimilar",image->filename);
+  if (subimage_search != MagickFalse)
+    {
+      similarity_image=SimilarityImage(image,reconstruct_image,&offset,
+        &similarity_metric,exception);
+      if (similarity_metric > dissimilarity_threshold)
+        ThrowCompareException(ImageError,"ImagesTooDissimilar",image->filename);
+    }
   if ((reconstruct_image->columns == image->columns) &&
       (reconstruct_image->rows == image->rows))
     difference_image=CompareImageChannels(image,reconstruct_image,channels,
       metric,&distortion,exception);
   else
-    if (similarity_image != (Image *) NULL)
+    if (similarity_image == (Image *) NULL)
+      ThrowCompareException(OptionError,"ImageWidthsOrHeightsDiffer",
+        image->filename)
+    else
       {
         Image
           *composite_image;
@@ -938,9 +985,7 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
               }
             composite_image=DestroyImage(composite_image);
           }
-        if (difference_image == (Image *) NULL)
-          similarity_image=DestroyImage(similarity_image);
-        else
+        if (difference_image != (Image *) NULL)
           {
             AppendImageToList(&difference_image,similarity_image);
             similarity_image=(Image *) NULL;
@@ -959,41 +1004,43 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
         {
           switch (metric)
           {
+            case FuzzErrorMetric:
             case MeanAbsoluteErrorMetric:
             case MeanSquaredErrorMetric:
             case RootMeanSquaredErrorMetric:
             case PeakAbsoluteErrorMetric:
             {
-              (void) fprintf(stderr,"%g (%g)",QuantumRange*distortion,(double)
-                distortion);
+              (void) FormatLocaleFile(stderr,"%g (%g)",QuantumRange*distortion,
+                (double) distortion);
               if ((reconstruct_image->columns != image->columns) ||
                   (reconstruct_image->rows != image->rows))
-                (void) fprintf(stderr," @ %ld,%ld",difference_image->page.x,
-                  difference_image->page.y);
-              (void) fprintf(stderr,"\n");
+                (void) FormatLocaleFile(stderr," @ %.20g,%.20g",(double)
+                  difference_image->page.x,(double) difference_image->page.y);
+              (void) FormatLocaleFile(stderr,"\n");
               break;
             }
             case AbsoluteErrorMetric:
+            case NormalizedCrossCorrelationErrorMetric:
             case PeakSignalToNoiseRatioMetric:
             {
-              (void) fprintf(stderr,"%g",distortion);
+              (void) FormatLocaleFile(stderr,"%g",distortion);
               if ((reconstruct_image->columns != image->columns) ||
                   (reconstruct_image->rows != image->rows))
-                (void) fprintf(stderr," @ %ld,%ld",difference_image->page.x,
-                  difference_image->page.y);
-              (void) fprintf(stderr,"\n");
+                (void) FormatLocaleFile(stderr," @ %.20g,%.20g",(double)
+                  difference_image->page.x,(double) difference_image->page.y);
+              (void) FormatLocaleFile(stderr,"\n");
               break;
             }
             case MeanErrorPerPixelMetric:
             {
-              (void) fprintf(stderr,"%g (%g, %g)",distortion,
+              (void) FormatLocaleFile(stderr,"%g (%g, %g)",distortion,
                 image->error.normalized_mean_error,
                 image->error.normalized_maximum_error);
               if ((reconstruct_image->columns != image->columns) ||
                   (reconstruct_image->rows != image->rows))
-                (void) fprintf(stderr," @ %ld,%ld",difference_image->page.x,
-                  difference_image->page.y);
-              (void) fprintf(stderr,"\n");
+                (void) FormatLocaleFile(stderr," @ %.20g,%.20g",(double)
+                  difference_image->page.x,(double) difference_image->page.y);
+              (void) FormatLocaleFile(stderr,"\n");
               break;
             }
             case UndefinedMetric:
@@ -1007,15 +1054,16 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
 
           channel_distortion=GetImageChannelDistortions(image,reconstruct_image,
             metric,&image->exception);
-          (void) fprintf(stderr,"Image: %s\n",image->filename);
+          (void) FormatLocaleFile(stderr,"Image: %s\n",image->filename);
           if ((reconstruct_image->columns != image->columns) ||
               (reconstruct_image->rows != image->rows))
-            (void) fprintf(stderr,"Offset: %ld,%ld\n",difference_image->page.x,
-              difference_image->page.y);
-          (void) fprintf(stderr,"  Channel distortion: %s\n",
-            MagickOptionToMnemonic(MagickMetricOptions,(long) metric));
+            (void) FormatLocaleFile(stderr,"Offset: %.20g,%.20g\n",(double)
+              difference_image->page.x,(double) difference_image->page.y);
+          (void) FormatLocaleFile(stderr,"  Channel distortion: %s\n",
+            CommandOptionToMnemonic(MagickMetricOptions,(ssize_t) metric));
           switch (metric)
           {
+            case FuzzErrorMetric:
             case MeanAbsoluteErrorMetric:
             case MeanSquaredErrorMetric:
             case RootMeanSquaredErrorMetric:
@@ -1026,59 +1074,60 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
                 case RGBColorspace:
                 default:
                 {
-                  (void) fprintf(stderr,"    red: %g (%g)\n",
+                  (void) FormatLocaleFile(stderr,"    red: %g (%g)\n",
                     QuantumRange*channel_distortion[RedChannel],
                     channel_distortion[RedChannel]);
-                  (void) fprintf(stderr,"    green: %g (%g)\n",
+                  (void) FormatLocaleFile(stderr,"    green: %g (%g)\n",
                     QuantumRange*channel_distortion[GreenChannel],
                     channel_distortion[GreenChannel]);
-                  (void) fprintf(stderr,"    blue: %g (%g)\n",
+                  (void) FormatLocaleFile(stderr,"    blue: %g (%g)\n",
                     QuantumRange*channel_distortion[BlueChannel],
                     channel_distortion[BlueChannel]);
                   if (image->matte != MagickFalse)
-                    (void) fprintf(stderr,"    alpha: %g (%g)\n",
+                    (void) FormatLocaleFile(stderr,"    alpha: %g (%g)\n",
                       QuantumRange*channel_distortion[OpacityChannel],
                       channel_distortion[OpacityChannel]);
                   break;
                 }
                 case CMYKColorspace:
                 {
-                  (void) fprintf(stderr,"    cyan: %g (%g)\n",
+                  (void) FormatLocaleFile(stderr,"    cyan: %g (%g)\n",
                     QuantumRange*channel_distortion[CyanChannel],
                     channel_distortion[CyanChannel]);
-                  (void) fprintf(stderr,"    magenta: %g (%g)\n",
+                  (void) FormatLocaleFile(stderr,"    magenta: %g (%g)\n",
                     QuantumRange*channel_distortion[MagentaChannel],
                     channel_distortion[MagentaChannel]);
-                  (void) fprintf(stderr,"    yellow: %g (%g)\n",
+                  (void) FormatLocaleFile(stderr,"    yellow: %g (%g)\n",
                     QuantumRange*channel_distortion[YellowChannel],
                     channel_distortion[YellowChannel]);
-                  (void) fprintf(stderr,"    black: %g (%g)\n",
+                  (void) FormatLocaleFile(stderr,"    black: %g (%g)\n",
                     QuantumRange*channel_distortion[BlackChannel],
                     channel_distortion[BlackChannel]);
                   if (image->matte != MagickFalse)
-                    (void) fprintf(stderr,"    alpha: %g (%g)\n",
+                    (void) FormatLocaleFile(stderr,"    alpha: %g (%g)\n",
                       QuantumRange*channel_distortion[OpacityChannel],
                       channel_distortion[OpacityChannel]);
                   break;
                 }
                 case GRAYColorspace:
                 {
-                  (void) fprintf(stderr,"    gray: %g (%g)\n",
+                  (void) FormatLocaleFile(stderr,"    gray: %g (%g)\n",
                     QuantumRange*channel_distortion[GrayChannel],
                     channel_distortion[GrayChannel]);
                   if (image->matte != MagickFalse)
-                    (void) fprintf(stderr,"    alpha: %g (%g)\n",
+                    (void) FormatLocaleFile(stderr,"    alpha: %g (%g)\n",
                       QuantumRange*channel_distortion[OpacityChannel],
                       channel_distortion[OpacityChannel]);
                   break;
                 }
               }
-              (void) fprintf(stderr,"    all: %g (%g)\n",
-                QuantumRange*channel_distortion[AllChannels],
-                channel_distortion[AllChannels]);
+              (void) FormatLocaleFile(stderr,"    all: %g (%g)\n",
+                QuantumRange*channel_distortion[CompositeChannels],
+                channel_distortion[CompositeChannels]);
               break;
             }
             case AbsoluteErrorMetric:
+            case NormalizedCrossCorrelationErrorMetric:
             case PeakSignalToNoiseRatioMetric:
             {
               switch (image->colorspace)
@@ -1086,50 +1135,50 @@ WandExport MagickBooleanType CompareImageCommand(ImageInfo *image_info,
                 case RGBColorspace:
                 default:
                 {
-                  (void) fprintf(stderr,"    red: %g\n",
+                  (void) FormatLocaleFile(stderr,"    red: %g\n",
                     channel_distortion[RedChannel]);
-                  (void) fprintf(stderr,"    green: %g\n",
+                  (void) FormatLocaleFile(stderr,"    green: %g\n",
                     channel_distortion[GreenChannel]);
-                  (void) fprintf(stderr,"    blue: %g\n",
+                  (void) FormatLocaleFile(stderr,"    blue: %g\n",
                     channel_distortion[BlueChannel]);
                   if (image->matte != MagickFalse)
-                    (void) fprintf(stderr,"    alpha: %g\n",
+                    (void) FormatLocaleFile(stderr,"    alpha: %g\n",
                       channel_distortion[OpacityChannel]);
                   break;
                 }
                 case CMYKColorspace:
                 {
-                  (void) fprintf(stderr,"    cyan: %g\n",
+                  (void) FormatLocaleFile(stderr,"    cyan: %g\n",
                     channel_distortion[CyanChannel]);
-                  (void) fprintf(stderr,"    magenta: %g\n",
+                  (void) FormatLocaleFile(stderr,"    magenta: %g\n",
                     channel_distortion[MagentaChannel]);
-                  (void) fprintf(stderr,"    yellow: %g\n",
+                  (void) FormatLocaleFile(stderr,"    yellow: %g\n",
                     channel_distortion[YellowChannel]);
-                  (void) fprintf(stderr,"    black: %g\n",
+                  (void) FormatLocaleFile(stderr,"    black: %g\n",
                     channel_distortion[BlackChannel]);
                   if (image->matte != MagickFalse)
-                    (void) fprintf(stderr,"    alpha: %g\n",
+                    (void) FormatLocaleFile(stderr,"    alpha: %g\n",
                       channel_distortion[OpacityChannel]);
                   break;
                 }
                 case GRAYColorspace:
                 {
-                  (void) fprintf(stderr,"    gray: %g\n",
+                  (void) FormatLocaleFile(stderr,"    gray: %g\n",
                     channel_distortion[GrayChannel]);
                   if (image->matte != MagickFalse)
-                    (void) fprintf(stderr,"    alpha: %g\n",
+                    (void) FormatLocaleFile(stderr,"    alpha: %g\n",
                       channel_distortion[OpacityChannel]);
                   break;
                 }
               }
-              (void) fprintf(stderr,"    all: %g\n",
-                channel_distortion[AllChannels]);
+              (void) FormatLocaleFile(stderr,"    all: %g\n",
+                channel_distortion[CompositeChannels]);
               break;
             }
             case MeanErrorPerPixelMetric:
             {
-              (void) fprintf(stderr,"    %g (%g, %g)\n",
-                channel_distortion[AllChannels],
+              (void) FormatLocaleFile(stderr,"    %g (%g, %g)\n",
+                channel_distortion[CompositeChannels],
                 image->error.normalized_mean_error,
                 image->error.normalized_maximum_error);
               break;

@@ -1,4 +1,4 @@
-#  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+#  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
 #  dedicated to making software imaging solutions freely available.
 #
 #  You may not use this file except in compliance with the License.  You may
@@ -11,8 +11,6 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-#
-#  Copyright (C) 2003 - 2008 GraphicsMagick Group
 #
 #  Makefile for building the MagickCore API.
 # 
@@ -56,6 +54,8 @@ magick_libMagickCore_la_DEPENDENCIES = $(MAGICK_LTDLDEPS)
 MAGICK_BASE_SRCS = \
 	magick/ImageMagick.h \
 	magick/MagickCore.h \
+	magick/accelerate.c \
+	magick/accelerate.h \
 	magick/animate.c \
 	magick/animate.h \
 	magick/animate-private.h \
@@ -64,6 +64,8 @@ MAGICK_BASE_SRCS = \
 	magick/api.h \
 	magick/artifact.c \
 	magick/artifact.h \
+	magick/attribute.c \
+	magick/attribute.h \
 	magick/blob.c \
 	magick/blob.h \
 	magick/blob-private.h \
@@ -81,6 +83,9 @@ MAGICK_BASE_SRCS = \
 	magick/color.c \
 	magick/color.h \
 	magick/color-private.h \
+	magick/colormap.c \
+	magick/colormap.h \
+	magick/colormap-private.h \
 	magick/colorspace.c \
 	magick/colorspace.h \
 	magick/colorspace-private.h \
@@ -117,6 +122,8 @@ MAGICK_BASE_SRCS = \
 	magick/exception.c \
 	magick/exception.h \
 	magick/exception-private.h \
+	magick/feature.c \
+	magick/feature.h \
 	magick/fourier.c \
 	magick/fourier.h \
 	magick/fx.c \
@@ -128,11 +135,15 @@ MAGICK_BASE_SRCS = \
 	magick/geometry.h \
 	magick/hashmap.c \
 	magick/hashmap.h \
+	magick/histogram.c \
+	magick/histogram.h \
 	magick/identify.c \
 	magick/identify.h \
 	magick/image.c \
 	magick/image.h \
 	magick/image-private.h \
+	magick/image-view.c \
+	magick/image-view.h \
 	magick/layer.c \
 	magick/layer.h \
 	magick/list.c \
@@ -162,6 +173,9 @@ MAGICK_BASE_SRCS = \
 	magick/monitor-private.h \
 	magick/montage.c \
 	magick/montage.h \
+	magick/morphology.c \
+	magick/morphology.h \
+	magick/morphology-private.h \
 	magick/nt-base.h \
 	magick/nt-feature.h \
 	magick/option.c \
@@ -205,6 +219,7 @@ MAGICK_BASE_SRCS = \
 	magick/segment.h \
 	magick/semaphore.c \
 	magick/semaphore.h \
+	magick/semaphore-private.h \
 	magick/shear.c \
 	magick/shear.h \
 	magick/signature.c \
@@ -221,6 +236,7 @@ MAGICK_BASE_SRCS = \
 	magick/stream-private.h \
 	magick/string.c \
 	magick/string_.h \
+	magick/string-private.h \
 	magick/studio.h \
 	magick/thread.c \
 	magick/thread_.h \
@@ -268,10 +284,12 @@ MAGICK_INCLUDE_HDRS = \
 	magick/ImageMagick.h \
 	magick/MagickCore.h \
 	magick/PreRvIcccm.h \
+	magick/accelerate.h \
 	magick/animate.h \
 	magick/annotate.h \
 	magick/api.h \
 	magick/artifact.h \
+	magick/attribute.h \
 	magick/blob.h \
 	magick/cache.h \
 	magick/cache-view.h \
@@ -279,6 +297,7 @@ MAGICK_INCLUDE_HDRS = \
 	magick/client.h \
 	magick/coder.h \
 	magick/color.h \
+	magick/colormap.h \
 	magick/colorspace.h \
 	magick/compare.h \
 	magick/composite.h \
@@ -294,13 +313,16 @@ MAGICK_INCLUDE_HDRS = \
 	magick/effect.h \
 	magick/enhance.h \
 	magick/exception.h \
+	magick/feature.h \
 	magick/fourier.h \
 	magick/fx.h \
 	magick/gem.h \
 	magick/geometry.h \
 	magick/hashmap.h \
+	magick/histogram.h \
 	magick/identify.h \
 	magick/image.h \
+	magick/image-view.h \
 	magick/layer.h \
 	magick/list.h \
 	magick/locale_.h \
@@ -316,6 +338,7 @@ MAGICK_INCLUDE_HDRS = \
 	magick/module.h \
 	magick/monitor.h \
 	magick/montage.h \
+	magick/morphology.h \
 	magick/option.h \
 	magick/paint.h \
 	magick/pixel.h \
@@ -354,6 +377,7 @@ MAGICK_NOINST_HDRS = \
 	magick/blob-private.h \
 	magick/cache-private.h \
 	magick/color-private.h \
+	magick/colormap-private.h \
 	magick/colorspace-private.h \
 	magick/composite-private.h \
 	magick/delegate-private.h \
@@ -365,6 +389,7 @@ MAGICK_NOINST_HDRS = \
 	magick/mac.h \
 	magick/mime-private.h \
 	magick/monitor-private.h \
+	magick/morphology-private.h \
 	magick/nt-base.h \
 	magick/nt-feature.h \
 	magick/pixel-private.h \
@@ -372,9 +397,11 @@ MAGICK_NOINST_HDRS = \
 	magick/random-private.h \
 	magick/resample-private.h \
 	magick/resize-private.h \
+	magick/semaphore-private.h \
 	magick/signature-private.h \
 	magick/static.h \
 	magick/stream-private.h \
+	magick/string-private.h \
 	magick/studio.h \
 	magick/thread_.h \
 	magick/thread-private.h \

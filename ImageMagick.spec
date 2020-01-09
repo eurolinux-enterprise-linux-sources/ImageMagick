@@ -1,23 +1,22 @@
-%define VER 6.5.4
+%define VER 6.7.2
 %define Patchlevel 7
 
 Name:           ImageMagick
 Version:        %{VER}.%{Patchlevel}
-Release:        7%{?dist}
+Release:        2%{?dist}
 Summary:        An X application for displaying and manipulating images
 Group:          Applications/Multimedia
 License:        ImageMagick
 Url:            http://www.imagemagick.org/
 # Source0:        ftp://ftp.ImageMagick.org/pub/%{name}/%{name}-%{VER}-%{Patchlevel}.tar.lzma
 # Reference mirror ftp://ftp.nluug.nl instead which keeps older releases longer
-Source0:        ftp://ftp.nluug.nl/pub/%{name}/%{name}-%{VER}-%{Patchlevel}.tar.lzma
+Source0:        ftp://ftp.nluug.nl/pub/%{name}/%{name}-%{VER}-%{Patchlevel}.tar.gz
 Patch1:         ImageMagick-6.4.0-multilib.patch
-# CVE-2010-4167
-Patch2: ImageMagick-6.5.4-cve-2010-4167.patch
 # CVE-2012-0247 CVE-2012-0248 CVE-2012-1185 CVE-2012-1186
-Patch3: ImageMagick-6.5.4-cve-2012-0247-0248.patch
+Patch3: ImageMagick-6.7.2-cve-2012-0247-0248.patch
 # CVE-2012-0259 CVE-2012-0260 CVE-2012-1798
-Patch4: ImageMagick-6.5.4-cve-2012-0259-0260.patch
+Patch4: ImageMagick-6.7.2-cve-2012-0259-0260.patch
+Patch5: ImageMagick-6.7.2-7-multiarch-fix.patch
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires:  bzip2-devel, freetype-devel, libjpeg-devel, libpng-devel
@@ -42,7 +41,6 @@ ImageMagick is one of your choices if you need a program to manipulate
 and display images. If you want to develop your own applications
 which use ImageMagick code or APIs, you need to install
 ImageMagick-devel as well.
-
 
 %package devel
 Summary: Library links and header files for ImageMagick app development
@@ -127,10 +125,9 @@ however.
 %prep
 %setup -q -n %{name}-%{VER}-%{Patchlevel}
 %patch1 -p1 -b .multilib
-%patch2 -p1 -b .cve-2010-4167
 %patch3 -p1 -b .cve-2012-0247-0248
 %patch4 -p1 -b .cve-2012-0259-0260
-
+%patch5 -p1 -b .multiarch-fix
 sed -i 's/libltdl.la/libltdl.so/g' configure
 iconv -f ISO-8859-1 -t UTF-8 README.txt > README.txt.tmp
 touch -r README.txt README.txt.tmp
@@ -195,9 +192,6 @@ if [ -z perl-pkg-files ] ; then
     exit -1
 fi
 
-# These don't belong here, we include them in %%doc
-rm $RPM_BUILD_ROOT%{_datadir}/%{name}-%{VER}/{ChangeLog,LICENSE,NEWS.txt}
-
 # fix multilib issues
 %ifarch x86_64 s390x ia64 ppc64 alpha sparc64
 %define wordsize 64
@@ -225,7 +219,6 @@ cat >$RPM_BUILD_ROOT%{_includedir}/%{name}/magick/magick-config.h <<EOF
 #endif
 EOF
 
-
 %clean
 rm -rf $RPM_BUILD_ROOT
 
@@ -250,6 +243,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_datadir}/%{name}-%{VER}
 %{_mandir}/man[145]/[a-z]*
 %{_mandir}/man1/%{name}.*
+%{_sysconfdir}/%{name}
 
 %files devel
 %defattr(-,root,root,-)
@@ -299,6 +293,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Thu Feb 19 2015 Jan Horak <jhorak@redhat.com> - 6.7.2.7-2
+- Rebase to 6.7.2.7
+
 * Wed Jan 29 2014 Benjamin Tissoires <benjamin.tissoires@redhat.com> 6.5.4.7-7
 - Enable OpenEXR support (rhbz#838748)
 

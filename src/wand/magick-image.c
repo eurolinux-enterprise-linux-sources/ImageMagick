@@ -23,7 +23,7 @@
 %                                 August 2003                                 %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -105,8 +105,8 @@ static MagickWand *CloneMagickWandFromImages(const MagickWand *wand,
       images->filename);
   (void) ResetMagickMemory(clone_wand,0,sizeof(*clone_wand));
   clone_wand->id=AcquireWandId();
-  (void) FormatMagickString(clone_wand->name,MaxTextExtent,"%s-%lu",
-    MagickWandId,clone_wand->id);
+  (void) FormatLocaleString(clone_wand->name,MaxTextExtent,"%s-%.20g",
+    MagickWandId,(double) clone_wand->id);
   clone_wand->exception=AcquireExceptionInfo();
   InheritException(clone_wand->exception,wand->exception);
   clone_wand->image_info=CloneImageInfo(wand->image_info);
@@ -239,7 +239,7 @@ WandExport MagickBooleanType MagickAdaptiveBlurImageChannel(MagickWand *wand,
 %  triangulation.
 %
 %      MagickBooleanType MagickAdaptiveResizeImage(MagickWand *wand,
-%        const unsigned long columns,const unsigned long rows)
+%        const size_t columns,const size_t rows)
 %
 %  A description of each parameter follows:
 %
@@ -251,7 +251,7 @@ WandExport MagickBooleanType MagickAdaptiveBlurImageChannel(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickAdaptiveResizeImage(MagickWand *wand,
-  const unsigned long columns,const unsigned long rows)
+  const size_t columns,const size_t rows)
 {
   Image
     *resize_image;
@@ -356,7 +356,7 @@ WandExport MagickBooleanType MagickAdaptiveSharpenImageChannel(MagickWand *wand,
 %  The format of the AdaptiveThresholdImage method is:
 %
 %      MagickBooleanType MagickAdaptiveThresholdImage(MagickWand *wand,
-%        const unsigned long width,const unsigned long height,const long offset)
+%        const size_t width,const size_t height,const ssize_t offset)
 %
 %  A description of each parameter follows:
 %
@@ -370,7 +370,7 @@ WandExport MagickBooleanType MagickAdaptiveSharpenImageChannel(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickAdaptiveThresholdImage(MagickWand *wand,
-  const unsigned long width,const unsigned long height,const long offset)
+  const size_t width,const size_t height,const ssize_t offset)
 {
   Image
     *threshold_image;
@@ -443,6 +443,12 @@ static inline MagickBooleanType InsertImageInWand(MagickWand *wand,
           return(MagickTrue);
         }
     }
+  if (sentinel->next == (Image *) NULL)
+    {
+      InsertImageInList(&sentinel,images);
+      wand->images=GetLastImageInList(images);
+      return(MagickTrue);
+    }
   InsertImageInList(&sentinel,images);
   wand->images=GetFirstImageInList(images);
   return(MagickTrue);
@@ -470,6 +476,7 @@ WandExport MagickBooleanType MagickAddImage(MagickWand *wand,
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
 %                                                                             %
 %                                                                             %
 %     M a g i c k A d d N o i s e I m a g e                                   %
@@ -638,7 +645,7 @@ WandExport MagickBooleanType MagickAnnotateImage(MagickWand *wand,
   if (draw_info == (DrawInfo *) NULL)
     return(MagickFalse);
   (void) CloneString(&draw_info->text,text);
-  (void) FormatMagickString(geometry,MaxTextExtent,"%+g%+g",x,y);
+  (void) FormatLocaleString(geometry,MaxTextExtent,"%+g%+g",x,y);
   draw_info->affine.sx=cos(DegreesToRadians(fmod(angle,360.0)));
   draw_info->affine.rx=sin(DegreesToRadians(fmod(angle,360.0)));
   draw_info->affine.ry=(-sin(DegreesToRadians(fmod(angle,360.0))));
@@ -742,38 +749,107 @@ WandExport MagickWand *MagickAppendImages(MagickWand *wand,
 %                                                                             %
 %                                                                             %
 %                                                                             %
-%   M a g i c k A v e r a g e I m a g e s                                     %
+%   M a g i c k A u t o G a m m a I m a g e                                   %
 %                                                                             %
 %                                                                             %
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  MagickAverageImages() average a set of images.
+%  MagickAutoGammaImage() extracts the 'mean' from the image and adjust the
+%  image to try make set its gamma appropriatally.
 %
-%  The format of the MagickAverageImages method is:
+%  The format of the MagickAutoGammaImage method is:
 %
-%      MagickWand *MagickAverageImages(MagickWand *wand)
+%      MagickBooleanType MagickAutoGammaImage(MagickWand *wand)
+%      MagickBooleanType MagickAutoGammaImageChannel(MagickWand *wand,
+%        const ChannelType channel)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
+%    o channel: the image channel(s).
+%
 */
-WandExport MagickWand *MagickAverageImages(MagickWand *wand)
+WandExport MagickBooleanType MagickAutoGammaImage(MagickWand *wand)
 {
-  Image
-    *average_image;
+  MagickBooleanType
+    status;
+
+  status=MagickAutoGammaImageChannel(wand,DefaultChannels);
+  return(status);
+}
+
+WandExport MagickBooleanType MagickAutoGammaImageChannel(MagickWand *wand,
+  const ChannelType channel)
+{
+  MagickBooleanType
+    status;
 
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
   if (wand->debug != MagickFalse)
     (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
   if (wand->images == (Image *) NULL)
-    return((MagickWand *) NULL);
-  average_image=AverageImages(wand->images,wand->exception);
-  if (average_image == (Image *) NULL)
-    return((MagickWand *) NULL);
-  return(CloneMagickWandFromImages(wand,average_image));
+    ThrowWandException(WandError,"ContainsNoImages",wand->name);
+  status=AutoGammaImageChannel(wand->images,channel);
+  if (status == MagickFalse)
+    InheritException(wand->exception,&wand->images->exception);
+  return(status);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%   M a g i c k A u t o L e v e l I m a g e                                   %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagickAutoLevelImage() adjusts the levels of a particular image channel by
+%  scaling the minimum and maximum values to the full quantum range.
+%
+%  The format of the MagickAutoLevelImage method is:
+%
+%      MagickBooleanType MagickAutoLevelImage(MagickWand *wand)
+%      MagickBooleanType MagickAutoLevelImageChannel(MagickWand *wand,
+%        const ChannelType channel)
+%
+%  A description of each parameter follows:
+%
+%    o wand: the magick wand.
+%
+%    o channel: the image channel(s).
+%
+*/
+WandExport MagickBooleanType MagickAutoLevelImage(MagickWand *wand)
+{
+  MagickBooleanType
+    status;
+
+  status=MagickAutoLevelImageChannel(wand,DefaultChannels);
+  return(status);
+}
+
+WandExport MagickBooleanType MagickAutoLevelImageChannel(MagickWand *wand,
+  const ChannelType channel)
+{
+  MagickBooleanType
+    status;
+
+  assert(wand != (MagickWand *) NULL);
+  assert(wand->signature == WandSignature);
+  if (wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
+  if (wand->images == (Image *) NULL)
+    ThrowWandException(WandError,"ContainsNoImages",wand->name);
+  status=AutoLevelImageChannel(wand->images,channel);
+  if (status == MagickFalse)
+    InheritException(wand->exception,&wand->images->exception);
+  return(status);
 }
 
 /*
@@ -818,7 +894,7 @@ WandExport MagickBooleanType MagickBlackThresholdImage(MagickWand *wand,
     (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
   if (wand->images == (Image *) NULL)
     ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  (void) FormatMagickString(thresholds,MaxTextExtent,
+  (void) FormatLocaleString(thresholds,MaxTextExtent,
     QuantumFormat "," QuantumFormat "," QuantumFormat "," QuantumFormat,
     PixelGetRedQuantum(threshold),PixelGetGreenQuantum(threshold),
     PixelGetBlueQuantum(threshold),PixelGetOpacityQuantum(threshold));
@@ -956,8 +1032,8 @@ WandExport MagickBooleanType MagickBlurImageChannel(MagickWand *wand,
 %  The format of the MagickBorderImage method is:
 %
 %      MagickBooleanType MagickBorderImage(MagickWand *wand,
-%        const PixelWand *bordercolor,const unsigned long width,
-%        const unsigned long height)
+%        const PixelWand *bordercolor,const size_t width,
+%        const size_t height)
 %
 %  A description of each parameter follows:
 %
@@ -971,8 +1047,8 @@ WandExport MagickBooleanType MagickBlurImageChannel(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickBorderImage(MagickWand *wand,
-  const PixelWand *bordercolor,const unsigned long width,
-  const unsigned long height)
+  const PixelWand *bordercolor,const size_t width,
+  const size_t height)
 {
   Image
     *border_image;
@@ -996,6 +1072,73 @@ WandExport MagickBooleanType MagickBorderImage(MagickWand *wand,
     return(MagickFalse);
   ReplaceImageInList(&wand->images,border_image);
   return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%   M a g i c k B r i g h t n e s s C o n t r a s t S t r e t c h I m a g e   %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  Use MagickBrightnessContrastImage() to change the brightness and/or contrast
+%  of an image.  It converts the brightness and contrast parameters into slope
+%  and intercept and calls a polynomical function to apply to the image.
+
+%
+%  The format of the MagickBrightnessContrastImage method is:
+%
+%      MagickBooleanType MagickBrightnessContrastImage(MagickWand *wand,
+%        const double brightness,const double contrast)
+%      MagickBooleanType MagickBrightnessContrastImageChannel(MagickWand *wand,
+%        const ChannelType channel,const double brightness,
+%        const double contrast)
+%
+%  A description of each parameter follows:
+%
+%    o wand: the magick wand.
+%
+%    o channel: the image channel(s).
+%
+%    o brightness: the brightness percent (-100 .. 100).
+%
+%    o contrast: the contrast percent (-100 .. 100).
+%
+*/
+
+WandExport MagickBooleanType MagickBrightnessContrastImage(MagickWand *wand,
+  const double brightness,const double contrast)
+{
+  MagickBooleanType
+    status;
+
+  status=MagickBrightnessContrastImageChannel(wand,DefaultChannels,brightness,
+    contrast);
+  return(status);
+}
+
+WandExport MagickBooleanType MagickBrightnessContrastImageChannel(
+  MagickWand *wand,const ChannelType channel,const double brightness,
+  const double contrast)
+{
+  MagickBooleanType
+    status;
+
+  assert(wand != (MagickWand *) NULL);
+  assert(wand->signature == WandSignature);
+  if (wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
+  if (wand->images == (Image *) NULL)
+    ThrowWandException(WandError,"ContainsNoImages",wand->name);
+  status=BrightnessContrastImageChannel(wand->images,channel,brightness,
+    contrast);
+  if (status == MagickFalse)
+    InheritException(wand->exception,&wand->images->exception);
+  return(status);
 }
 
 /*
@@ -1062,8 +1205,8 @@ WandExport MagickBooleanType MagickCharcoalImage(MagickWand *wand,
 %  The format of the MagickChopImage method is:
 %
 %      MagickBooleanType MagickChopImage(MagickWand *wand,
-%        const unsigned long width,const unsigned long height,const long x,
-%        const long y)
+%        const size_t width,const size_t height,const ssize_t x,
+%        const ssize_t y)
 %
 %  A description of each parameter follows:
 %
@@ -1080,8 +1223,8 @@ WandExport MagickBooleanType MagickCharcoalImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickChopImage(MagickWand *wand,
-  const unsigned long width,const unsigned long height,const long x,
-  const long y)
+  const size_t width,const size_t height,const ssize_t x,
+  const ssize_t y)
 {
   Image
     *chop_image;
@@ -1104,6 +1247,60 @@ WandExport MagickBooleanType MagickChopImage(MagickWand *wand,
     return(MagickFalse);
   ReplaceImageInList(&wand->images,chop_image);
   return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%   M a g i c k C l a m p I m a g e                                           %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagickClampImage() restricts the color range from 0 to the quantum depth.
+%
+%  The format of the MagickClampImage method is:
+%
+%      MagickBooleanType MagickClampImage(MagickWand *wand)
+%      MagickBooleanType MagickClampImageChannel(MagickWand *wand,
+%        const ChannelType channel)
+%
+%  A description of each parameter follows:
+%
+%    o wand: the magick wand.
+%
+%    o channel: the channel.
+%
+*/
+
+WandExport MagickBooleanType MagickClampImage(MagickWand *wand)
+{
+  MagickBooleanType
+    status;
+
+  status=MagickClampImageChannel(wand,DefaultChannels);
+  return(status);
+}
+
+WandExport MagickBooleanType MagickClampImageChannel(MagickWand *wand,
+  const ChannelType channel)
+{
+  MagickBooleanType
+    status;
+
+  assert(wand != (MagickWand *) NULL);
+  assert(wand->signature == WandSignature);
+  if (wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
+  if (wand->images == (Image *) NULL)
+    ThrowWandException(WandError,"ContainsNoImages",wand->name);
+  status=ClampImageChannel(wand->images,channel);
+  if (status == MagickFalse)
+    InheritException(wand->exception,&wand->images->exception);
+  return(status);
 }
 
 /*
@@ -1402,17 +1599,70 @@ WandExport MagickBooleanType MagickColorizeImage(MagickWand *wand,
     (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
   if (wand->images == (Image *) NULL)
     ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  (void) FormatMagickString(percent_opaque,MaxTextExtent,"%g,%g,%g,%g",
-    (double) (100.0*QuantumScale*PixelGetRedQuantum(opacity)),
-    (double) (100.0*QuantumScale*PixelGetGreenQuantum(opacity)),
-    (double) (100.0*QuantumScale*PixelGetBlueQuantum(opacity)),
-    (double) (100.0*QuantumScale*PixelGetOpacityQuantum(opacity)));
+  (void) FormatLocaleString(percent_opaque,MaxTextExtent,
+    "%g,%g,%g,%g",(double) (100.0*QuantumScale*
+    PixelGetRedQuantum(opacity)),(double) (100.0*QuantumScale*
+    PixelGetGreenQuantum(opacity)),(double) (100.0*QuantumScale*
+    PixelGetBlueQuantum(opacity)),(double) (100.0*QuantumScale*
+    PixelGetOpacityQuantum(opacity)));
   PixelGetQuantumColor(colorize,&target);
   colorize_image=ColorizeImage(wand->images,percent_opaque,target,
     wand->exception);
   if (colorize_image == (Image *) NULL)
     return(MagickFalse);
   ReplaceImageInList(&wand->images,colorize_image);
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%   M a g i c k C o l o r M a t r i x I m a g e                               %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagickColorMatrixImage() apply color transformation to an image. The method
+%  permits saturation changes, hue rotation, luminance to alpha, and various
+%  other effects.  Although variable-sized transformation matrices can be used,
+%  typically one uses a 5x5 matrix for an RGBA image and a 6x6 for CMYKA
+%  (or RGBA with offsets).  The matrix is similar to those used by Adobe Flash
+%  except offsets are in column 6 rather than 5 (in support of CMYKA images)
+%  and offsets are normalized (divide Flash offset by 255).
+%
+%  The format of the MagickColorMatrixImage method is:
+%
+%      MagickBooleanType MagickColorMatrixImage(MagickWand *wand,
+%        const KernelInfo *color_matrix)
+%
+%  A description of each parameter follows:
+%
+%    o wand: the magick wand.
+%
+%    o color_matrix:  the color matrix.
+%
+*/
+WandExport MagickBooleanType MagickColorMatrixImage(MagickWand *wand,
+  const KernelInfo *color_matrix)
+{
+  Image
+    *color_image;
+
+  assert(wand != (MagickWand *) NULL);
+  assert(wand->signature == WandSignature);
+  if (wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
+  if (color_matrix == (const KernelInfo *) NULL)
+    return(MagickFalse);
+  if (wand->images == (Image *) NULL)
+    ThrowWandException(WandError,"ContainsNoImages",wand->name);
+  color_image=ColorMatrixImage(wand->images,color_matrix,wand->exception);
+  if (color_image == (Image *) NULL)
+    return(MagickFalse);
+  ReplaceImageInList(&wand->images,color_image);
   return(MagickTrue);
 }
 
@@ -1680,10 +1930,10 @@ WandExport MagickWand *MagickCompareImages(MagickWand *wand,
 %
 %      MagickBooleanType MagickCompositeImage(MagickWand *wand,
 %        const MagickWand *composite_wand,const CompositeOperator compose,
-%        const long x,const long y)
+%        const ssize_t x,const ssize_t y)
 %      MagickBooleanType MagickCompositeImageChannel(MagickWand *wand,
 %        const ChannelType channel,const MagickWand *composite_wand,
-%        const CompositeOperator compose,const long x,const long y)
+%        const CompositeOperator compose,const ssize_t x,const ssize_t y)
 %
 %  A description of each parameter follows:
 %
@@ -1707,8 +1957,8 @@ WandExport MagickWand *MagickCompareImages(MagickWand *wand,
 */
 
 WandExport MagickBooleanType MagickCompositeImage(MagickWand *wand,
-  const MagickWand *composite_wand,const CompositeOperator compose,const long x,
-  const long y)
+  const MagickWand *composite_wand,const CompositeOperator compose,const ssize_t x,
+  const ssize_t y)
 {
   MagickBooleanType
     status;
@@ -1720,7 +1970,7 @@ WandExport MagickBooleanType MagickCompositeImage(MagickWand *wand,
 
 WandExport MagickBooleanType MagickCompositeImageChannel(MagickWand *wand,
   const ChannelType channel,const MagickWand *composite_wand,
-  const CompositeOperator compose,const long x,const long y)
+  const CompositeOperator compose,const ssize_t x,const ssize_t y)
 {
   MagickBooleanType
     status;
@@ -1867,9 +2117,9 @@ WandExport MagickBooleanType MagickContrastStretchImageChannel(MagickWand *wand,
 %  The format of the MagickConvolveImage method is:
 %
 %      MagickBooleanType MagickConvolveImage(MagickWand *wand,
-%        const unsigned long order,const double *kernel)
+%        const size_t order,const double *kernel)
 %      MagickBooleanType MagickConvolveImageChannel(MagickWand *wand,
-%        const ChannelType channel,const unsigned long order,
+%        const ChannelType channel,const size_t order,
 %        const double *kernel)
 %
 %  A description of each parameter follows:
@@ -1885,7 +2135,7 @@ WandExport MagickBooleanType MagickContrastStretchImageChannel(MagickWand *wand,
 */
 
 WandExport MagickBooleanType MagickConvolveImage(MagickWand *wand,
-  const unsigned long order,const double *kernel)
+  const size_t order,const double *kernel)
 {
   MagickBooleanType
     status;
@@ -1895,7 +2145,7 @@ WandExport MagickBooleanType MagickConvolveImage(MagickWand *wand,
 }
 
 WandExport MagickBooleanType MagickConvolveImageChannel(MagickWand *wand,
-  const ChannelType channel,const unsigned long order,const double *kernel)
+  const ChannelType channel,const size_t order,const double *kernel)
 {
   Image
     *convolve_image;
@@ -1932,8 +2182,7 @@ WandExport MagickBooleanType MagickConvolveImageChannel(MagickWand *wand,
 %  The format of the MagickCropImage method is:
 %
 %      MagickBooleanType MagickCropImage(MagickWand *wand,
-%        const unsigned long width,const unsigned long height,const long x,
-%        const long y)
+%        const size_t width,const size_t height,const ssize_t x,const ssize_t y)
 %
 %  A description of each parameter follows:
 %
@@ -1949,8 +2198,7 @@ WandExport MagickBooleanType MagickConvolveImageChannel(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickCropImage(MagickWand *wand,
-  const unsigned long width,const unsigned long height,const long x,
-  const long y)
+  const size_t width,const size_t height,const ssize_t x,const ssize_t y)
 {
   Image
     *crop_image;
@@ -1993,7 +2241,7 @@ WandExport MagickBooleanType MagickCropImage(MagickWand *wand,
 %  The format of the MagickCycleColormapImage method is:
 %
 %      MagickBooleanType MagickCycleColormapImage(MagickWand *wand,
-%        const long displace)
+%        const ssize_t displace)
 %
 %  A description of each parameter follows:
 %
@@ -2003,7 +2251,7 @@ WandExport MagickBooleanType MagickCropImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickCycleColormapImage(MagickWand *wand,
-  const long displace)
+  const ssize_t displace)
 {
   MagickBooleanType
     status;
@@ -2044,7 +2292,7 @@ WandExport MagickBooleanType MagickCycleColormapImage(MagickWand *wand,
 %  The format of the MagickConstituteImage method is:
 %
 %      MagickBooleanType MagickConstituteImage(MagickWand *wand,
-%        const unsigned long columns,const unsigned long rows,const char *map,
+%        const size_t columns,const size_t rows,const char *map,
 %        const StorageType storage,void *pixels)
 %
 %  A description of each parameter follows:
@@ -2073,7 +2321,7 @@ WandExport MagickBooleanType MagickCycleColormapImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickConstituteImage(MagickWand *wand,
-  const unsigned long columns,const unsigned long rows,const char *map,
+  const size_t columns,const size_t rows,const char *map,
   const StorageType storage,const void *pixels)
 {
   Image
@@ -2401,7 +2649,7 @@ WandExport MagickBooleanType MagickDisplayImages(MagickWand *wand,
 %  The format of the MagickDistortImage method is:
 %
 %      MagickBooleanType MagickDistortImage(MagickWand *wand,
-%        const DistortImageMethod method,const unsigned long number_arguments,
+%        const DistortImageMethod method,const size_t number_arguments,
 %        const double *arguments,const MagickBooleanType bestfit)
 %
 %  A description of each parameter follows:
@@ -2437,7 +2685,7 @@ WandExport MagickBooleanType MagickDisplayImages(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickDistortImage(MagickWand *wand,
-  const DistortImageMethod method,const unsigned long number_arguments,
+  const DistortImageMethod method,const size_t number_arguments,
   const double *arguments,const MagickBooleanType bestfit)
 {
   Image
@@ -2763,6 +3011,8 @@ WandExport MagickBooleanType MagickEqualizeImageChannel(MagickWand *wand,
 %
 %      MagickBooleanType MagickEvaluateImage(MagickWand *wand,
 %        const MagickEvaluateOperator operator,const double value)
+%      MagickBooleanType MagickEvaluateImages(MagickWand *wand,
+%        const MagickEvaluateOperator operator)
 %      MagickBooleanType MagickEvaluateImageChannel(MagickWand *wand,
 %        const ChannelType channel,const MagickEvaluateOperator op,
 %        const double value)
@@ -2797,6 +3047,24 @@ WandExport MagickBooleanType MagickEvaluateImage(MagickWand *wand,
   return(status);
 }
 
+WandExport MagickWand *MagickEvaluateImages(MagickWand *wand,
+  const MagickEvaluateOperator op)
+{
+  Image
+    *evaluate_image;
+
+  assert(wand != (MagickWand *) NULL);
+  assert(wand->signature == WandSignature);
+  if (wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
+  if (wand->images == (Image *) NULL)
+    return((MagickWand *) NULL);
+  evaluate_image=EvaluateImages(wand->images,op,wand->exception);
+  if (evaluate_image == (Image *) NULL)
+    return((MagickWand *) NULL);
+  return(CloneMagickWandFromImages(wand,evaluate_image));
+}
+
 WandExport MagickBooleanType MagickEvaluateImageChannel(MagickWand *wand,
   const ChannelType channel,const MagickEvaluateOperator op,const double value)
 {
@@ -2828,7 +3096,7 @@ WandExport MagickBooleanType MagickEvaluateImageChannel(MagickWand *wand,
 %  MagickExportImagePixels() extracts pixel data from an image and returns it
 %  to you.  The method returns MagickTrue on success otherwise MagickFalse if
 %  an error is encountered.  The data is returned as char, short int, int,
-%  long, float, or double in the order specified by map.
+%  ssize_t, float, or double in the order specified by map.
 %
 %  Suppose you want to extract the first scanline of a 640x480 image as
 %  character data in red-green-blue order:
@@ -2838,8 +3106,8 @@ WandExport MagickBooleanType MagickEvaluateImageChannel(MagickWand *wand,
 %  The format of the MagickExportImagePixels method is:
 %
 %      MagickBooleanType MagickExportImagePixels(MagickWand *wand,
-%        const long x,const long y,const unsigned long columns,
-%        const unsigned long rows,const char *map,const StorageType storage,
+%        const ssize_t x,const ssize_t y,const size_t columns,
+%        const size_t rows,const char *map,const StorageType storage,
 %        void *pixels)
 %
 %  A description of each parameter follows:
@@ -2866,8 +3134,8 @@ WandExport MagickBooleanType MagickEvaluateImageChannel(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickExportImagePixels(MagickWand *wand,
-  const long x,const long y,const unsigned long columns,
-  const unsigned long rows,const char *map,const StorageType storage,
+  const ssize_t x,const ssize_t y,const size_t columns,
+  const size_t rows,const char *map,const StorageType storage,
   void *pixels)
 {
   MagickBooleanType
@@ -2904,8 +3172,8 @@ WandExport MagickBooleanType MagickExportImagePixels(MagickWand *wand,
 %  The format of the MagickExtentImage method is:
 %
 %      MagickBooleanType MagickExtentImage(MagickWand *wand,
-%        const unsigned long width,const unsigned long height,const long x,
-%        const long y)
+%        const size_t width,const size_t height,const ssize_t x,
+%        const ssize_t y)
 %
 %  A description of each parameter follows:
 %
@@ -2921,8 +3189,8 @@ WandExport MagickBooleanType MagickExportImagePixels(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickExtentImage(MagickWand *wand,
-  const unsigned long width,const unsigned long height,const long x,
-  const long y)
+  const size_t width,const size_t height,const ssize_t x,
+  const ssize_t y)
 {
   Image
     *extent_image;
@@ -2944,6 +3212,67 @@ WandExport MagickBooleanType MagickExtentImage(MagickWand *wand,
   if (extent_image == (Image *) NULL)
     return(MagickFalse);
   ReplaceImageInList(&wand->images,extent_image);
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%   M a g i c k F i l t e r I m a g e                                         %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagickFilterImage() applies a custom convolution kernel to the image.
+%
+%  The format of the MagickFilterImage method is:
+%
+%      MagickBooleanType MagickFilterImage(MagickWand *wand,
+%        const KernelInfo *kernel)
+%      MagickBooleanType MagickFilterImageChannel(MagickWand *wand,
+%        const ChannelType channel,const KernelInfo *kernel)
+%
+%  A description of each parameter follows:
+%
+%    o wand: the magick wand.
+%
+%    o channel: the image channel(s).
+%
+%    o kernel: An array of doubles representing the convolution kernel.
+%
+*/
+
+WandExport MagickBooleanType MagickFilterImage(MagickWand *wand,
+  const KernelInfo *kernel)
+{
+  MagickBooleanType
+    status;
+
+  status=MagickFilterImageChannel(wand,DefaultChannels,kernel);
+  return(status);
+}
+
+WandExport MagickBooleanType MagickFilterImageChannel(MagickWand *wand,
+  const ChannelType channel,const KernelInfo *kernel)
+{
+  Image
+    *filter_image;
+
+  assert(wand != (MagickWand *) NULL);
+  assert(wand->signature == WandSignature);
+  if (wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
+  if (kernel == (const KernelInfo *) NULL)
+    return(MagickFalse);
+  if (wand->images == (Image *) NULL)
+    ThrowWandException(WandError,"ContainsNoImages",wand->name);
+  filter_image=FilterImageChannel(wand->images,channel,kernel,wand->exception);
+  if (filter_image == (Image *) NULL)
+    return(MagickFalse);
+  ReplaceImageInList(&wand->images,filter_image);
   return(MagickTrue);
 }
 
@@ -3008,7 +3337,7 @@ WandExport MagickBooleanType MagickFlipImage(MagickWand *wand)
 %
 %      MagickBooleanType MagickFloodfillPaintImage(MagickWand *wand,
 %        const ChannelType channel,const PixelWand *fill,const double fuzz,
-%        const PixelWand *bordercolor,const long x,const long y,
+%        const PixelWand *bordercolor,const ssize_t x,const ssize_t y,
 %        const MagickBooleanType invert)
 %
 %  A description of each parameter follows:
@@ -3035,7 +3364,7 @@ WandExport MagickBooleanType MagickFlipImage(MagickWand *wand)
 */
 WandExport MagickBooleanType MagickFloodfillPaintImage(MagickWand *wand,
   const ChannelType channel,const PixelWand *fill,const double fuzz,
-  const PixelWand *bordercolor,const long x,const long y,
+  const PixelWand *bordercolor,const ssize_t x,const ssize_t y,
   const MagickBooleanType invert)
 {
   DrawInfo
@@ -3176,9 +3505,9 @@ WandExport MagickBooleanType MagickForwardFourierTransformImage(
 %  The format of the MagickFrameImage method is:
 %
 %      MagickBooleanType MagickFrameImage(MagickWand *wand,
-%        const PixelWand *matte_color,const unsigned long width,
-%        const unsigned long height,const long inner_bevel,
-%        const long outer_bevel)
+%        const PixelWand *matte_color,const size_t width,
+%        const size_t height,const ssize_t inner_bevel,
+%        const ssize_t outer_bevel)
 %
 %  A description of each parameter follows:
 %
@@ -3196,8 +3525,8 @@ WandExport MagickBooleanType MagickForwardFourierTransformImage(
 %
 */
 WandExport MagickBooleanType MagickFrameImage(MagickWand *wand,
-  const PixelWand *matte_color,const unsigned long width,
-  const unsigned long height,const long inner_bevel,const long outer_bevel)
+  const PixelWand *matte_color,const size_t width,
+  const size_t height,const ssize_t inner_bevel,const ssize_t outer_bevel)
 {
   Image
     *frame_image;
@@ -3214,8 +3543,8 @@ WandExport MagickBooleanType MagickFrameImage(MagickWand *wand,
   (void) ResetMagickMemory(&frame_info,0,sizeof(frame_info));
   frame_info.width=wand->images->columns+2*width;
   frame_info.height=wand->images->rows+2*height;
-  frame_info.x=(long) width;
-  frame_info.y=(long) height;
+  frame_info.x=(ssize_t) width;
+  frame_info.y=(ssize_t) height;
   frame_info.inner_bevel=inner_bevel;
   frame_info.outer_bevel=outer_bevel;
   PixelGetQuantumColor(matte_color,&wand->images->matte_color);
@@ -3245,11 +3574,11 @@ WandExport MagickBooleanType MagickFrameImage(MagickWand *wand,
 %  The format of the MagickFunctionImage method is:
 %
 %      MagickBooleanType MagickFunctionImage(MagickWand *wand,
-%        const MagickFunction function,const unsigned long number_arguments,
+%        const MagickFunction function,const size_t number_arguments,
 %        const double *arguments)
 %      MagickBooleanType MagickFunctionImageChannel(MagickWand *wand,
 %        const ChannelType channel,const MagickFunction function,
-%        const unsigned long number_arguments,const double *arguments)
+%        const size_t number_arguments,const double *arguments)
 %
 %  A description of each parameter follows:
 %
@@ -3266,7 +3595,7 @@ WandExport MagickBooleanType MagickFrameImage(MagickWand *wand,
 */
 
 WandExport MagickBooleanType MagickFunctionImage(MagickWand *wand,
-  const MagickFunction function,const unsigned long number_arguments,
+  const MagickFunction function,const size_t number_arguments,
   const double *arguments)
 {
   MagickBooleanType
@@ -3287,7 +3616,7 @@ WandExport MagickBooleanType MagickFunctionImage(MagickWand *wand,
 
 WandExport MagickBooleanType MagickFunctionImageChannel(MagickWand *wand,
   const ChannelType channel,const MagickFunction function,
-  const unsigned long number_arguments,const double *arguments)
+  const size_t number_arguments,const double *arguments)
 {
   MagickBooleanType
     status;
@@ -3549,7 +3878,7 @@ WandExport MagickWand *MagickGetImage(MagickWand *wand)
 %
 %  The format of the MagickGetImageAlphaChannel method is:
 %
-%      unsigned long MagickGetImageAlphaChannel(MagickWand *wand)
+%      size_t MagickGetImageAlphaChannel(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
@@ -3659,9 +3988,13 @@ WandExport MagickBooleanType MagickGetImageBackgroundColor(MagickWand *wand,
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  MagickGetImageBlob() implements direct to memory image formats.  It
-%  returns the image as a blob and its length.   Use MagickSetFormat() to
-%  set the format of the returned blob (GIF, JPEG,  PNG, etc.).
+%  MagickGetImageBlob() implements direct to memory image formats.  It returns
+%  the image as a blob (a formatted "file" in memory) and its length, starting
+%  from the current position in the image sequence.  Use MagickSetImageFormat() 
+%  to set the format to write to the blob (GIF, JPEG,  PNG, etc.).
+%
+%  Utilize MagickResetIterator() to ensure the write is from the beginning of
+%  the image sequence.
 %
 %  Use MagickRelinquishMemory() to free the blob when you are done with it.
 %
@@ -3837,7 +4170,7 @@ WandExport MagickBooleanType MagickGetImageBorderColor(MagickWand *wand,
 %
 %  The format of the MagickGetImageChannelDepth method is:
 %
-%      unsigned long MagickGetImageChannelDepth(MagickWand *wand,
+%      size_t MagickGetImageChannelDepth(MagickWand *wand,
 %        const ChannelType channel)
 %
 %  A description of each parameter follows:
@@ -3847,7 +4180,7 @@ WandExport MagickBooleanType MagickGetImageBorderColor(MagickWand *wand,
 %    o channel: the image channel(s).
 %
 */
-WandExport unsigned long MagickGetImageChannelDepth(MagickWand *wand,
+WandExport size_t MagickGetImageChannelDepth(MagickWand *wand,
   const ChannelType channel)
 {
   assert(wand != (MagickWand *) NULL);
@@ -3970,46 +4303,53 @@ WandExport double *MagickGetImageChannelDistortions(MagickWand *wand,
 %                                                                             %
 %                                                                             %
 %                                                                             %
-%   M a g i c k G e t I m a g e C h a n n e l M e a n                         %
+%   M a g i c k G e t I m a g e C h a n n e l F e a t u r e s                 %
 %                                                                             %
 %                                                                             %
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  MagickGetImageChannelMean() gets the mean and standard deviation of one or
-%  more image channels.
+%  MagickGetImageChannelFeatures() returns features for each channel in the
+%  image in each of four directions (horizontal, vertical, left and right
+%  diagonals) for the specified distance.  The features include the angular
+%  second moment, contrast, correlation, sum of squares: variance, inverse
+%  difference moment, sum average, sum varience, sum entropy, entropy,
+%  difference variance, difference entropy, information measures of
+%  correlation 1, information measures of correlation 2, and maximum
+%  correlation coefficient.  You can access the red channel contrast, for
+%  example, like this:
 %
-%  The format of the MagickGetImageChannelMean method is:
+%      channel_features=MagickGetImageChannelFeatures(wand,1);
+%      contrast=channel_features[RedChannel].contrast[0];
 %
-%      MagickBooleanType MagickGetImageChannelMean(MagickWand *wand,
-%        const ChannelType channel,double *mean,double *standard_deviation)
+%  Use MagickRelinquishMemory() to free the statistics buffer.
+%
+%  The format of the MagickGetImageChannelFeatures method is:
+%
+%      ChannelFeatures *MagickGetImageChannelFeatures(MagickWand *wand,
+%        const size_t distance)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
-%    o channel: the image channel(s).
-%
-%    o mean:  The mean pixel value for the specified channel(s).
-%
-%    o standard_deviation:  The standard deviation for the specified channel(s).
+%    o distance: the distance.
 %
 */
-WandExport MagickBooleanType MagickGetImageChannelMean(MagickWand *wand,
-  const ChannelType channel,double *mean,double *standard_deviation)
+WandExport ChannelFeatures *MagickGetImageChannelFeatures(MagickWand *wand,
+  const size_t distance)
 {
-  MagickBooleanType
-    status;
-
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
   if (wand->debug != MagickFalse)
     (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
   if (wand->images == (Image *) NULL)
-    ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  status=GetImageChannelMean(wand->images,channel,mean,standard_deviation,
-    wand->exception);
-  return(status);
+    {
+      (void) ThrowMagickException(wand->exception,GetMagickModule(),WandError,
+        "ContainsNoImages","`%s'",wand->name);
+      return((ChannelFeatures *) NULL);
+    }
+  return(GetImageChannelFeatures(wand->images,distance,wand->exception));
 }
 
 /*
@@ -4058,7 +4398,54 @@ WandExport MagickBooleanType MagickGetImageChannelKurtosis(MagickWand *wand,
     wand->exception);
   return(status);
 }
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%   M a g i c k G e t I m a g e C h a n n e l M e a n                         %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagickGetImageChannelMean() gets the mean and standard deviation of one or
+%  more image channels.
+%
+%  The format of the MagickGetImageChannelMean method is:
+%
+%      MagickBooleanType MagickGetImageChannelMean(MagickWand *wand,
+%        const ChannelType channel,double *mean,double *standard_deviation)
+%
+%  A description of each parameter follows:
+%
+%    o wand: the magick wand.
+%
+%    o channel: the image channel(s).
+%
+%    o mean:  The mean pixel value for the specified channel(s).
+%
+%    o standard_deviation:  The standard deviation for the specified channel(s).
+%
+*/
+WandExport MagickBooleanType MagickGetImageChannelMean(MagickWand *wand,
+  const ChannelType channel,double *mean,double *standard_deviation)
+{
+  MagickBooleanType
+    status;
 
+  assert(wand != (MagickWand *) NULL);
+  assert(wand->signature == WandSignature);
+  if (wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
+  if (wand->images == (Image *) NULL)
+    ThrowWandException(WandError,"ContainsNoImages",wand->name);
+  status=GetImageChannelMean(wand->images,channel,mean,standard_deviation,
+    wand->exception);
+  return(status);
+}
+
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                             %
@@ -4121,7 +4508,7 @@ WandExport MagickBooleanType MagickGetImageChannelRange(MagickWand *wand,
 %  maxima, the mean, the standard deviation, the kurtosis and the skewness.
 %  You can access the red channel mean, for example, like this:
 %
-%      channel_statistics=MagickGetImageChannelStatistics(image,excepton);
+%      channel_statistics=MagickGetImageChannelStatistics(wand);
 %      red_mean=channel_statistics[RedChannel].mean;
 %
 %  Use MagickRelinquishMemory() to free the statistics buffer.
@@ -4167,7 +4554,7 @@ WandExport ChannelStatistics *MagickGetImageChannelStatistics(MagickWand *wand)
 %  The format of the MagickGetImageColormapColor method is:
 %
 %      MagickBooleanType MagickGetImageColormapColor(MagickWand *wand,
-%        const unsigned long index,PixelWand *color)
+%        const size_t index,PixelWand *color)
 %
 %  A description of each parameter follows:
 %
@@ -4179,7 +4566,7 @@ WandExport ChannelStatistics *MagickGetImageChannelStatistics(MagickWand *wand)
 %
 */
 WandExport MagickBooleanType MagickGetImageColormapColor(MagickWand *wand,
-  const unsigned long index,PixelWand *color)
+  const size_t index,PixelWand *color)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -4213,14 +4600,14 @@ WandExport MagickBooleanType MagickGetImageColormapColor(MagickWand *wand,
 %
 %  The format of the MagickGetImageColors method is:
 %
-%      unsigned long MagickGetImageColors(MagickWand *wand)
+%      size_t MagickGetImageColors(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
 */
-WandExport unsigned long MagickGetImageColors(MagickWand *wand)
+WandExport size_t MagickGetImageColors(MagickWand *wand)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -4362,14 +4749,14 @@ WandExport CompressionType MagickGetImageCompression(MagickWand *wand)
 %
 %  The format of the MagickGetImageCompression method is:
 %
-%      unsigned long MagickGetImageCompression(MagickWand *wand)
+%      size_t MagickGetImageCompression(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
 */
-WandExport unsigned long MagickGetImageCompressionQuality(MagickWand *wand)
+WandExport size_t MagickGetImageCompressionQuality(MagickWand *wand)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -4399,14 +4786,14 @@ WandExport unsigned long MagickGetImageCompressionQuality(MagickWand *wand)
 %
 %  The format of the MagickGetImageDelay method is:
 %
-%      unsigned long MagickGetImageDelay(MagickWand *wand)
+%      size_t MagickGetImageDelay(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
 */
-WandExport unsigned long MagickGetImageDelay(MagickWand *wand)
+WandExport size_t MagickGetImageDelay(MagickWand *wand)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -4432,14 +4819,14 @@ WandExport unsigned long MagickGetImageDelay(MagickWand *wand)
 %
 %  The format of the MagickGetImageDepth method is:
 %
-%      unsigned long MagickGetImageDepth(MagickWand *wand)
+%      size_t MagickGetImageDepth(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
 */
-WandExport unsigned long MagickGetImageDepth(MagickWand *wand)
+WandExport size_t MagickGetImageDepth(MagickWand *wand)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -4590,7 +4977,7 @@ WandExport char *MagickGetImageFilename(MagickWand *wand)
 %
 %  The format of the MagickGetImageFormat method is:
 %
-%      const char MagickGetImageFormat(MagickWand *wand)
+%      const char *MagickGetImageFormat(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
@@ -4779,14 +5166,14 @@ WandExport MagickBooleanType MagickGetImageGreenPrimary(MagickWand *wand,
 %
 %  The format of the MagickGetImageHeight method is:
 %
-%      unsigned long MagickGetImageHeight(MagickWand *wand)
+%      size_t MagickGetImageHeight(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
 */
-WandExport unsigned long MagickGetImageHeight(MagickWand *wand)
+WandExport size_t MagickGetImageHeight(MagickWand *wand)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -4814,7 +5201,7 @@ WandExport unsigned long MagickGetImageHeight(MagickWand *wand)
 %  The format of the MagickGetImageHistogram method is:
 %
 %      PixelWand **MagickGetImageHistogram(MagickWand *wand,
-%        unsigned long *number_colors)
+%        size_t *number_colors)
 %
 %  A description of each parameter follows:
 %
@@ -4825,7 +5212,7 @@ WandExport unsigned long MagickGetImageHeight(MagickWand *wand)
 %
 */
 WandExport PixelWand **MagickGetImageHistogram(MagickWand *wand,
-  unsigned long *number_colors)
+  size_t *number_colors)
 {
   ColorPacket
     *histogram;
@@ -4833,7 +5220,7 @@ WandExport PixelWand **MagickGetImageHistogram(MagickWand *wand,
   PixelWand
     **pixel_wands;
 
-  register long
+  register ssize_t
     i;
 
   assert(wand != (MagickWand *) NULL);
@@ -4850,11 +5237,11 @@ WandExport PixelWand **MagickGetImageHistogram(MagickWand *wand,
   if (histogram == (ColorPacket *) NULL)
     return((PixelWand **) NULL);
   pixel_wands=NewPixelWands(*number_colors);
-  for (i=0; i < (long) *number_colors; i++)
+  for (i=0; i < (ssize_t) *number_colors; i++)
   {
     PixelSetQuantumColor(pixel_wands[i],&histogram[i].pixel);
     PixelSetIndex(pixel_wands[i],histogram[i].index);
-    PixelSetColorCount(pixel_wands[i],(unsigned long) histogram[i].count);
+    PixelSetColorCount(pixel_wands[i],(size_t) histogram[i].count);
   }
   histogram=(ColorPacket *) RelinquishMagickMemory(histogram);
   return(pixel_wands);
@@ -4951,14 +5338,14 @@ WandExport InterpolatePixelMethod MagickGetImageInterpolateMethod(
 %
 %  The format of the MagickGetImageIterations method is:
 %
-%      unsigned long MagickGetImageIterations(MagickWand *wand)
+%      size_t MagickGetImageIterations(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
 */
-WandExport unsigned long MagickGetImageIterations(MagickWand *wand)
+WandExport size_t MagickGetImageIterations(MagickWand *wand)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -5098,7 +5485,7 @@ WandExport OrientationType MagickGetImageOrientation(MagickWand *wand)
 %  The format of the MagickGetImagePage method is:
 %
 %      MagickBooleanType MagickGetImagePage(MagickWand *wand,
-%        unsigned long *width,unsigned long *height,long *x,long *y)
+%        size_t *width,size_t *height,ssize_t *x,ssize_t *y)
 %
 %  A description of each parameter follows:
 %
@@ -5114,7 +5501,7 @@ WandExport OrientationType MagickGetImageOrientation(MagickWand *wand)
 %
 */
 WandExport MagickBooleanType MagickGetImagePage(MagickWand *wand,
-  unsigned long *width,unsigned long *height,long *x,long *y)
+  size_t *width,size_t *height,ssize_t *x,ssize_t *y)
 {
   assert(wand != (const MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -5145,7 +5532,7 @@ WandExport MagickBooleanType MagickGetImagePage(MagickWand *wand,
 %  The format of the MagickGetImagePixelColor method is:
 %
 %      MagickBooleanType MagickGetImagePixelColor(MagickWand *wand,
-%        const long x,const long y,PixelWand *color)
+%        const ssize_t x,const ssize_t y,PixelWand *color)
 %
 %  A description of each parameter follows:
 %
@@ -5157,7 +5544,7 @@ WandExport MagickBooleanType MagickGetImagePage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickGetImagePixelColor(MagickWand *wand,
-  const long x,const long y,PixelWand *color)
+  const ssize_t x,const ssize_t y,PixelWand *color)
 {
   IndexPacket
     *indexes;
@@ -5293,8 +5680,8 @@ WandExport MagickBooleanType MagickGetImageRedPrimary(MagickWand *wand,
 %  The format of the MagickGetImageRegion method is:
 %
 %      MagickWand *MagickGetImageRegion(MagickWand *wand,
-%        const unsigned long width,const unsigned long height,const long x,
-%        const long y)
+%        const size_t width,const size_t height,const ssize_t x,
+%        const ssize_t y)
 %
 %  A description of each parameter follows:
 %
@@ -5310,8 +5697,8 @@ WandExport MagickBooleanType MagickGetImageRedPrimary(MagickWand *wand,
 %
 */
 WandExport MagickWand *MagickGetImageRegion(MagickWand *wand,
-  const unsigned long width,const unsigned long height,const long x,
-  const long y)
+  const size_t width,const size_t height,const ssize_t x,
+  const ssize_t y)
 {
   Image
     *region_image;
@@ -5428,14 +5815,14 @@ WandExport MagickBooleanType MagickGetImageResolution(MagickWand *wand,
 %
 %  The format of the MagickGetImageScene method is:
 %
-%      unsigned long MagickGetImageScene(MagickWand *wand)
+%      size_t MagickGetImageScene(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
 */
-WandExport unsigned long MagickGetImageScene(MagickWand *wand)
+WandExport size_t MagickGetImageScene(MagickWand *wand)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -5512,14 +5899,14 @@ WandExport char *MagickGetImageSignature(MagickWand *wand)
 %
 %  The format of the MagickGetImageTicksPerSecond method is:
 %
-%      unsigned long MagickGetImageTicksPerSecond(MagickWand *wand)
+%      size_t MagickGetImageTicksPerSecond(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
 */
-WandExport unsigned long MagickGetImageTicksPerSecond(MagickWand *wand)
+WandExport size_t MagickGetImageTicksPerSecond(MagickWand *wand)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -5527,7 +5914,7 @@ WandExport unsigned long MagickGetImageTicksPerSecond(MagickWand *wand)
     (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
   if (wand->images == (Image *) NULL)
     ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  return((unsigned long) wand->images->ticks_per_second);
+  return((size_t) wand->images->ticks_per_second);
 }
 
 /*
@@ -5706,14 +6093,14 @@ WandExport MagickBooleanType MagickGetImageWhitePoint(MagickWand *wand,
 %
 %  The format of the MagickGetImageWidth method is:
 %
-%      unsigned long MagickGetImageWidth(MagickWand *wand)
+%      size_t MagickGetImageWidth(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
 */
-WandExport unsigned long MagickGetImageWidth(MagickWand *wand)
+WandExport size_t MagickGetImageWidth(MagickWand *wand)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -5740,14 +6127,14 @@ WandExport unsigned long MagickGetImageWidth(MagickWand *wand)
 %
 %  The format of the MagickGetNumberImages method is:
 %
-%      unsigned long MagickGetNumberImages(MagickWand *wand)
+%      size_t MagickGetNumberImages(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
 */
-WandExport unsigned long MagickGetNumberImages(MagickWand *wand)
+WandExport size_t MagickGetNumberImages(MagickWand *wand)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -6049,7 +6436,7 @@ WandExport MagickBooleanType MagickImplodeImage(MagickWand *wand,
 %  MagickImportImagePixels() accepts pixel datand stores it in the image at the
 %  location you specify.  The method returns MagickFalse on success otherwise
 %  MagickTrue if an error is encountered.  The pixel data can be either char,
-%  short int, int, long, float, or double in the order specified by map.
+%  short int, int, ssize_t, float, or double in the order specified by map.
 %
 %  Suppose your want to upload the first scanline of a 640x480 image from
 %  character data in red-green-blue order:
@@ -6059,8 +6446,8 @@ WandExport MagickBooleanType MagickImplodeImage(MagickWand *wand,
 %  The format of the MagickImportImagePixels method is:
 %
 %      MagickBooleanType MagickImportImagePixels(MagickWand *wand,
-%        const long x,const long y,const unsigned long columns,
-%        const unsigned long rows,const char *map,const StorageType storage,
+%        const ssize_t x,const ssize_t y,const size_t columns,
+%        const size_t rows,const char *map,const StorageType storage,
 %        const void *pixels)
 %
 %  A description of each parameter follows:
@@ -6087,8 +6474,8 @@ WandExport MagickBooleanType MagickImplodeImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickImportImagePixels(MagickWand *wand,
-  const long x,const long y,const unsigned long columns,
-  const unsigned long rows,const char *map,const StorageType storage,
+  const ssize_t x,const ssize_t y,const size_t columns,
+  const size_t rows,const char *map,const StorageType storage,
   const void *pixels)
 {
   MagickBooleanType
@@ -6124,30 +6511,42 @@ WandExport MagickBooleanType MagickImportImagePixels(MagickWand *wand,
 %  The format of the MagickInverseFourierTransformImage method is:
 %
 %      MagickBooleanType MagickInverseFourierTransformImage(
-%        MagickWand *wand,const MagickBooleanType magnitude)
+%        MagickWand *magnitude_wand,MagickWand *phase_wand,
+%        const MagickBooleanType magnitude)
 %
 %  A description of each parameter follows:
 %
-%    o wand: the magick wand.
+%    o magnitude_wand: the magnitude or real wand.
+%
+%    o phase_wand: the phase or imaginary wand.
 %
 %    o magnitude: if true, return as magnitude / phase pair otherwise a real /
 %      imaginary image pair.
 %
 */
 WandExport MagickBooleanType MagickInverseFourierTransformImage(
-  MagickWand *wand,const MagickBooleanType magnitude)
+  MagickWand *magnitude_wand,MagickWand *phase_wand,
+  const MagickBooleanType magnitude)
 {
   Image
     *inverse_image;
 
-  assert(wand != (MagickWand *) NULL);
-  assert(wand->signature == WandSignature);
-  if (wand->debug != MagickFalse)
-    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
-  if (wand->images == (Image *) NULL)
-    ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  inverse_image=InverseFourierTransformImage(wand->images,magnitude,
-    wand->exception);
+  MagickWand
+    *wand;
+
+  assert(magnitude_wand != (MagickWand *) NULL);
+  assert(magnitude_wand->signature == WandSignature);
+  if (magnitude_wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",
+      magnitude_wand->name);
+  wand=magnitude_wand;
+  if (magnitude_wand->images == (Image *) NULL)
+    ThrowWandException(WandError,"ContainsNoImages",
+      magnitude_wand->name);
+  assert(phase_wand != (MagickWand *) NULL);
+  assert(phase_wand->signature == WandSignature);
+  inverse_image=InverseFourierTransformImage(magnitude_wand->images,
+    phase_wand->images,magnitude,wand->exception);
   if (inverse_image == (Image *) NULL)
     return(MagickFalse);
   ReplaceImageInList(&wand->images,inverse_image);
@@ -6330,7 +6729,7 @@ WandExport MagickBooleanType MagickLinearStretchImage(MagickWand *wand,
 %  MagickLiquidRescaleImage() rescales image with seam carving.
 %
 %      MagickBooleanType MagickLiquidRescaleImage(MagickWand *wand,
-%        const unsigned long columns,const unsigned long rows,
+%        const size_t columns,const size_t rows,
 %        const double delta_x,const double rigidity)
 %
 %  A description of each parameter follows:
@@ -6347,7 +6746,7 @@ WandExport MagickBooleanType MagickLinearStretchImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickLiquidRescaleImage(MagickWand *wand,
-  const unsigned long columns,const unsigned long rows,const double delta_x,
+  const size_t columns,const size_t rows,const double delta_x,
   const double rigidity)
 {
   Image
@@ -6413,60 +6812,14 @@ WandExport MagickBooleanType MagickMagnifyImage(MagickWand *wand)
 %                                                                             %
 %                                                                             %
 %                                                                             %
-%   M a g i c k M e d i a n F i l t e r I m a g e                             %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  MagickMedianFilterImage() applies a digital filter that improves the quality
-%  of a noisy image.  Each pixel is replaced by the median in a set of
-%  neighboring pixels as defined by radius.
-%
-%  The format of the MagickMedianFilterImage method is:
-%
-%      MagickBooleanType MagickMedianFilterImage(MagickWand *wand,
-%        const double radius)
-%
-%  A description of each parameter follows:
-%
-%    o wand: the magick wand.
-%
-%    o radius: the radius of the pixel neighborhood.
-%
-*/
-WandExport MagickBooleanType MagickMedianFilterImage(MagickWand *wand,
-  const double radius)
-{
-  Image
-    *median_image;
-
-  assert(wand != (MagickWand *) NULL);
-  assert(wand->signature == WandSignature);
-  if (wand->debug != MagickFalse)
-    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
-  if (wand->images == (Image *) NULL)
-    ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  median_image=MedianFilterImage(wand->images,radius,wand->exception);
-  if (median_image == (Image *) NULL)
-    return(MagickFalse);
-  ReplaceImageInList(&wand->images,median_image);
-  return(MagickTrue);
-}
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
 %   M a g i c k M e r g e I m a g e L a y e r s                               %
 %                                                                             %
 %                                                                             %
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  MagickMergeImageLayers() composes all the image layers from the current given
-%  image onward to produce a single image of the merged layers.
+%  MagickMergeImageLayers() composes all the image layers from the current
+%  given image onward to produce a single image of the merged layers.
 %
 %  The inital canvas's size depends on the given ImageLayerMethod, and is
 %  initialized using the first images background color.  The images
@@ -6607,8 +6960,8 @@ WandExport MagickBooleanType MagickModulateImage(MagickWand *wand,
     (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
   if (wand->images == (Image *) NULL)
     ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  (void) FormatMagickString(modulate,MaxTextExtent,"%g,%g,%g",brightness,
-    saturation,hue);
+  (void) FormatLocaleString(modulate,MaxTextExtent,"%g,%g,%g",
+    brightness,saturation,hue);
   status=ModulateImage(wand->images,modulate);
   if (status == MagickFalse)
     InheritException(wand->exception,&wand->images->exception);
@@ -6746,7 +7099,7 @@ WandExport MagickWand *MagickMontageImage(MagickWand *wand,
 %  The format of the MagickMorphImages method is:
 %
 %      MagickWand *MagickMorphImages(MagickWand *wand,
-%        const unsigned long number_frames)
+%        const size_t number_frames)
 %
 %  A description of each parameter follows:
 %
@@ -6756,7 +7109,7 @@ WandExport MagickWand *MagickMontageImage(MagickWand *wand,
 %
 */
 WandExport MagickWand *MagickMorphImages(MagickWand *wand,
-  const unsigned long number_frames)
+  const size_t number_frames)
 {
   Image
     *morph_image;
@@ -6771,6 +7124,78 @@ WandExport MagickWand *MagickMorphImages(MagickWand *wand,
   if (morph_image == (Image *) NULL)
     return((MagickWand *) NULL);
   return(CloneMagickWandFromImages(wand,morph_image));
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%   M a g i c k M o r p h o l o g y I m a g e                                 %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagickMorphologyImage() applies a user supplied kernel to the image
+%  according to the given mophology method.
+%
+%  The format of the MagickMorphologyImage method is:
+%
+%      MagickBooleanType MagickMorphologyImage(MagickWand *wand,
+%        MorphologyMethod method,const ssize_t iterations,KernelInfo *kernel)
+%      MagickBooleanType MagickMorphologyImageChannel(MagickWand *wand,
+%        ChannelType channel,MorphologyMethod method,const ssize_t iterations,
+%        KernelInfo *kernel)
+%
+%  A description of each parameter follows:
+%
+%    o wand: the magick wand.
+%
+%    o channel: the image channel(s).
+%
+%    o method: the morphology method to be applied.
+%
+%    o iterations: apply the operation this many times (or no change).
+%      A value of -1 means loop until no change found.  How this is applied
+%      may depend on the morphology method.  Typically this is a value of 1.
+%
+%    o kernel: An array of doubles representing the morphology kernel.
+%
+*/
+
+WandExport MagickBooleanType MagickMorphologyImage(MagickWand *wand,
+  MorphologyMethod method,const ssize_t iterations,KernelInfo *kernel)
+{
+  MagickBooleanType
+    status;
+
+  status=MagickMorphologyImageChannel(wand,DefaultChannels,method,iterations,
+    kernel);
+  return(status);
+}
+
+WandExport MagickBooleanType MagickMorphologyImageChannel(MagickWand *wand,
+  const ChannelType channel,MorphologyMethod method,const ssize_t iterations,
+  KernelInfo *kernel)
+{
+  Image
+    *morphology_image;
+
+  assert(wand != (MagickWand *) NULL);
+  assert(wand->signature == WandSignature);
+  if (wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
+  if (kernel == (const KernelInfo *) NULL)
+    return(MagickFalse);
+  if (wand->images == (Image *) NULL)
+    ThrowWandException(WandError,"ContainsNoImages",wand->name);
+  morphology_image=MorphologyImageChannel(wand->images,channel,method,
+    iterations,kernel,wand->exception);
+  if (morphology_image == (Image *) NULL)
+    return(MagickFalse);
+  ReplaceImageInList(&wand->images,morphology_image);
+  return(MagickTrue);
 }
 
 /*
@@ -6924,7 +7349,7 @@ WandExport MagickBooleanType MagickNegateImageChannel(MagickWand *wand,
 %  The format of the MagickNewImage method is:
 %
 %      MagickBooleanType MagickNewImage(MagickWand *wand,
-%        const unsigned long columns,const unsigned long rows,
+%        const size_t columns,const size_t rows,
 %        const PixelWand *background)
 %
 %  A description of each parameter follows:
@@ -6939,7 +7364,7 @@ WandExport MagickBooleanType MagickNegateImageChannel(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickNewImage(MagickWand *wand,
-  const unsigned long width,const unsigned long height,
+  const size_t width,const size_t height,
   const PixelWand *background)
 {
   Image
@@ -7268,7 +7693,7 @@ WandExport MagickWand *MagickOptimizeImageLayers(MagickWand *wand)
 %      map to use, followed by zero or more numbers representing the number of
 %      color levels tho dither between.
 %
-%      Any level number less than 2 is equivelent to 2, and means only binary
+%      Any level number less than 2 is equivalent to 2, and means only binary
 %      dithering will be applied to each color channel.
 %
 %      No numbers also means a 2 level (bitmap) dither will be applied to all
@@ -7540,7 +7965,7 @@ WandExport MagickBooleanType MagickPolaroidImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickPosterizeImage(MagickWand *wand,
-  const unsigned long levels,const MagickBooleanType dither)
+  const size_t levels,const MagickBooleanType dither)
 {
   MagickBooleanType
     status;
@@ -7667,8 +8092,8 @@ WandExport MagickBooleanType MagickPreviousImage(MagickWand *wand)
 %  The format of the MagickQuantizeImage method is:
 %
 %      MagickBooleanType MagickQuantizeImage(MagickWand *wand,
-%        const unsigned long number_colors,const ColorspaceType colorspace,
-%        const unsigned long treedepth,const MagickBooleanType dither,
+%        const size_t number_colors,const ColorspaceType colorspace,
+%        const size_t treedepth,const MagickBooleanType dither,
 %        const MagickBooleanType measure_error)
 %
 %  A description of each parameter follows:
@@ -7700,8 +8125,8 @@ WandExport MagickBooleanType MagickPreviousImage(MagickWand *wand)
 %
 */
 WandExport MagickBooleanType MagickQuantizeImage(MagickWand *wand,
-  const unsigned long number_colors,const ColorspaceType colorspace,
-  const unsigned long treedepth,const MagickBooleanType dither,
+  const size_t number_colors,const ColorspaceType colorspace,
+  const size_t treedepth,const MagickBooleanType dither,
   const MagickBooleanType measure_error)
 {
   MagickBooleanType
@@ -7748,8 +8173,8 @@ WandExport MagickBooleanType MagickQuantizeImage(MagickWand *wand,
 %  The format of the MagickQuantizeImages method is:
 %
 %      MagickBooleanType MagickQuantizeImages(MagickWand *wand,
-%        const unsigned long number_colors,const ColorspaceType colorspace,
-%        const unsigned long treedepth,const MagickBooleanType dither,
+%        const size_t number_colors,const ColorspaceType colorspace,
+%        const size_t treedepth,const MagickBooleanType dither,
 %        const MagickBooleanType measure_error)
 %
 %  A description of each parameter follows:
@@ -7781,8 +8206,8 @@ WandExport MagickBooleanType MagickQuantizeImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickQuantizeImages(MagickWand *wand,
-  const unsigned long number_colors,const ColorspaceType colorspace,
-  const unsigned long treedepth,const MagickBooleanType dither,
+  const size_t number_colors,const ColorspaceType colorspace,
+  const size_t treedepth,const MagickBooleanType dither,
   const MagickBooleanType measure_error)
 {
   MagickBooleanType
@@ -7888,8 +8313,8 @@ WandExport MagickBooleanType MagickRadialBlurImageChannel(MagickWand *wand,
 %  The format of the MagickRaiseImage method is:
 %
 %      MagickBooleanType MagickRaiseImage(MagickWand *wand,
-%        const unsigned long width,const unsigned long height,const long x,
-%        const long y,const MagickBooleanType raise)
+%        const size_t width,const size_t height,const ssize_t x,
+%        const ssize_t y,const MagickBooleanType raise)
 %
 %  A description of each parameter follows:
 %
@@ -7902,8 +8327,8 @@ WandExport MagickBooleanType MagickRadialBlurImageChannel(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickRaiseImage(MagickWand *wand,
-  const unsigned long width,const unsigned long height,const long x,
-  const long y,const MagickBooleanType raise)
+  const size_t width,const size_t height,const ssize_t x,
+  const ssize_t y,const MagickBooleanType raise)
 {
   MagickBooleanType
     status;
@@ -7986,7 +8411,7 @@ WandExport MagickBooleanType MagickRandomThresholdImageChannel(
     (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
   if (wand->images == (Image *) NULL)
     ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  (void) FormatMagickString(threshold,MaxTextExtent,"%gx%g",low,high);
+  (void) FormatLocaleString(threshold,MaxTextExtent,"%gx%g",low,high);
   status=RandomThresholdImageChannel(wand->images,channel,threshold,
     wand->exception);
   if (status == MagickFalse)
@@ -8133,105 +8558,6 @@ WandExport MagickBooleanType MagickReadImageFile(MagickWand *wand,FILE *file)
   if (images == (Image *) NULL)
     return(MagickFalse);
   return(InsertImageInWand(wand,images));
-}
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%   M a g i c k R e c o l o r I m a g e                                       %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  MagickRecolorImage() translate, scale, shear, or rotate image colors.
-%  Although you can use variable sized matrices, typically you use a 5 x 5 for
-%  an RGBA image and a 6x6 for CMYKA.  Populate the last row with normalized
-%  values to translate.
-%
-%  The format of the MagickRecolorImage method is:
-%
-%      MagickBooleanType MagickRecolorImage(MagickWand *wand,
-%        const unsigned long order,const double *color_matrix)
-%
-%  A description of each parameter follows:
-%
-%    o wand: the magick wand.
-%
-%    o order: the number of columns and rows in the color matrix.
-%
-%    o color_matrix: An array of doubles representing the color matrix.
-%
-*/
-WandExport MagickBooleanType MagickRecolorImage(MagickWand *wand,
-  const unsigned long order,const double *color_matrix)
-{
-  Image
-    *transform_image;
-
-  assert(wand != (MagickWand *) NULL);
-  assert(wand->signature == WandSignature);
-  if (wand->debug != MagickFalse)
-    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
-  if (color_matrix == (const double *) NULL)
-    return(MagickFalse);
-  if (wand->images == (Image *) NULL)
-    ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  transform_image=RecolorImage(wand->images,order,color_matrix,
-    wand->exception);
-  if (transform_image == (Image *) NULL)
-    return(MagickFalse);
-  ReplaceImageInList(&wand->images,transform_image);
-  return(MagickTrue);
-}
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%     M a g i c k R e d u c e N o i s e I m a g e                             %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  MagickReduceNoiseImage() smooths the contours of an image while still
-%  preserving edge information.  The algorithm works by replacing each pixel
-%  with its neighbor closest in value.  A neighbor is defined by radius.  Use
-%  a radius of 0 and ReduceNoise() selects a suitable radius for you.
-%
-%  The format of the MagickReduceNoiseImage method is:
-%
-%      MagickBooleanType MagickReduceNoiseImage(MagickWand *wand,
-%        const double radius)
-%
-%  A description of each parameter follows:
-%
-%    o wand: the magick wand.
-%
-%    o radius: the radius of the pixel neighborhood.
-%
-*/
-WandExport MagickBooleanType MagickReduceNoiseImage(MagickWand *wand,
-  const double radius)
-{
-  Image
-    *noise_image;
-
-  assert(wand != (MagickWand *) NULL);
-  assert(wand->signature == WandSignature);
-  if (wand->debug != MagickFalse)
-    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
-  if (wand->images == (Image *) NULL)
-    ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  noise_image=ReduceNoiseImage(wand->images,radius,wand->exception);
-  if (noise_image == (Image *) NULL)
-    return(MagickFalse);
-  ReplaceImageInList(&wand->images,noise_image);
-  return(MagickTrue);
 }
 
 /*
@@ -8458,7 +8784,7 @@ WandExport MagickBooleanType MagickResetImagePage(MagickWand *wand,
 %  The format of the MagickResizeImage method is:
 %
 %      MagickBooleanType MagickResizeImage(MagickWand *wand,
-%        const unsigned long columns,const unsigned long rows,
+%        const size_t columns,const size_t rows,
 %        const FilterTypes filter,const double blur)
 %
 %  A description of each parameter follows:
@@ -8475,7 +8801,7 @@ WandExport MagickBooleanType MagickResetImagePage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickResizeImage(MagickWand *wand,
-  const unsigned long columns,const unsigned long rows,const FilterTypes filter,
+  const size_t columns,const size_t rows,const FilterTypes filter,
   const double blur)
 {
   Image
@@ -8510,8 +8836,8 @@ WandExport MagickBooleanType MagickResizeImage(MagickWand *wand,
 %
 %  The format of the MagickRollImage method is:
 %
-%      MagickBooleanType MagickRollImage(MagickWand *wand,const long x,
-%        const unsigned long y)
+%      MagickBooleanType MagickRollImage(MagickWand *wand,const ssize_t x,
+%        const size_t y)
 %
 %  A description of each parameter follows:
 %
@@ -8524,7 +8850,7 @@ WandExport MagickBooleanType MagickResizeImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickRollImage(MagickWand *wand,
-  const long x,const long y)
+  const ssize_t x,const ssize_t y)
 {
   Image
     *roll_image;
@@ -8610,7 +8936,7 @@ WandExport MagickBooleanType MagickRotateImage(MagickWand *wand,
 %  The format of the MagickSampleImage method is:
 %
 %      MagickBooleanType MagickSampleImage(MagickWand *wand,
-%        const unsigned long columns,const unsigned long rows)
+%        const size_t columns,const size_t rows)
 %
 %  A description of each parameter follows:
 %
@@ -8623,7 +8949,7 @@ WandExport MagickBooleanType MagickRotateImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSampleImage(MagickWand *wand,
-  const unsigned long columns,const unsigned long rows)
+  const size_t columns,const size_t rows)
 {
   Image
     *sample_image;
@@ -8657,7 +8983,7 @@ WandExport MagickBooleanType MagickSampleImage(MagickWand *wand,
 %  The format of the MagickScaleImage method is:
 %
 %      MagickBooleanType MagickScaleImage(MagickWand *wand,
-%        const unsigned long columns,const unsigned long rows)
+%        const size_t columns,const size_t rows)
 %
 %  A description of each parameter follows:
 %
@@ -8670,7 +8996,7 @@ WandExport MagickBooleanType MagickSampleImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickScaleImage(MagickWand *wand,
-  const unsigned long columns,const unsigned long rows)
+  const size_t columns,const size_t rows)
 {
   Image
     *scale_image;
@@ -8782,7 +9108,7 @@ MagickExport MagickBooleanType MagickSegmentImage(MagickWand *wand,
 %    o sigma: the standard deviation of the gaussian, in pixels.
 %
 %    o threshold: only pixels within this contrast threshold are included
-%      in the blur operation 
+%      in the blur operation.
 %
 */
 
@@ -9171,7 +9497,7 @@ WandExport MagickBooleanType MagickSetImageBorderColor(MagickWand *wand,
 %  The format of the MagickSetImageChannelDepth method is:
 %
 %      MagickBooleanType MagickSetImageChannelDepth(MagickWand *wand,
-%        const ChannelType channel,const unsigned long depth)
+%        const ChannelType channel,const size_t depth)
 %
 %  A description of each parameter follows:
 %
@@ -9183,7 +9509,7 @@ WandExport MagickBooleanType MagickSetImageBorderColor(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSetImageChannelDepth(MagickWand *wand,
-  const ChannelType channel,const unsigned long depth)
+  const ChannelType channel,const size_t depth)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -9240,6 +9566,51 @@ WandExport MagickBooleanType MagickSetImageClipMask(MagickWand *wand,
 %                                                                             %
 %                                                                             %
 %                                                                             %
+%   M a g i c k S e t I m a g e C o l o r                                     %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagickSetImageColor() set the entire wand canvas to the specified color.
+%
+%  The format of the MagickSetImageColor method is:
+%
+%      MagickBooleanType MagickSetImageColor(MagickWand *wand,
+%        const PixelWand *color)
+%
+%  A description of each parameter follows:
+%
+%    o wand: the magick wand.
+%
+%    o background: the image color.
+%
+*/
+WandExport MagickBooleanType MagickSetImageColor(MagickWand *wand,
+  const PixelWand *color)
+{
+  MagickBooleanType
+    status;
+
+  MagickPixelPacket
+    pixel;
+
+  assert(wand != (MagickWand *) NULL);
+  assert(wand->signature == WandSignature);
+  if (wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
+  PixelGetMagickColor(color,&pixel);
+  status=SetImageColor(wand->images,&pixel);
+  if (status == MagickFalse)
+    InheritException(wand->exception,&wand->images->exception);
+  return(status);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
 %   M a g i c k S e t I m a g e C o l o r m a p C o l o r                     %
 %                                                                             %
 %                                                                             %
@@ -9252,7 +9623,7 @@ WandExport MagickBooleanType MagickSetImageClipMask(MagickWand *wand,
 %  The format of the MagickSetImageColormapColor method is:
 %
 %      MagickBooleanType MagickSetImageColormapColor(MagickWand *wand,
-%        const unsigned long index,const PixelWand *color)
+%        const size_t index,const PixelWand *color)
 %
 %  A description of each parameter follows:
 %
@@ -9264,7 +9635,7 @@ WandExport MagickBooleanType MagickSetImageClipMask(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSetImageColormapColor(MagickWand *wand,
-  const unsigned long index,const PixelWand *color)
+  const size_t index,const PixelWand *color)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -9414,7 +9785,7 @@ WandExport MagickBooleanType MagickSetImageCompression(MagickWand *wand,
 %  The format of the MagickSetImageCompressionQuality method is:
 %
 %      MagickBooleanType MagickSetImageCompressionQuality(MagickWand *wand,
-%        const unsigned long quality)
+%        const size_t quality)
 %
 %  A description of each parameter follows:
 %
@@ -9424,7 +9795,7 @@ WandExport MagickBooleanType MagickSetImageCompression(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSetImageCompressionQuality(MagickWand *wand,
-  const unsigned long quality)
+  const size_t quality)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -9452,7 +9823,7 @@ WandExport MagickBooleanType MagickSetImageCompressionQuality(MagickWand *wand,
 %  The format of the MagickSetImageDelay method is:
 %
 %      MagickBooleanType MagickSetImageDelay(MagickWand *wand,
-%        const unsigned long delay)
+%        const size_t delay)
 %
 %  A description of each parameter follows:
 %
@@ -9462,7 +9833,7 @@ WandExport MagickBooleanType MagickSetImageCompressionQuality(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSetImageDelay(MagickWand *wand,
-  const unsigned long delay)
+  const size_t delay)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -9490,7 +9861,7 @@ WandExport MagickBooleanType MagickSetImageDelay(MagickWand *wand,
 %  The format of the MagickSetImageDepth method is:
 %
 %      MagickBooleanType MagickSetImageDepth(MagickWand *wand,
-%        const unsigned long depth)
+%        const size_t depth)
 %
 %  A description of each parameter follows:
 %
@@ -9500,7 +9871,7 @@ WandExport MagickBooleanType MagickSetImageDelay(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSetImageDepth(MagickWand *wand,
-  const unsigned long depth)
+  const size_t depth)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -9566,7 +9937,7 @@ WandExport MagickBooleanType MagickSetImageDispose(MagickWand *wand,
 %  The format of the MagickSetImageExtent method is:
 %
 %      MagickBooleanType MagickSetImageExtent(MagickWand *wand,
-%        const unsigned long columns,const unsigned rows)
+%        const size_t columns,const unsigned rows)
 %
 %  A description of each parameter follows:
 %
@@ -9578,7 +9949,7 @@ WandExport MagickBooleanType MagickSetImageDispose(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSetImageExtent(MagickWand *wand,
-  const unsigned long columns,const unsigned long rows)
+  const size_t columns,const size_t rows)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -9932,7 +10303,7 @@ WandExport MagickBooleanType MagickSetImageInterpolateMethod(MagickWand *wand,
 %  The format of the MagickSetImageIterations method is:
 %
 %      MagickBooleanType MagickSetImageIterations(MagickWand *wand,
-%        const unsigned long iterations)
+%        const size_t iterations)
 %
 %  A description of each parameter follows:
 %
@@ -9942,7 +10313,7 @@ WandExport MagickBooleanType MagickSetImageInterpolateMethod(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSetImageIterations(MagickWand *wand,
-  const unsigned long iterations)
+  const size_t iterations)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -10071,7 +10442,7 @@ WandExport MagickBooleanType MagickSetImageOpacity(MagickWand *wand,
     (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
   if (wand->images == (Image *) NULL)
     ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  status=SetImageOpacity(wand->images,RoundToQuantum((MagickRealType)
+  status=SetImageOpacity(wand->images,ClampToQuantum((MagickRealType)
     QuantumRange-QuantumRange*alpha));
   if (status == MagickFalse)
     InheritException(wand->exception,&wand->images->exception);
@@ -10132,8 +10503,8 @@ WandExport MagickBooleanType MagickSetImageOrientation(MagickWand *wand,
 %  The format of the MagickSetImagePage method is:
 %
 %      MagickBooleanType MagickSetImagePage(MagickWand *wand,
-%        const unsigned long width,const unsigned long height,const long x,
-%        const long y)
+%        const size_t width,const size_t height,const ssize_t x,
+%        const ssize_t y)
 %
 %  A description of each parameter follows:
 %
@@ -10149,8 +10520,8 @@ WandExport MagickBooleanType MagickSetImageOrientation(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSetImagePage(MagickWand *wand,
-  const unsigned long width,const unsigned long height,const long x,
-  const long y)
+  const size_t width,const size_t height,const ssize_t x,
+  const ssize_t y)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -10360,7 +10731,7 @@ WandExport MagickBooleanType MagickSetImageResolution(MagickWand *wand,
 %  The format of the MagickSetImageScene method is:
 %
 %      MagickBooleanType MagickSetImageScene(MagickWand *wand,
-%        const unsigned long scene)
+%        const size_t scene)
 %
 %  A description of each parameter follows:
 %
@@ -10370,7 +10741,7 @@ WandExport MagickBooleanType MagickSetImageResolution(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSetImageScene(MagickWand *wand,
-  const unsigned long scene)
+  const size_t scene)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -10398,7 +10769,7 @@ WandExport MagickBooleanType MagickSetImageScene(MagickWand *wand,
 %  The format of the MagickSetImageTicksPerSecond method is:
 %
 %      MagickBooleanType MagickSetImageTicksPerSecond(MagickWand *wand,
-%        const long ticks_per-second)
+%        const ssize_t ticks_per-second)
 %
 %  A description of each parameter follows:
 %
@@ -10408,7 +10779,7 @@ WandExport MagickBooleanType MagickSetImageScene(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSetImageTicksPerSecond(MagickWand *wand,
-  const long ticks_per_second)
+  const ssize_t ticks_per_second)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -10645,7 +11016,7 @@ WandExport MagickBooleanType MagickShadeImage(MagickWand *wand,
 %  The format of the MagickShadowImage method is:
 %
 %      MagickBooleanType MagickShadowImage(MagickWand *wand,
-%        const double opacity,const double sigma,const long x,const long y)
+%        const double opacity,const double sigma,const ssize_t x,const ssize_t y)
 %
 %  A description of each parameter follows:
 %
@@ -10661,7 +11032,7 @@ WandExport MagickBooleanType MagickShadeImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickShadowImage(MagickWand *wand,
-  const double opacity,const double sigma,const long x,const long y)
+  const double opacity,const double sigma,const ssize_t x,const ssize_t y)
 {
   Image
     *shadow_image;
@@ -10763,7 +11134,7 @@ WandExport MagickBooleanType MagickSharpenImageChannel(MagickWand *wand,
 %  The format of the MagickShaveImage method is:
 %
 %      MagickBooleanType MagickShaveImage(MagickWand *wand,
-%        const unsigned long columns,const unsigned long rows)
+%        const size_t columns,const size_t rows)
 %
 %  A description of each parameter follows:
 %
@@ -10776,7 +11147,7 @@ WandExport MagickBooleanType MagickSharpenImageChannel(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickShaveImage(MagickWand *wand,
-  const unsigned long columns,const unsigned long rows)
+  const size_t columns,const size_t rows)
 {
   Image
     *shave_image;
@@ -10892,9 +11263,10 @@ WandExport MagickBooleanType MagickShearImage(MagickWand *wand,
 %
 %    o sharpen: Increase or decrease image contrast.
 %
-%    o alpha: control the "shoulder" of the contast curve.
+%    o alpha: strength of the contrast, the larger the number the more
+%      'threshold-like' it becomes.
 %
-%    o beta: control the "toe" of the contast curve.
+%    o beta: midpoint of the function as a color value 0 to QuantumRange.
 %
 */
 
@@ -11041,6 +11413,54 @@ WandExport MagickBooleanType MagickSketchImage(MagickWand *wand,
 %                                                                             %
 %                                                                             %
 %                                                                             %
+%   M a g i c k S m u s h I m a g e s                                         %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagickSmushImages() takes all images from the current image pointer to the
+%  end of the image list and smushs them to each other top-to-bottom if the
+%  stack parameter is true, otherwise left-to-right.
+%
+%  The format of the MagickSmushImages method is:
+%
+%      MagickWand *MagickSmushImages(MagickWand *wand,
+%        const MagickBooleanType stack,const ssize_t offset)
+%
+%  A description of each parameter follows:
+%
+%    o wand: the magick wand.
+%
+%    o stack: By default, images are stacked left-to-right. Set stack to
+%      MagickTrue to stack them top-to-bottom.
+%
+%    o offset: minimum distance in pixels between images.
+%
+*/
+WandExport MagickWand *MagickSmushImages(MagickWand *wand,
+  const MagickBooleanType stack,const ssize_t offset)
+{
+  Image
+    *smush_image;
+
+  assert(wand != (MagickWand *) NULL);
+  assert(wand->signature == WandSignature);
+  if (wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
+  if (wand->images == (Image *) NULL)
+    return((MagickWand *) NULL);
+  smush_image=SmushImages(wand->images,stack,offset,wand->exception);
+  if (smush_image == (Image *) NULL)
+    return((MagickWand *) NULL);
+  return(CloneMagickWandFromImages(wand,smush_image));
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
 %     M a g i c k S o l a r i z e I m a g e                                   %
 %                                                                             %
 %                                                                             %
@@ -11101,7 +11521,7 @@ WandExport MagickBooleanType MagickSolarizeImage(MagickWand *wand,
 %
 %      MagickBooleanType MagickSparseColorImage(MagickWand *wand,
 %        const ChannelType channel,const SparseColorMethod method,
-%        const unsigned long number_arguments,const double *arguments)
+%        const size_t number_arguments,const double *arguments)
 %
 %  A description of each parameter follows:
 %
@@ -11135,7 +11555,7 @@ WandExport MagickBooleanType MagickSolarizeImage(MagickWand *wand,
 */
 WandExport MagickBooleanType MagickSparseColorImage(MagickWand *wand,
   const ChannelType channel,const SparseColorMethod method,
-  const unsigned long number_arguments,const double *arguments)
+  const size_t number_arguments,const double *arguments)
 {
   Image
     *sparse_image;
@@ -11170,8 +11590,8 @@ WandExport MagickBooleanType MagickSparseColorImage(MagickWand *wand,
 %  The format of the MagickSpliceImage method is:
 %
 %      MagickBooleanType MagickSpliceImage(MagickWand *wand,
-%        const unsigned long width,const unsigned long height,const long x,
-%        const long y)
+%        const size_t width,const size_t height,const ssize_t x,
+%        const ssize_t y)
 %
 %  A description of each parameter follows:
 %
@@ -11187,8 +11607,8 @@ WandExport MagickBooleanType MagickSparseColorImage(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickSpliceImage(MagickWand *wand,
-  const unsigned long width,const unsigned long height,const long x,
-  const long y)
+  const size_t width,const size_t height,const ssize_t x,
+  const ssize_t y)
 {
   Image
     *splice_image;
@@ -11262,6 +11682,62 @@ WandExport MagickBooleanType MagickSpreadImage(MagickWand *wand,
 %                                                                             %
 %                                                                             %
 %                                                                             %
+%   M a g i c k S t a t i s t i c I m a g e                                   %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagickStatisticImage() replace each pixel with corresponding statistic from
+%  the neighborhood of the specified width and height.
+%
+%  The format of the MagickStatisticImage method is:
+%
+%      MagickBooleanType MagickStatisticImage(MagickWand *wand,
+%        const StatisticType type,const double width,const size_t height)
+%      MagickBooleanType MagickStatisticImageChannel(MagickWand *wand,
+%        const ChannelType channel,const StatisticType type,const double width,
+%        const size_t height)
+%
+%  A description of each parameter follows:
+%
+%    o wand: the magick wand.
+%
+%    o channel: the image channel(s).
+%
+%    o type: the statistic type (e.g. median, mode, etc.).
+%
+%    o width: the width of the pixel neighborhood.
+%
+%    o height: the height of the pixel neighborhood.
+%
+*/
+WandExport MagickBooleanType MagickStatisticImage(MagickWand *wand,
+  const ChannelType channel,const StatisticType type,const size_t width,
+  const size_t height)
+{
+  Image
+    *statistic_image;
+
+  assert(wand != (MagickWand *) NULL);
+  assert(wand->signature == WandSignature);
+  if (wand->debug != MagickFalse)
+    (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
+  if (wand->images == (Image *) NULL)
+    ThrowWandException(WandError,"ContainsNoImages",wand->name);
+  statistic_image=StatisticImageChannel(wand->images,channel,type,width,height,
+    wand->exception);
+  if (statistic_image == (Image *) NULL)
+    return(MagickFalse);
+  ReplaceImageInList(&wand->images,statistic_image);
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
 %   M a g i c k S t e g a n o I m a g e                                       %
 %                                                                             %
 %                                                                             %
@@ -11276,7 +11752,7 @@ WandExport MagickBooleanType MagickSpreadImage(MagickWand *wand,
 %  The format of the MagickSteganoImage method is:
 %
 %      MagickWand *MagickSteganoImage(MagickWand *wand,
-%        const MagickWand *watermark_wand,const long offset)
+%        const MagickWand *watermark_wand,const ssize_t offset)
 %
 %  A description of each parameter follows:
 %
@@ -11288,7 +11764,7 @@ WandExport MagickBooleanType MagickSpreadImage(MagickWand *wand,
 %
 */
 WandExport MagickWand *MagickSteganoImage(MagickWand *wand,
-  const MagickWand *watermark_wand,const long offset)
+  const MagickWand *watermark_wand,const ssize_t offset)
 {
   Image
     *stegano_image;
@@ -11581,7 +12057,7 @@ WandExport MagickBooleanType MagickThresholdImageChannel(MagickWand *wand,
 %  The format of the MagickThumbnailImage method is:
 %
 %      MagickBooleanType MagickThumbnailImage(MagickWand *wand,
-%        const unsigned long columns,const unsigned long rows)
+%        const size_t columns,const size_t rows)
 %
 %  A description of each parameter follows:
 %
@@ -11593,7 +12069,7 @@ WandExport MagickBooleanType MagickThresholdImageChannel(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickThumbnailImage(MagickWand *wand,
-  const unsigned long columns,const unsigned long rows)
+  const size_t columns,const size_t rows)
 {
   Image
     *thumbnail_image;
@@ -11659,11 +12135,12 @@ WandExport MagickBooleanType MagickTintImage(MagickWand *wand,
     (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
   if (wand->images == (Image *) NULL)
     ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  (void) FormatMagickString(percent_opaque,MaxTextExtent,"%g,%g,%g,%g",
-    (double) (100.0*QuantumScale*PixelGetRedQuantum(opacity)),
-    (double) (100.0*QuantumScale*PixelGetGreenQuantum(opacity)),
-    (double) (100.0*QuantumScale*PixelGetBlueQuantum(opacity)),
-    (double) (100.0*QuantumScale*PixelGetOpacityQuantum(opacity)));
+  (void) FormatLocaleString(percent_opaque,MaxTextExtent,
+    "%g,%g,%g,%g",(double) (100.0*QuantumScale*
+    PixelGetRedQuantum(opacity)),(double) (100.0*QuantumScale*
+    PixelGetGreenQuantum(opacity)),(double) (100.0*QuantumScale*
+    PixelGetBlueQuantum(opacity)),(double) (100.0*QuantumScale*
+    PixelGetOpacityQuantum(opacity)));
   PixelGetQuantumColor(tint,&target);
   tint_image=TintImage(wand->images,percent_opaque,target,wand->exception);
   if (tint_image == (Image *) NULL)
@@ -11831,7 +12308,7 @@ WandExport MagickBooleanType MagickTransparentPaintImage(MagickWand *wand,
     ThrowWandException(WandError,"ContainsNoImages",wand->name);
   PixelGetMagickColor(target,&target_pixel);
   wand->images->fuzz=fuzz;
-  status=TransparentPaintImage(wand->images,&target_pixel,RoundToQuantum(
+  status=TransparentPaintImage(wand->images,&target_pixel,ClampToQuantum(
     (MagickRealType) QuantumRange-QuantumRange*alpha),invert);
   if (status == MagickFalse)
     InheritException(wand->exception,&wand->images->exception);
@@ -12100,8 +12577,8 @@ WandExport MagickBooleanType MagickUnsharpMaskImageChannel(MagickWand *wand,
 %  The format of the MagickVignetteImage method is:
 %
 %      MagickBooleanType MagickVignetteImage(MagickWand *wand,
-%        const double black_point,const double white_point,const long x,
-%        const long y)
+%        const double black_point,const double white_point,const ssize_t x,
+%        const ssize_t y)
 %
 %  A description of each parameter follows:
 %
@@ -12115,7 +12592,7 @@ WandExport MagickBooleanType MagickUnsharpMaskImageChannel(MagickWand *wand,
 %
 */
 WandExport MagickBooleanType MagickVignetteImage(MagickWand *wand,
-  const double black_point,const double white_point,const long x,const long y)
+  const double black_point,const double white_point,const ssize_t x,const ssize_t y)
 {
   Image
     *vignette_image;
@@ -12223,7 +12700,7 @@ WandExport MagickBooleanType MagickWhiteThresholdImage(MagickWand *wand,
     (void) LogMagickEvent(WandEvent,GetMagickModule(),"%s",wand->name);
   if (wand->images == (Image *) NULL)
     ThrowWandException(WandError,"ContainsNoImages",wand->name);
-  (void) FormatMagickString(thresholds,MaxTextExtent,
+  (void) FormatLocaleString(thresholds,MaxTextExtent,
     QuantumFormat "," QuantumFormat "," QuantumFormat "," QuantumFormat,
     PixelGetRedQuantum(threshold),PixelGetGreenQuantum(threshold),
     PixelGetBlueQuantum(threshold),PixelGetOpacityQuantum(threshold));
@@ -12316,7 +12793,6 @@ WandExport MagickBooleanType MagickWriteImage(MagickWand *wand,
 %    o wand: the magick wand.
 %
 %    o file: the file descriptor.
-%
 %
 */
 WandExport MagickBooleanType MagickWriteImageFile(MagickWand *wand,FILE *file)

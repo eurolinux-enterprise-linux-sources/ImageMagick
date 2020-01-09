@@ -24,7 +24,7 @@
     decode="in_format"
 
   specify the rules for converting from in_format to some format that
-  ImageMagick will automatically recognize. These rules are used to
+  ImageMagick will automagically recognize. These rules are used to
   decode formats.
 
   Commands which specify only

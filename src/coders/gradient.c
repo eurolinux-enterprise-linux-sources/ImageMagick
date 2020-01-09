@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -157,10 +157,10 @@ static Image *ReadGRADIENTImage(const ImageInfo *image_info,
 %
 %  The format of the RegisterGRADIENTImage method is:
 %
-%      unsigned long RegisterGRADIENTImage(void)
+%      size_t RegisterGRADIENTImage(void)
 %
 */
-ModuleExport unsigned long RegisterGRADIENTImage(void)
+ModuleExport size_t RegisterGRADIENTImage(void)
 {
   MagickInfo
     *entry;
@@ -169,7 +169,7 @@ ModuleExport unsigned long RegisterGRADIENTImage(void)
   entry->decoder=(DecodeImageHandler *) ReadGRADIENTImage;
   entry->adjoin=MagickFalse;
   entry->raw=MagickTrue;
-  entry->format_type=ExplicitFormatType;
+  entry->format_type=ImplicitFormatType;
   entry->description=ConstantString("Gradual linear passing from one shade to "
     "another");
   entry->module=ConstantString("GRADIENT");
@@ -178,7 +178,7 @@ ModuleExport unsigned long RegisterGRADIENTImage(void)
   entry->decoder=(DecodeImageHandler *) ReadGRADIENTImage;
   entry->adjoin=MagickFalse;
   entry->raw=MagickTrue;
-  entry->format_type=ExplicitFormatType;
+  entry->format_type=ImplicitFormatType;
   entry->description=ConstantString("Gradual radial passing from one shade to "
     "another");
   entry->module=ConstantString("GRADIENT");

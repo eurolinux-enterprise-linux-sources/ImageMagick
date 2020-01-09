@@ -17,7 +17,7 @@
 %                                September 2002                               %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -52,6 +52,7 @@
 #include "magick/semaphore.h"
 #include "magick/timer.h"
 #include "magick/string_.h"
+#include "magick/string-private.h"
 #include "magick/token.h"
 #include "magick/thread_.h"
 #include "magick/thread-private.h"
@@ -111,29 +112,43 @@ struct _LogInfo
     *filename,
     *format;
 
-  unsigned long
+  size_t
     generations,
     limit;
 
   FILE
     *file;
 
-  unsigned long
+  size_t
     generation;
 
   MagickBooleanType
     append,
+    exempt,
     stealth;
 
   TimerInfo
     timer;
 
-  unsigned long
+  size_t
     signature;
 };
+
+typedef struct _LogMapInfo
+{
+  const LogEventType
+    event_mask;
+
+  const LogHandlerType
+    handler_mask;
+
+  const char
+    *filename,
+    *format;
+} LogMapInfo;
 
 /*
-  Declare log map.
+  Static declarations.
 */
 static const HandlerInfo
   LogHandlers[] =
@@ -148,19 +163,13 @@ static const HandlerInfo
     { (char *) NULL, UndefinedHandler }
   };
 
-static const char
-  *LogMap = (const char *)
-    "<?xml version=\"1.0\"?>"
-    "<logmap>"
-    "  <log events=\"None\" />"
-    "  <log output=\"console\" />"
-    "  <log filename=\"Magick-%d.log\" />"
-    "  <log format=\"%t %r %u %v %d %c[%p]: %m/%f/%l/%d\n  %e\" />"
-    "</logmap>";
-
-/*
-  Static declarations.
-*/
+static const LogMapInfo
+  LogMap[] =
+  {
+    { NoEvents, ConsoleHandler, "Magick-%d.log",
+      "%t %r %u %v %d %c[%p]: %m/%f/%l/%d\n  %e" }
+  };
+
 static char
   log_name[MaxTextExtent] = "Magick";
 
@@ -217,67 +226,15 @@ MagickExport void CloseMagickLog(void)
   exception=AcquireExceptionInfo();
   log_info=GetLogInfo("*",exception);
   exception=DestroyExceptionInfo(exception);
-  AcquireSemaphoreInfo(&log_semaphore);
+  LockSemaphoreInfo(log_semaphore);
   if (log_info->file != (FILE *) NULL)
     {
       if (log_info->append == MagickFalse)
-        (void) fprintf(log_info->file,"</log>\n");
+        (void) FormatLocaleFile(log_info->file,"</log>\n");
       (void) fclose(log_info->file);
       log_info->file=(FILE *) NULL;
     }
-  RelinquishSemaphoreInfo(log_semaphore);
-}
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-+   D e s t r o y L o g L i s t                                               %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  DestroyLogList() deallocates memory associated with the log list.
-%
-%  The format of the DestroyLogList method is:
-%
-%      DestroyLogList(void)
-%
-*/
-
-static void *DestroyLogElement(void *log_info)
-{
-  register LogInfo
-    *p;
-
-  p=(LogInfo *) log_info;
-  if (p->file != (FILE *) NULL)
-    {
-      if (p->append == MagickFalse)
-        (void) fprintf(p->file,"</log>\n");
-      (void) fclose(p->file);
-      p->file=(FILE *) NULL;
-    }
-  if (p->filename != (char *) NULL)
-    p->filename=DestroyString(p->filename);
-  if (p->path != (char *) NULL)
-    p->path=DestroyString(p->path);
-  if (p->format != (char *) NULL)
-    p->format=DestroyString(p->format);
-  p=(LogInfo *) RelinquishMagickMemory(p);
-  return((void *) NULL);
-}
-
-MagickExport void DestroyLogList(void)
-{
-  AcquireSemaphoreInfo(&log_semaphore);
-  if (log_list != (LinkedListInfo *) NULL)
-    log_list=DestroyLinkedList(log_list,DestroyLogElement);
-  instantiate_log=MagickFalse;
-  RelinquishSemaphoreInfo(log_semaphore);
-  DestroySemaphoreInfo(&log_semaphore);
+  UnlockSemaphoreInfo(log_semaphore);
 }
 
 /*
@@ -322,7 +279,7 @@ static LogInfo *GetLogInfo(const char *name,ExceptionInfo *exception)
   /*
     Search for log tag.
   */
-  AcquireSemaphoreInfo(&log_semaphore);
+  LockSemaphoreInfo(log_semaphore);
   ResetLinkedListIterator(log_list);
   p=(LogInfo *) GetNextValueInLinkedList(log_list);
   while (p != (LogInfo *) NULL)
@@ -334,7 +291,7 @@ static LogInfo *GetLogInfo(const char *name,ExceptionInfo *exception)
   if (p != (LogInfo *) NULL)
     (void) InsertValueInLinkedList(log_list,0,
       RemoveElementByValueFromLinkedList(log_list,p));
-  RelinquishSemaphoreInfo(log_semaphore);
+  UnlockSemaphoreInfo(log_semaphore);
   return(p);
 }
 
@@ -354,7 +311,7 @@ static LogInfo *GetLogInfo(const char *name,ExceptionInfo *exception)
 %  The format of the GetLogInfoList function is:
 %
 %      const LogInfo **GetLogInfoList(const char *pattern,
-%        unsigned long *number_preferences,ExceptionInfo *exception)
+%        size_t *number_preferences,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
@@ -387,7 +344,7 @@ static int LogInfoCompare(const void *x,const void *y)
 #endif
 
 MagickExport const LogInfo **GetLogInfoList(const char *pattern,
-  unsigned long *number_preferences,ExceptionInfo *exception)
+  size_t *number_preferences,ExceptionInfo *exception)
 {
   const LogInfo
     **preferences;
@@ -395,7 +352,7 @@ MagickExport const LogInfo **GetLogInfoList(const char *pattern,
   register const LogInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -403,7 +360,7 @@ MagickExport const LogInfo **GetLogInfoList(const char *pattern,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_preferences != (unsigned long *) NULL);
+  assert(number_preferences != (size_t *) NULL);
   *number_preferences=0;
   p=GetLogInfo("*",exception);
   if (p == (const LogInfo *) NULL)
@@ -415,7 +372,7 @@ MagickExport const LogInfo **GetLogInfoList(const char *pattern,
   /*
     Generate log list.
   */
-  AcquireSemaphoreInfo(&log_semaphore);
+  LockSemaphoreInfo(log_semaphore);
   ResetLinkedListIterator(log_list);
   p=(const LogInfo *) GetNextValueInLinkedList(log_list);
   for (i=0; p != (const LogInfo *) NULL; )
@@ -425,10 +382,10 @@ MagickExport const LogInfo **GetLogInfoList(const char *pattern,
       preferences[i++]=p;
     p=(const LogInfo *) GetNextValueInLinkedList(log_list);
   }
-  RelinquishSemaphoreInfo(log_semaphore);
+  UnlockSemaphoreInfo(log_semaphore);
   qsort((void *) preferences,(size_t) i,sizeof(*preferences),LogInfoCompare);
   preferences[i]=(LogInfo *) NULL;
-  *number_preferences=(unsigned long) i;
+  *number_preferences=(size_t) i;
   return(preferences);
 }
 
@@ -447,7 +404,7 @@ MagickExport const LogInfo **GetLogInfoList(const char *pattern,
 %
 %  The format of the GetLogList function is:
 %
-%      char **GetLogList(const char *pattern,unsigned long *number_preferences,
+%      char **GetLogList(const char *pattern,size_t *number_preferences,
 %        ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
@@ -480,7 +437,7 @@ static int LogCompare(const void *x,const void *y)
 #endif
 
 MagickExport char **GetLogList(const char *pattern,
-  unsigned long *number_preferences,ExceptionInfo *exception)
+  size_t *number_preferences,ExceptionInfo *exception)
 {
   char
     **preferences;
@@ -488,7 +445,7 @@ MagickExport char **GetLogList(const char *pattern,
   register const LogInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -496,7 +453,7 @@ MagickExport char **GetLogList(const char *pattern,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_preferences != (unsigned long *) NULL);
+  assert(number_preferences != (size_t *) NULL);
   *number_preferences=0;
   p=GetLogInfo("*",exception);
   if (p == (const LogInfo *) NULL)
@@ -508,7 +465,7 @@ MagickExport char **GetLogList(const char *pattern,
   /*
     Generate log list.
   */
-  AcquireSemaphoreInfo(&log_semaphore);
+  LockSemaphoreInfo(log_semaphore);
   ResetLinkedListIterator(log_list);
   p=(const LogInfo *) GetNextValueInLinkedList(log_list);
   for (i=0; p != (const LogInfo *) NULL; )
@@ -518,10 +475,10 @@ MagickExport char **GetLogList(const char *pattern,
       preferences[i++]=ConstantString(p->name);
     p=(const LogInfo *) GetNextValueInLinkedList(log_list);
   }
-  RelinquishSemaphoreInfo(log_semaphore);
+  UnlockSemaphoreInfo(log_semaphore);
   qsort((void *) preferences,(size_t) i,sizeof(*preferences),LogCompare);
   preferences[i]=(char *) NULL;
-  *number_preferences=(unsigned long) i;
+  *number_preferences=(size_t) i;
   return(preferences);
 }
 
@@ -574,14 +531,16 @@ static MagickBooleanType InitializeLogList(ExceptionInfo *exception)
 {
   if ((log_list == (LinkedListInfo *) NULL) && (instantiate_log == MagickFalse))
     {
-      AcquireSemaphoreInfo(&log_semaphore);
+      if (log_semaphore == (SemaphoreInfo *) NULL)
+        AcquireSemaphoreInfo(&log_semaphore);
+      LockSemaphoreInfo(log_semaphore);
       if ((log_list == (LinkedListInfo *) NULL) &&
           (instantiate_log == MagickFalse))
         {
           (void) LoadLogLists(LogFilename,exception);
           instantiate_log=MagickTrue;
         }
-      RelinquishSemaphoreInfo(log_semaphore);
+      UnlockSemaphoreInfo(log_semaphore);
     }
   return(log_list != (LinkedListInfo *) NULL ? MagickTrue : MagickFalse);
 }
@@ -658,14 +617,14 @@ MagickExport MagickBooleanType ListLogInfo(FILE *file,ExceptionInfo *exception)
   const LogInfo
     **log_info;
 
-  long
-    j;
-
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     number_aliases;
+
+  ssize_t
+    j;
 
   if (file == (const FILE *) NULL)
     file=stdout;
@@ -674,7 +633,7 @@ MagickExport MagickBooleanType ListLogInfo(FILE *file,ExceptionInfo *exception)
     return(MagickFalse);
   j=0;
   path=(const char *) NULL;
-  for (i=0; i < (long) number_aliases; i++)
+  for (i=0; i < (ssize_t) number_aliases; i++)
   {
     if (log_info[i]->stealth != MagickFalse)
       continue;
@@ -682,28 +641,112 @@ MagickExport MagickBooleanType ListLogInfo(FILE *file,ExceptionInfo *exception)
         (LocaleCompare(path,log_info[i]->path) != 0))
       {
         if (log_info[i]->path != (char *) NULL)
-          (void) fprintf(file,"\nPath: %s\n\n",log_info[i]->path);
-        (void) fprintf(file,"Filename       Generations     Limit  Format\n");
-        (void) fprintf(file,"-------------------------------------------------"
+          (void) FormatLocaleFile(file,"\nPath: %s\n\n",log_info[i]->path);
+        (void) FormatLocaleFile(file,
+          "Filename       Generations     Limit  Format\n");
+        (void) FormatLocaleFile(file,
+          "-------------------------------------------------"
           "------------------------------\n");
       }
     path=log_info[i]->path;
     if (log_info[i]->filename != (char *) NULL)
       {
-        (void) fprintf(file,"%s",log_info[i]->filename);
-        for (j=(long) strlen(log_info[i]->filename); j <= 16; j++)
-          (void) fprintf(file," ");
+        (void) FormatLocaleFile(file,"%s",log_info[i]->filename);
+        for (j=(ssize_t) strlen(log_info[i]->filename); j <= 16; j++)
+          (void) FormatLocaleFile(file," ");
       }
-    (void) fprintf(file,"%9lu  ",log_info[i]->generations);
-    (void) FormatMagickSize(MegabytesToBytes(log_info[i]->limit),limit);
-    (void) fprintf(file,"%8s  ",limit);
+    (void) FormatLocaleFile(file,"%9g  ",(double) log_info[i]->generations);
+    (void) FormatMagickSize(MegabytesToBytes(log_info[i]->limit),MagickFalse,
+      limit);
+    (void) FormatLocaleFile(file,"%8sB  ",limit);
     if (log_info[i]->format != (char *) NULL)
-      (void) fprintf(file,"%s",log_info[i]->format);
-    (void) fprintf(file,"\n");
+      (void) FormatLocaleFile(file,"%s",log_info[i]->format);
+    (void) FormatLocaleFile(file,"\n");
   }
   (void) fflush(file);
   log_info=(const LogInfo **) RelinquishMagickMemory((void *) log_info);
   return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   L o g C o m p o n e n t G e n e s i s                                     %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  LogComponentGenesis() instantiates the log component.
+%
+%  The format of the LogComponentGenesis method is:
+%
+%      MagickBooleanType LogComponentGenesis(void)
+%
+*/
+MagickExport MagickBooleanType LogComponentGenesis(void)
+{
+  AcquireSemaphoreInfo(&log_semaphore);
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   L o g C o m p o n e n t T e r m i n u s                                   %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  LogComponentTerminus() destroys the logging component.
+%
+%  The format of the LogComponentTerminus method is:
+%
+%      LogComponentTerminus(void)
+%
+*/
+
+static void *DestroyLogElement(void *log_info)
+{
+  register LogInfo
+    *p;
+
+  p=(LogInfo *) log_info;
+  if (p->file != (FILE *) NULL)
+    {
+      if (p->append == MagickFalse)
+        (void) FormatLocaleFile(p->file,"</log>\n");
+      (void) fclose(p->file);
+      p->file=(FILE *) NULL;
+    }
+  if (p->exempt == MagickFalse)
+    {
+      if (p->format != (char *) NULL)
+        p->format=DestroyString(p->format);
+      if (p->path != (char *) NULL)
+        p->path=DestroyString(p->path);
+      if (p->filename != (char *) NULL)
+        p->filename=DestroyString(p->filename);
+    }
+  p=(LogInfo *) RelinquishMagickMemory(p);
+  return((void *) NULL);
+}
+
+MagickExport void LogComponentTerminus(void)
+{
+  if (log_semaphore == (SemaphoreInfo *) NULL)
+    AcquireSemaphoreInfo(&log_semaphore);
+  LockSemaphoreInfo(log_semaphore);
+  if (log_list != (LinkedListInfo *) NULL)
+    log_list=DestroyLinkedList(log_list,DestroyLogElement);
+  instantiate_log=MagickFalse;
+  UnlockSemaphoreInfo(log_semaphore);
+  DestroySemaphoreInfo(&log_semaphore);
 }
 
 /*
@@ -723,7 +766,7 @@ MagickExport MagickBooleanType ListLogInfo(FILE *file,ExceptionInfo *exception)
 %  The format of the LogMagickEvent method is:
 %
 %      MagickBooleanType LogMagickEvent(const LogEventType type,
-%        const char *module,const char *function,const unsigned long line,
+%        const char *module,const char *function,const size_t line,
 %        const char *format,...)
 %
 %  A description of each parameter follows:
@@ -740,7 +783,7 @@ MagickExport MagickBooleanType ListLogInfo(FILE *file,ExceptionInfo *exception)
 %
 */
 static char *TranslateEvent(const LogEventType magick_unused(type),
-  const char *module,const char *function,const unsigned long line,
+  const char *module,const char *function,const size_t line,
   const char *domain,const char *event)
 {
   char
@@ -787,21 +830,23 @@ static char *TranslateEvent(const LogEventType magick_unused(type),
         Translate event in "XML" format.
       */
       (void) FormatMagickTime(seconds,extent,timestamp);
-      (void) FormatMagickString(text,extent,
+      (void) FormatLocaleString(text,extent,
         "<entry>\n"
         "  <timestamp>%s</timestamp>\n"
-        "  <elapsed-time>%ld:%02ld</elapsed-time>\n"
+        "  <elapsed-time>%lu:%02lu.%03lu</elapsed-time>\n"
         "  <user-time>%0.3f</user-time>\n"
-        "  <process-id>%ld</process-id>\n"
-        "  <thread-id>%lu</thread-id>\n"
+        "  <process-id>%.20g</process-id>\n"
+        "  <thread-id>%.20g</thread-id>\n"
         "  <module>%s</module>\n"
         "  <function>%s</function>\n"
-        "  <line>%lu</line>\n"
+        "  <line>%.20g</line>\n"
         "  <domain>%s</domain>\n"
         "  <event>%s</event>\n"
-        "</entry>",timestamp,(long) (elapsed_time/60.0),
-        (long) ceil(fmod(elapsed_time,60.0)),user_time,(long) getpid(),
-        (unsigned long) GetMagickThreadId(),module,function,line,domain,event);
+        "</entry>",timestamp,(unsigned long) (elapsed_time/60.0),
+        (unsigned long) floor(fmod(elapsed_time,60.0)),(unsigned long)
+        (1000.0*(elapsed_time-floor(elapsed_time))+0.5),user_time,
+        (double) getpid(),(double) GetMagickThreadSignature(),module,function,
+        (double) line,domain,event);
       return(text);
     }
   /*
@@ -888,13 +933,13 @@ static char *TranslateEvent(const LogEventType magick_unused(type),
             q++;
             break;
           }
-        q+=FormatMagickString(q,extent,"%lu",log_info->generation %
-          log_info->generations);
+        q+=FormatLocaleString(q,extent,"%.20g",(double) (log_info->generation %
+          log_info->generations));
         break;
       }
       case 'l':
       {
-        q+=FormatMagickString(q,extent,"%lu",line);
+        q+=FormatLocaleString(q,extent,"%.20g",(double) line);
         break;
       }
       case 'm':
@@ -918,13 +963,14 @@ static char *TranslateEvent(const LogEventType magick_unused(type),
       }
       case 'p':
       {
-        q+=FormatMagickString(q,extent,"%ld",(long) getpid());
+        q+=FormatLocaleString(q,extent,"%.20g",(double) getpid());
         break;
       }
       case 'r':
       {
-        q+=FormatMagickString(q,extent,"%ld:%02ld",(long)
-          (elapsed_time/60.0),(long) ceil(fmod(elapsed_time,60.0)));
+        q+=FormatLocaleString(q,extent,"%lu:%02lu.%03lu",(unsigned long)
+          (elapsed_time/60.0),(unsigned long) floor(fmod(elapsed_time,60.0)),
+          (unsigned long) (1000.0*(elapsed_time-floor(elapsed_time))+0.5));
         break;
       }
       case 't':
@@ -934,7 +980,7 @@ static char *TranslateEvent(const LogEventType magick_unused(type),
       }
       case 'u':
       {
-        q+=FormatMagickString(q,extent,"%0.3fu",user_time);
+        q+=FormatLocaleString(q,extent,"%0.3fu",user_time);
         break;
       }
       case 'v':
@@ -1024,8 +1070,8 @@ static char *TranslateFilename(const LogInfo *log_info)
             q++;
             break;
           }
-        q+=FormatMagickString(q,extent,"%lu",log_info->generation %
-          log_info->generations);
+        q+=FormatLocaleString(q,extent,"%.20g",(double) (log_info->generation %
+          log_info->generations));
         break;
       }
       case 'n':
@@ -1035,7 +1081,7 @@ static char *TranslateFilename(const LogInfo *log_info)
       }
       case 'p':
       {
-        q+=FormatMagickString(q,extent,"%ld",(long) getpid());
+        q+=FormatLocaleString(q,extent,"%.20g",(double) getpid());
         break;
       }
       case 'v':
@@ -1061,7 +1107,7 @@ static char *TranslateFilename(const LogInfo *log_info)
 }
 
 MagickBooleanType LogMagickEventList(const LogEventType type,const char *module,
-  const char *function,const unsigned long line,const char *format,
+  const char *function,const size_t line,const char *format,
   va_list operands)
 {
   char
@@ -1085,13 +1131,13 @@ MagickBooleanType LogMagickEventList(const LogEventType type,const char *module,
   exception=AcquireExceptionInfo();
   log_info=(LogInfo *) GetLogInfo("*",exception);
   exception=DestroyExceptionInfo(exception);
-  AcquireSemaphoreInfo(&log_semaphore);
+  LockSemaphoreInfo(log_semaphore);
   if ((log_info->event_mask & type) == 0)
     {
-      RelinquishSemaphoreInfo(log_semaphore);
+      UnlockSemaphoreInfo(log_semaphore);
       return(MagickTrue);
     }
-  domain=MagickOptionToMnemonic(MagickLogEventOptions,type);
+  domain=CommandOptionToMnemonic(MagickLogEventOptions,type);
 #if defined(MAGICKCORE_HAVE_VSNPRINTF)
   n=vsnprintf(event,MaxTextExtent,format,operands);
 #else
@@ -1103,23 +1149,23 @@ MagickBooleanType LogMagickEventList(const LogEventType type,const char *module,
   if (text == (char *) NULL)
     {
       (void) ContinueTimer((TimerInfo *) &log_info->timer);
-      RelinquishSemaphoreInfo(log_semaphore);
+      UnlockSemaphoreInfo(log_semaphore);
       return(MagickFalse);
     }
   if ((log_info->handler_mask & ConsoleHandler) != 0)
     {
-      (void) fprintf(stderr,"%s\n",text);
+      (void) FormatLocaleFile(stderr,"%s\n",text);
       (void) fflush(stderr);
     }
   if ((log_info->handler_mask & DebugHandler) != 0)
     {
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
       OutputDebugString(text);
 #endif
     }
   if ((log_info->handler_mask & EventHandler) != 0)
     {
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
       (void) NTReportEvent(text,MagickFalse);
 #endif
     }
@@ -1131,9 +1177,9 @@ MagickBooleanType LogMagickEventList(const LogEventType type,const char *module,
       file_info.st_size=0;
       if (log_info->file != (FILE *) NULL)
         (void) fstat(fileno(log_info->file),&file_info);
-      if (file_info.st_size > (off_t) (1024*1024*log_info->limit))
+      if (file_info.st_size > (1024*1024*log_info->limit))
         {
-          (void) fprintf(log_info->file,"</log>\n");
+          (void) FormatLocaleFile(log_info->file,"</log>\n");
           (void) fclose(log_info->file);
           log_info->file=(FILE *) NULL;
         }
@@ -1146,7 +1192,7 @@ MagickBooleanType LogMagickEventList(const LogEventType type,const char *module,
           if (filename == (char *) NULL)
             {
               (void) ContinueTimer((TimerInfo *) &log_info->timer);
-              RelinquishSemaphoreInfo(log_semaphore);
+              UnlockSemaphoreInfo(log_semaphore);
               return(MagickFalse);
             }
           log_info->append=IsPathAccessible(filename);
@@ -1154,38 +1200,38 @@ MagickBooleanType LogMagickEventList(const LogEventType type,const char *module,
           filename=(char  *) RelinquishMagickMemory(filename);
           if (log_info->file == (FILE *) NULL)
             {
-              RelinquishSemaphoreInfo(log_semaphore);
+              UnlockSemaphoreInfo(log_semaphore);
               return(MagickFalse);
             }
           log_info->generation++;
           if (log_info->append == MagickFalse)
             {
-              (void) fprintf(log_info->file,"<?xml version=\"1.0\" "
+              (void) FormatLocaleFile(log_info->file,"<?xml version=\"1.0\" "
                 "encoding=\"UTF-8\" standalone=\"yes\"?>\n");
-              (void) fprintf(log_info->file,"<log>\n");
+              (void) FormatLocaleFile(log_info->file,"<log>\n");
             }
         }
-      (void) fprintf(log_info->file,"%s\n",text);
+      (void) FormatLocaleFile(log_info->file,"%s\n",text);
       (void) fflush(log_info->file);
     }
   if ((log_info->handler_mask & StdoutHandler) != 0)
     {
-      (void) fprintf(stdout,"%s\n",text);
+      (void) FormatLocaleFile(stdout,"%s\n",text);
       (void) fflush(stdout);
     }
   if ((log_info->handler_mask & StderrHandler) != 0)
     {
-      (void) fprintf(stderr,"%s\n",text);
+      (void) FormatLocaleFile(stderr,"%s\n",text);
       (void) fflush(stderr);
     }
   text=(char  *) RelinquishMagickMemory(text);
   (void) ContinueTimer((TimerInfo *) &log_info->timer);
-  RelinquishSemaphoreInfo(log_semaphore);
+  UnlockSemaphoreInfo(log_semaphore);
   return(MagickTrue);
 }
 
 MagickBooleanType LogMagickEvent(const LogEventType type,const char *module,
-  const char *function,const unsigned long line,const char *format,...)
+  const char *function,const size_t line,const char *format,...)
 {
   va_list
     operands;
@@ -1216,7 +1262,7 @@ MagickBooleanType LogMagickEvent(const LogEventType type,const char *module,
 %  The format of the LoadLogList method is:
 %
 %      MagickBooleanType LoadLogList(const char *xml,const char *filename,
-%        const unsigned long depth,ExceptionInfo *exception)
+%        const size_t depth,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
@@ -1230,7 +1276,7 @@ MagickBooleanType LogMagickEvent(const LogEventType type,const char *module,
 %
 */
 static MagickBooleanType LoadLogList(const char *xml,const char *filename,
-  const unsigned long depth,ExceptionInfo *exception)
+  const size_t depth,ExceptionInfo *exception)
 {
   char
     keyword[MaxTextExtent],
@@ -1342,6 +1388,7 @@ static MagickBooleanType LoadLogList(const char *xml,const char *filename,
         (void) ResetMagickMemory(log_info,0,sizeof(*log_info));
         log_info->path=ConstantString(filename);
         GetTimerInfo((TimerInfo *) &log_info->timer);
+        log_info->exempt=MagickFalse;
         log_info->signature=MagickSignature;
         continue;
       }
@@ -1368,7 +1415,7 @@ static MagickBooleanType LoadLogList(const char *xml,const char *filename,
         if (LocaleCompare((char *) keyword,"events") == 0)
           {
             log_info->event_mask=(LogEventType) (log_info->event_mask |
-              ParseMagickOption(MagickLogEventOptions,MagickTrue,token));
+              ParseCommandOption(MagickLogEventOptions,MagickTrue,token));
             break;
           }
         break;
@@ -1404,7 +1451,7 @@ static MagickBooleanType LoadLogList(const char *xml,const char *filename,
                 log_info->generations=(~0UL);
                 break;
               }
-            log_info->generations=(unsigned long) atol(token);
+            log_info->generations=StringToUnsignedLong(token);
             break;
           }
         break;
@@ -1419,7 +1466,7 @@ static MagickBooleanType LoadLogList(const char *xml,const char *filename,
                 log_info->limit=(~0UL);
                 break;
               }
-            log_info->limit=(unsigned long) atol(token);
+            log_info->limit=StringToUnsignedLong(token);
             break;
           }
         break;
@@ -1474,9 +1521,6 @@ static MagickBooleanType LoadLogList(const char *xml,const char *filename,
 static MagickBooleanType LoadLogLists(const char *filename,
   ExceptionInfo *exception)
 {
-#if defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
-  return(LoadLogList(LogMap,"built-in",0,exception));
-#else
   const StringInfo
     *option;
 
@@ -1486,7 +1530,56 @@ static MagickBooleanType LoadLogLists(const char *filename,
   MagickStatusType
     status;
 
+  register ssize_t
+    i;
+
+  /*
+    Load built-in log map.
+  */
   status=MagickFalse;
+  if (log_list == (LinkedListInfo *) NULL)
+    {
+      log_list=NewLinkedList(0);
+      if (log_list == (LinkedListInfo *) NULL)
+        {
+          ThrowFileException(exception,ResourceLimitError,
+            "MemoryAllocationFailed",filename);
+          return(MagickFalse);
+        }
+    }
+  for (i=0; i < (ssize_t) (sizeof(LogMap)/sizeof(*LogMap)); i++)
+  {
+    LogInfo
+      *log_info;
+
+    register const LogMapInfo
+      *p;
+
+    p=LogMap+i;
+    log_info=(LogInfo *) AcquireMagickMemory(sizeof(*log_info));
+    if (log_info == (LogInfo *) NULL)
+      {
+        (void) ThrowMagickException(exception,GetMagickModule(),
+          ResourceLimitError,"MemoryAllocationFailed","`%s'",log_info->name);
+        continue;
+      }
+    (void) ResetMagickMemory(log_info,0,sizeof(*log_info));
+    log_info->path=(char *) "[built-in]";
+    GetTimerInfo((TimerInfo *) &log_info->timer);
+    log_info->event_mask=p->event_mask;
+    log_info->handler_mask=p->handler_mask;
+    log_info->filename=ConstantString(p->filename);
+    log_info->format=ConstantString(p->format);
+    log_info->exempt=MagickTrue;
+    log_info->signature=MagickSignature;
+    status=AppendValueToLinkedList(log_list,log_info);
+    if (status == MagickFalse)
+      (void) ThrowMagickException(exception,GetMagickModule(),
+        ResourceLimitError,"MemoryAllocationFailed","`%s'",log_info->name);
+  }
+  /*
+    Load external log map.
+  */
   options=GetConfigureOptions(filename,exception);
   option=(const StringInfo *) GetNextValueInLinkedList(options);
   while (option != (const StringInfo *) NULL)
@@ -1496,11 +1589,7 @@ static MagickBooleanType LoadLogLists(const char *filename,
     option=(const StringInfo *) GetNextValueInLinkedList(options);
   }
   options=DestroyConfigureOptions(options);
-  if ((log_list == (LinkedListInfo *) NULL) ||
-      (IsLinkedListEmpty(log_list) != MagickFalse))
-    status|=LoadLogList(LogMap,"built-in",0,exception);
   return(status != 0 ? MagickTrue : MagickFalse);
-#endif
 }
 
 /*
@@ -1534,7 +1623,7 @@ static LogHandlerType ParseLogHandlers(const char *handlers)
   register const char
     *p;
 
-  register long
+  register ssize_t
     i;
 
   size_t
@@ -1593,19 +1682,19 @@ MagickExport LogEventType SetLogEventMask(const char *events)
   LogInfo
     *log_info;
 
-  long
+  ssize_t
     option;
 
   exception=AcquireExceptionInfo();
   log_info=(LogInfo *) GetLogInfo("*",exception);
   exception=DestroyExceptionInfo(exception);
-  option=ParseMagickOption(MagickLogEventOptions,MagickTrue,events);
-  AcquireSemaphoreInfo(&log_semaphore);
+  option=ParseCommandOption(MagickLogEventOptions,MagickTrue,events);
+  LockSemaphoreInfo(log_semaphore);
   log_info=(LogInfo *) GetValueFromLinkedList(log_list,0);
   log_info->event_mask=(LogEventType) option;
   if (option == -1)
     log_info->event_mask=UndefinedEvents;
-  RelinquishSemaphoreInfo(log_semaphore);
+  UnlockSemaphoreInfo(log_semaphore);
   return(log_info->event_mask);
 }
 
@@ -1642,11 +1731,11 @@ MagickExport void SetLogFormat(const char *format)
   exception=AcquireExceptionInfo();
   log_info=(LogInfo *) GetLogInfo("*",exception);
   exception=DestroyExceptionInfo(exception);
-  AcquireSemaphoreInfo(&log_semaphore);
+  LockSemaphoreInfo(log_semaphore);
   if (log_info->format != (char *) NULL)
     log_info->format=DestroyString(log_info->format);
   log_info->format=ConstantString(format);
-  RelinquishSemaphoreInfo(log_semaphore);
+  UnlockSemaphoreInfo(log_semaphore);
 }
 
 /*

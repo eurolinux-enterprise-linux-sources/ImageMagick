@@ -43,10 +43,6 @@
 /* Define if you have Display Postscript */
 #undef DPS_DELEGATE
 
-/* Build self-contained, embeddable, zero-configuration ImageMagick
-   (experimental) */
-#undef EMBEDDABLE_SUPPORT
-
 /* exclude deprecated methods in MagickCore API */
 #undef EXCLUDE_DEPRECATED
 
@@ -77,6 +73,9 @@
 /* Define if you have GVC library */
 #undef GVC_DELEGATE
 
+/* Define to 1 if you have the `acosh' function. */
+#undef HAVE_ACOSH
+
 /* Define to 1 if you have the `argz_add' function. */
 #undef HAVE_ARGZ_ADD
 
@@ -104,23 +103,53 @@
 /* Define to 1 if you have the <arm/limits.h> header file. */
 #undef HAVE_ARM_LIMITS_H
 
+/* Define to 1 if you have the `asinh' function. */
+#undef HAVE_ASINH
+
+/* Define to 1 if you have the `atanh' function. */
+#undef HAVE_ATANH
+
 /* Define to 1 if you have the `atexit' function. */
 #undef HAVE_ATEXIT
+
+/* Define to 1 if you have the `atoll' function. */
+#undef HAVE_ATOLL
 
 /* define if bool is a built-in type */
 #undef HAVE_BOOL
 
+/* Define to 1 if you have the `cabs' function. */
+#undef HAVE_CABS
+
+/* Define to 1 if you have the `carg' function. */
+#undef HAVE_CARG
+
+/* Define to 1 if you have the `cimag' function. */
+#undef HAVE_CIMAG
+
 /* Define to 1 if you have the `clock' function. */
 #undef HAVE_CLOCK
 
-/* Define to 1 if you have the `clock_gettime' function. */
+/* Define to 1 if you have clock_gettime. */
 #undef HAVE_CLOCK_GETTIME
+
+/* Define to 1 if clock_gettime supports CLOCK_REALTIME. */
+#undef HAVE_CLOCK_REALTIME
 
 /* Define to 1 if you have the `closedir' function. */
 #undef HAVE_CLOSEDIR
 
+/* Define to 1 if you have the <CL/cl.h> header file. */
+#undef HAVE_CL_CL_H
+
 /* Define to 1 if you have the <complex.h> header file. */
 #undef HAVE_COMPLEX_H
+
+/* Define to 1 if you have the `creal' function. */
+#undef HAVE_CREAL
+
+/* Define to 1 if you have the `ctime_r' function. */
+#undef HAVE_CTIME_R
 
 /* Define to 1 if you have the declaration of `cygwin_conv_path', and to 0 if
    you don't. */
@@ -137,6 +166,10 @@
 /* Define to 1 if you have the declaration of `strlcpy', and to 0 if you
    don't. */
 #undef HAVE_DECL_STRLCPY
+
+/* Define to 1 if you have the declaration of `tzname', and to 0 if you don't.
+   */
+#undef HAVE_DECL_TZNAME
 
 /* Define to 1 if you have the declaration of `vsnprintf', and to 0 if you
    don't. */
@@ -179,6 +212,9 @@
 /* Define to 1 if you have the `execvp' function. */
 #undef HAVE_EXECVP
 
+/* Define to 1 if you have the `fchmod' function. */
+#undef HAVE_FCHMOD
+
 /* Define to 1 if you have the <fcntl.h> header file. */
 #undef HAVE_FCNTL_H
 
@@ -203,6 +239,9 @@
 /* Define to 1 if you have the `getcwd' function. */
 #undef HAVE_GETCWD
 
+/* Define to 1 if you have the `getc_unlocked' function. */
+#undef HAVE_GETC_UNLOCKED
+
 /* Define to 1 if you have the `getdtablesize' function. */
 #undef HAVE_GETDTABLESIZE
 
@@ -215,14 +254,38 @@
 /* Define to 1 if you have the `getpid' function. */
 #undef HAVE_GETPID
 
+/* Define to 1 if you have the `getrlimit' function. */
+#undef HAVE_GETRLIMIT
+
+/* Define to 1 if you have the `getrusage' function. */
+#undef HAVE_GETRUSAGE
+
 /* Define to 1 if you have the `gettimeofday' function. */
 #undef HAVE_GETTIMEOFDAY
 
 /* Define to 1 if you have the `gmtime_r' function. */
 #undef HAVE_GMTIME_R
 
+/* Define to 1 if the system has the type `intmax_t'. */
+#undef HAVE_INTMAX_T
+
+/* Define to 1 if the system has the type `intptr_t'. */
+#undef HAVE_INTPTR_T
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
+
+/* Define to 1 if you have the `j0' function. */
+#undef HAVE_J0
+
+/* Define to 1 if you have the `j1' function. */
+#undef HAVE_J1
+
+/* Define if you have the <lcms2.h> header file. */
+#undef HAVE_LCMS2_H
+
+/* Define if you have the <lcms2/lcms2.h> header file. */
+#undef HAVE_LCMS2_LCMS2_H
 
 /* Define if you have the <lcms.h> header file. */
 #undef HAVE_LCMS_H
@@ -245,21 +308,27 @@
 /* Define to 1 if you have the <linux/unistd.h> header file. */
 #undef HAVE_LINUX_UNISTD_H
 
+/* Define to 1 if you have the `lltostr' function. */
+#undef HAVE_LLTOSTR
+
 /* Define to 1 if you have the <locale.h> header file. */
 #undef HAVE_LOCALE_H
 
 /* Define to 1 if you have the `localtime_r' function. */
 #undef HAVE_LOCALTIME_R
 
+/* Define to 1 if the system has the type `long double'. */
+#undef HAVE_LONG_DOUBLE
+
 /* Define to 1 if the type `long double' works and has more range or precision
    than `double'. */
 #undef HAVE_LONG_DOUBLE_WIDER
 
+/* Define to 1 if the system has the type `long long int'. */
+#undef HAVE_LONG_LONG_INT
+
 /* Define to 1 if you have the `lstat' function. */
 #undef HAVE_LSTAT
-
-/* define if the compiler implements L"widestring" */
-#undef HAVE_LSTRING
 
 /* Define this if a modern libltdl is already installed */
 #undef HAVE_LTDL
@@ -269,6 +338,9 @@
 
 /* Define to 1 if you have the <mach-o/dyld.h> header file. */
 #undef HAVE_MACH_O_DYLD_H
+
+/* Define to 1 if <wchar.h> declares mbstate_t. */
+#undef HAVE_MBSTATE_T
 
 /* Define to 1 if you have the `memmove' function. */
 #undef HAVE_MEMMOVE
@@ -294,8 +366,20 @@
 /* define if the compiler implements namespaces */
 #undef HAVE_NAMESPACES
 
+/* Define if g++ supports namespace std. */
+#undef HAVE_NAMESPACE_STD
+
+/* Define to 1 if you have the `nanosleep' function. */
+#undef HAVE_NANOSLEEP
+
 /* Define to 1 if you have the <ndir.h> header file, and it defines `DIR'. */
 #undef HAVE_NDIR_H
+
+/* Define to 1 if you have the `newlocale' function. */
+#undef HAVE_NEWLOCALE
+
+/* Define to 1 if you have the <OpenCL/cl.h> header file. */
+#undef HAVE_OPENCL_CL_H
 
 /* Define to 1 if you have the `opendir' function. */
 #undef HAVE_OPENDIR
@@ -324,6 +408,9 @@
 /* Define to 1 if you have the `posix_memalign' function. */
 #undef HAVE_POSIX_MEMALIGN
 
+/* Define to 1 if you have the `posix_spawnp' function. */
+#undef HAVE_POSIX_SPAWNP
+
 /* Define to 1 if you have the `pow' function. */
 #undef HAVE_POW
 
@@ -333,11 +420,17 @@
 /* Define if libtool can extract symbol lists from object files. */
 #undef HAVE_PRELOADED_SYMBOLS
 
+/* Define to 1 if you have the <process.h> header file. */
+#undef HAVE_PROCESS_H
+
 /* Define if you have POSIX threads libraries and header files. */
 #undef HAVE_PTHREAD
 
 /* Define to 1 if you have the `pwrite' function. */
 #undef HAVE_PWRITE
+
+/* Define to 1 if you have the `qsort_r' function. */
+#undef HAVE_QSORT_R
 
 /* Define to 1 if you have the `raise' function. */
 #undef HAVE_RAISE
@@ -384,6 +477,9 @@
 /* Define to 1 if you have the `sigemptyset' function. */
 #undef HAVE_SIGEMPTYSET
 
+/* Define to 1 if you have the `spawnvp' function. */
+#undef HAVE_SPAWNVP
+
 /* Define to 1 if you have the `sqrt' function. */
 #undef HAVE_SQRT
 
@@ -396,9 +492,6 @@
 /* Define to 1 if stdbool.h conforms to C99. */
 #undef HAVE_STDBOOL_H
 
-/* Define to 1 if you have the <stddef.h> header file. */
-#undef HAVE_STDDEF_H
-
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
@@ -407,9 +500,6 @@
 
 /* define if the compiler supports ISO C++ standard library */
 #undef HAVE_STD_LIBS
-
-/* define if the compiler supports the std namespace */
-#undef HAVE_STD_NAMESPACE
 
 /* Define to 1 if you have the `strcasecmp' function. */
 #undef HAVE_STRCASECMP
@@ -459,8 +549,20 @@
 /* Define to 1 if you have the `strstr' function. */
 #undef HAVE_STRSTR
 
+/* Define to 1 if you have the `strtod' function. */
+#undef HAVE_STRTOD
+
+/* Define to 1 if you have the `strtod_l' function. */
+#undef HAVE_STRTOD_L
+
 /* Define to 1 if you have the `strtol' function. */
 #undef HAVE_STRTOL
+
+/* Define to 1 if you have the `strtoul' function. */
+#undef HAVE_STRTOUL
+
+/* Define to 1 if `tm_zone' is a member of `struct tm'. */
+#undef HAVE_STRUCT_TM_TM_ZONE
 
 /* Define to 1 if you have the `symlink' function. */
 #undef HAVE_SYMLINK
@@ -481,6 +583,9 @@
 /* Define to 1 if you have the <sys/ndir.h> header file, and it defines `DIR'.
    */
 #undef HAVE_SYS_NDIR_H
+
+/* Define to 1 if you have the <sys/param.h> header file. */
+#undef HAVE_SYS_PARAM_H
 
 /* Define to 1 if you have the <sys/resource.h> header file. */
 #undef HAVE_SYS_RESOURCE_H
@@ -545,11 +650,37 @@
 /* Define to 1 if you have the `times' function. */
 #undef HAVE_TIMES
 
+/* Define to 1 if your `struct tm' has `tm_zone'. Deprecated, use
+   `HAVE_STRUCT_TM_TM_ZONE' instead. */
+#undef HAVE_TM_ZONE
+
+/* Define to 1 if you don't have `tm_zone' but do have the external array
+   `tzname'. */
+#undef HAVE_TZNAME
+
+/* Define to 1 if the system has the type `uintmax_t'. */
+#undef HAVE_UINTMAX_T
+
+/* Define to 1 if the system has the type `uintptr_t'. */
+#undef HAVE_UINTPTR_T
+
+/* Define to 1 if you have the `ulltostr' function. */
+#undef HAVE_ULLTOSTR
+
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
+/* Define to 1 if the system has the type `unsigned long long int'. */
+#undef HAVE_UNSIGNED_LONG_LONG_INT
+
+/* Define to 1 if you have the `uselocale' function. */
+#undef HAVE_USELOCALE
+
 /* Define to 1 if you have the `usleep' function. */
 #undef HAVE_USLEEP
+
+/* Define to 1 if you have the `utime' function. */
+#undef HAVE_UTIME
 
 /* Define to 1 if you have the `vfork' function. */
 #undef HAVE_VFORK
@@ -557,11 +688,20 @@
 /* Define to 1 if you have the <vfork.h> header file. */
 #undef HAVE_VFORK_H
 
+/* Define to 1 if you have the `vfprintf' function. */
+#undef HAVE_VFPRINTF
+
+/* Define to 1 if you have the `vfprintf_l' function. */
+#undef HAVE_VFPRINTF_L
+
 /* Define to 1 if you have the `vprintf' function. */
 #undef HAVE_VPRINTF
 
 /* Define to 1 if you have the `vsnprintf' function. */
 #undef HAVE_VSNPRINTF
+
+/* Define to 1 if you have the `vsnprintf_l' function. */
+#undef HAVE_VSNPRINTF_L
 
 /* Define to 1 if you have the `vsprintf' function. */
 #undef HAVE_VSPRINTF
@@ -572,6 +712,9 @@
 /* Define to 1 if you have the <wchar.h> header file. */
 #undef HAVE_WCHAR_H
 
+/* Define to 1 if you have the <windows.h> header file. */
+#undef HAVE_WINDOWS_H
+
 /* This value is set to 1 to indicate that the system argz facility works */
 #undef HAVE_WORKING_ARGZ
 
@@ -580,6 +723,9 @@
 
 /* Define to 1 if `vfork' works. */
 #undef HAVE_WORKING_VFORK
+
+/* Define to 1 if you have the <xlocale.h> header file. */
+#undef HAVE_XLOCALE_H
 
 /* Define to 1 if the system has the type `_Bool'. */
 #undef HAVE__BOOL
@@ -602,6 +748,9 @@
 /* Define to 1 if you have the `_wstat' function. */
 #undef HAVE__WSTAT
 
+/* define if your compiler has __attribute__ */
+#undef HAVE___ATTRIBUTE__
+
 /* accurately represent the wide range of intensity levels in real scenes */
 #undef HDRI_SUPPORT
 
@@ -620,7 +769,7 @@
 /* Define if you have JPEG library */
 #undef JPEG_DELEGATE
 
-/* Define if you have LCMS library */
+/* Define if you have LCMS (v1.11 or later) library */
 #undef LCMS_DELEGATE
 
 /* Directory where architecture-dependent files live. */
@@ -645,6 +794,9 @@
 /* The archive extension */
 #undef LT_LIBEXT
 
+/* The archive prefix */
+#undef LT_LIBPREFIX
+
 /* Define to the extension used for runtime loadable modules, say, ".so". */
 #undef LT_MODULE_EXT
 
@@ -656,13 +808,16 @@
    */
 #undef LT_OBJDIR
 
+/* Define if you have lzma compression library */
+#undef LZMA_DELEGATE
+
 /* Define to prepend to default font search path. */
 #undef MAGICK_FONT_PATH
 
 /* Magick API method prefix */
 #undef NAMESPACE_PREFIX
 
-/* Turn off assert statements */
+/* Define to 1 if assertions should be disabled. */
 #undef NDEBUG
 
 /* Define if dlsym() requires a leading underscore in symbol names. */
@@ -685,6 +840,9 @@
 
 /* Define to the one symbol short name of this package. */
 #undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
@@ -718,14 +876,11 @@
 #undef SELECT_TYPE_ARG5
 
 /* Directory where architecture-independent configuration files live. */
-#undef SHARE_CONFIGURE_PATH
+#undef SHARE_PATH
 
 /* Subdirectory of lib where architecture-independent configuration files
    live. */
-#undef SHARE_CONFIGURE_RELATIVE_PATH
-
-/* Directory where architecture-independent files live. */
-#undef SHARE_PATH
+#undef SHARE_RELATIVE_PATH
 
 /* The size of `off_t', as computed by sizeof. */
 #undef SIZEOF_OFF_T
@@ -744,6 +899,9 @@
 
 /* The size of `size_t', as computed by sizeof. */
 #undef SIZEOF_SIZE_T
+
+/* The size of `ssize_t', as computed by sizeof. */
+#undef SIZEOF_SSIZE_T
 
 /* The size of `unsigned int', as computed by sizeof. */
 #undef SIZEOF_UNSIGNED_INT
@@ -765,6 +923,9 @@
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
+
+/* Define if you have POSIX threads libraries and header files. */
+#undef THREAD_SUPPORT
 
 /* Define if you have TIFF library */
 #undef TIFF_DELEGATE
@@ -797,16 +958,16 @@
 #endif
 
 
+/* Define if you have WEBP library */
+#undef WEBP_DELEGATE
+
 /* Define to use the Windows GDI32 library */
 #undef WINGDI32_DELEGATE
 
 /* Define if using the dmalloc debugging malloc package */
 #undef WITH_DMALLOC
 
-/* Define if you have wmflite library */
-#undef WMFLITE_DELEGATE
-
-/* Define if you have wmf library */
+/* Define if you have WMF library */
 #undef WMF_DELEGATE
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
@@ -833,6 +994,9 @@
 /* Define to 1 if the X Window System is missing or not being used. */
 #undef X_DISPLAY_MISSING
 
+/* Build self-contained, embeddable, zero-configuration ImageMagick */
+#undef ZERO_CONFIGURATION_SUPPORT
+
 /* Define if you have zlib compression library */
 #undef ZLIB_DELEGATE
 
@@ -851,12 +1015,30 @@
 /* Define to 1 if on MINIX. */
 #undef _MINIX
 
+/* Define this for the OpenCL Accelerator */
+#undef _OPENCL
+
 /* Define to 2 if the system does not provide POSIX.1 features except with
    this defined. */
 #undef _POSIX_1_SOURCE
 
 /* Define to 1 if you need to in order for `stat' and other things to work. */
 #undef _POSIX_SOURCE
+
+/* Define for Solaris 2.5.1 so the uint32_t typedef from <sys/synch.h>,
+   <pthread.h>, or <semaphore.h> is not used. If the typedef were allowed, the
+   #define below would cause a syntax error. */
+#undef _UINT32_T
+
+/* Define for Solaris 2.5.1 so the uint64_t typedef from <sys/synch.h>,
+   <pthread.h>, or <semaphore.h> is not used. If the typedef were allowed, the
+   #define below would cause a syntax error. */
+#undef _UINT64_T
+
+/* Define for Solaris 2.5.1 so the uint8_t typedef from <sys/synch.h>,
+   <pthread.h>, or <semaphore.h> is not used. If the typedef were allowed, the
+   #define below would cause a syntax error. */
+#undef _UINT8_T
 
 /* Define to 1 if type `char' is unsigned and you are not using gcc.  */
 #ifndef __CHAR_UNSIGNED__
@@ -869,17 +1051,44 @@
 /* Define to appropriate substitue if compiler does not have __func__ */
 #undef __func__
 
-/* Define to empty if `const' does not conform to ANSI C. */
-#undef const
-
 /* Define to a type to use for `error_t' if it is not otherwise available. */
 #undef error_t
+
+/* Define to `int' if <sys/types.h> doesn't define. */
+#undef gid_t
 
 /* Define to `__inline__' or `__inline' if that's what the C compiler
    calls it, or to nothing if 'inline' is not supported under any name.  */
 #ifndef __cplusplus
 #undef inline
 #endif
+
+/* Define to the type of a signed integer type of width exactly 16 bits if
+   such a type exists and the standard includes do not define it. */
+#undef int16_t
+
+/* Define to the type of a signed integer type of width exactly 32 bits if
+   such a type exists and the standard includes do not define it. */
+#undef int32_t
+
+/* Define to the type of a signed integer type of width exactly 64 bits if
+   such a type exists and the standard includes do not define it. */
+#undef int64_t
+
+/* Define to the type of a signed integer type of width exactly 8 bits if such
+   a type exists and the standard includes do not define it. */
+#undef int8_t
+
+/* Define to the widest signed integer type if <stdint.h> and <inttypes.h> do
+   not define. */
+#undef intmax_t
+
+/* Define to the type of a signed integer type wide enough to hold a pointer,
+   if such a type exists, and if the system does not define it. */
+#undef intptr_t
+
+/* Define to a type if <wchar.h> does not define. */
+#undef mbstate_t
 
 /* Define to `int' if <sys/types.h> does not define. */
 #undef mode_t
@@ -894,13 +1103,14 @@
    nothing if this is not supported.  Do not define if restrict is
    supported directly.  */
 #undef restrict
-/* Work around a bug in Sun C++: it does not support _Restrict, even
-   though the corresponding Sun C compiler does, which causes
-   "#define restrict _Restrict" in the previous line.  Perhaps some future
-   version of Sun C++ will work with _Restrict; if so, it'll probably
-   define __RESTRICT, just as Sun C does.  */
+/* Work around a bug in Sun C++: it does not support _Restrict or
+   __restrict__, even though the corresponding Sun C compiler ends up with
+   "#define restrict _Restrict" or "#define restrict __restrict__" in the
+   previous line.  Perhaps some future version of Sun C++ will work with
+   restrict; if so, hopefully it defines __RESTRICT like Sun C does.  */
 #if defined __SUNPRO_CC && !defined __RESTRICT
 # define _Restrict
+# define __restrict__
 #endif
 
 /* Define to `unsigned int' if <sys/types.h> does not define. */
@@ -908,6 +1118,33 @@
 
 /* Define to `int' if <sys/types.h> does not define. */
 #undef ssize_t
+
+/* Define to `int' if <sys/types.h> doesn't define. */
+#undef uid_t
+
+/* Define to the type of an unsigned integer type of width exactly 16 bits if
+   such a type exists and the standard includes do not define it. */
+#undef uint16_t
+
+/* Define to the type of an unsigned integer type of width exactly 32 bits if
+   such a type exists and the standard includes do not define it. */
+#undef uint32_t
+
+/* Define to the type of an unsigned integer type of width exactly 64 bits if
+   such a type exists and the standard includes do not define it. */
+#undef uint64_t
+
+/* Define to the type of an unsigned integer type of width exactly 8 bits if
+   such a type exists and the standard includes do not define it. */
+#undef uint8_t
+
+/* Define to the widest unsigned integer type if <stdint.h> and <inttypes.h>
+   do not define. */
+#undef uintmax_t
+
+/* Define to the type of an unsigned integer type wide enough to hold a
+   pointer, if such a type exists, and if the system does not define it. */
+#undef uintptr_t
 
 /* Define as `fork' if `vfork' does not work. */
 #undef vfork

@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
   
   You may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #if defined(__cplusplus) || defined(c_plusplus)
 extern "C" {
 #endif
+
+#include <magick/morphology.h>
 
 typedef enum
 {
@@ -56,6 +58,19 @@ typedef enum
   JPEGPreview
 } PreviewType;
 
+typedef enum
+{
+  UndefinedStatistic,
+  GradientStatistic,
+  MaximumStatistic,
+  MeanStatistic,
+  MedianStatistic,
+  MinimumStatistic,
+  ModeStatistic,
+  NonpeakStatistic,
+  StandardDeviationStatistic
+} StatisticType;
+
 extern MagickExport Image
   *AdaptiveBlurImage(const Image *,const double,const double,ExceptionInfo *),
   *AdaptiveBlurImageChannel(const Image *,const ChannelType,const double,
@@ -67,13 +82,18 @@ extern MagickExport Image
   *BlurImage(const Image *,const double,const double,ExceptionInfo *),
   *BlurImageChannel(const Image *,const ChannelType,const double,const double,
     ExceptionInfo *),
+  *ConvolveImage(const Image *,const size_t,const double *,ExceptionInfo *),
+  *ConvolveImageChannel(const Image *,const ChannelType,const size_t,
+    const double *,ExceptionInfo *),
   *DespeckleImage(const Image *,ExceptionInfo *),
   *EdgeImage(const Image *,const double,ExceptionInfo *),
   *EmbossImage(const Image *,const double,const double,ExceptionInfo *),
+  *FilterImage(const Image *,const KernelInfo *,ExceptionInfo *),
+  *FilterImageChannel(const Image *,const ChannelType,const KernelInfo *,
+     ExceptionInfo *),
   *GaussianBlurImage(const Image *,const double,const double,ExceptionInfo *),
   *GaussianBlurImageChannel(const Image *,const ChannelType,const double,
     const double,ExceptionInfo *),
-  *MedianFilterImage(const Image *,const double,ExceptionInfo *),
   *MotionBlurImage(const Image *,const double,const double,const double,
     ExceptionInfo *),
   *MotionBlurImageChannel(const Image *,const ChannelType,const double,
@@ -82,7 +102,6 @@ extern MagickExport Image
   *RadialBlurImage(const Image *,const double,ExceptionInfo *),
   *RadialBlurImageChannel(const Image *,const ChannelType,const double,
     ExceptionInfo *),
-  *ReduceNoiseImage(const Image *,const double,ExceptionInfo *),
   *SelectiveBlurImage(const Image *,const double,const double,const double,
     ExceptionInfo *),
   *SelectiveBlurImageChannel(const Image *,const ChannelType,const double,
@@ -93,6 +112,10 @@ extern MagickExport Image
   *SharpenImageChannel(const Image *,const ChannelType,const double,
     const double,ExceptionInfo *),
   *SpreadImage(const Image *,const double,ExceptionInfo *),
+  *StatisticImage(const Image *,const StatisticType,const size_t,const size_t,
+    ExceptionInfo *),
+  *StatisticImageChannel(const Image *,const ChannelType,const StatisticType,
+    const size_t,const size_t,ExceptionInfo *),
   *UnsharpMaskImage(const Image *,const double,const double,const double,
     const double,ExceptionInfo *),
   *UnsharpMaskImageChannel(const Image *,const ChannelType,const double,

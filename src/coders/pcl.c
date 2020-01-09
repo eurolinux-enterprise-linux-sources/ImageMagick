@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -47,6 +47,7 @@
 #include "magick/color.h"
 #include "magick/color-private.h"
 #include "magick/colorspace.h"
+#include "magick/colorspace-private.h"
 #include "magick/constitute.h"
 #include "magick/delegate.h"
 #include "magick/draw.h"
@@ -60,6 +61,7 @@
 #include "magick/memory_.h"
 #include "magick/monitor.h"
 #include "magick/monitor-private.h"
+#include "magick/option.h"
 #include "magick/profile.h"
 #include "magick/resource_.h"
 #include "magick/quantum-private.h"
@@ -105,10 +107,10 @@ static MagickBooleanType IsPCL(const unsigned char *magick,const size_t length)
 {
   if (length < 4)
     return(MagickFalse);
-  if (memcmp(magick,"\033E\033",3) == 0)
-    return(MagickTrue);
   if (memcmp(magick,"\033E\033&",4) == 0)
     return(MagickFalse);
+  if (memcmp(magick,"\033E\033",3) == 0)
+    return(MagickTrue);
   return(MagickFalse);
 }
 
@@ -177,18 +179,18 @@ static Image *ReadPCLImage(const ImageInfo *image_info,ExceptionInfo *exception)
   register char
     *p;
 
-  register long
+  register ssize_t
     c;
 
   SegmentInfo
     bounds;
 
-  ssize_t
-    count;
-
-  unsigned long
+  size_t
     height,
     width;
+
+  ssize_t
+    count;
 
   assert(image_info != (const ImageInfo *) NULL);
   assert(image_info->signature == MagickSignature);
@@ -289,8 +291,8 @@ static Image *ReadPCLImage(const ImageInfo *image_info,ExceptionInfo *exception)
     /*
       Set PCL render geometry.
     */
-    width=(unsigned long) (bounds.x2-bounds.x1+0.5);
-    height=(unsigned long) (bounds.y2-bounds.y1+0.5);
+    width=(size_t) floor(bounds.x2-bounds.x1+0.5);
+    height=(size_t) floor(bounds.y2-bounds.y1+0.5);
     if (width > page.width)
       page.width=width;
     if (height > page.height)
@@ -304,8 +306,8 @@ static Image *ReadPCLImage(const ImageInfo *image_info,ExceptionInfo *exception)
     (void) ParseAbsoluteGeometry(PSPageGeometry,&page);
   if (image_info->page != (char *) NULL)
     (void) ParseAbsoluteGeometry(image_info->page,&page);
-  (void) FormatMagickString(geometry,MaxTextExtent,"%lux%lu",
-    page.width,page.height);
+  (void) FormatLocaleString(geometry,MaxTextExtent,"%.20gx%.20g",(double)
+    page.width,(double) page.height);
   if (image_info->monochrome != MagickFalse)
     delegate_info=GetDelegateInfo("pcl:mono",(char *) NULL,exception);
   else
@@ -320,40 +322,41 @@ static Image *ReadPCLImage(const ImageInfo *image_info,ExceptionInfo *exception)
     (void) ParseAbsoluteGeometry(PSPageGeometry,&page);
   if (image_info->page != (char *) NULL)
     (void) ParseAbsoluteGeometry(image_info->page,&page);
-  (void) FormatMagickString(density,MaxTextExtent,"%gx%g",
+  (void) FormatLocaleString(density,MaxTextExtent,"%gx%g",
     image->x_resolution,image->y_resolution);
-  page.width=(unsigned long) (page.width*image->x_resolution/delta.x+0.5);
-  page.height=(unsigned long) (page.height*image->y_resolution/delta.y+0.5);
-  (void) FormatMagickString(options,MaxTextExtent,"-g%lux%lu ",
-    page.width,page.height);
+  page.width=(size_t) floor(page.width*image->x_resolution/delta.x+0.5);
+  page.height=(size_t) floor(page.height*image->y_resolution/delta.y+
+    0.5);
+  (void) FormatLocaleString(options,MaxTextExtent,"-g%.20gx%.20g ",(double)
+     page.width,(double) page.height);
   image=DestroyImage(image);
   read_info=CloneImageInfo(image_info);
   *read_info->magick='\0';
   if (read_info->number_scenes != 0)
     {
       if (read_info->number_scenes != 1)
-        (void) FormatMagickString(options,MaxTextExtent,"-dLastPage=%lu",
-          read_info->scene+read_info->number_scenes);
+        (void) FormatLocaleString(options,MaxTextExtent,"-dLastPage=%.20g",
+          (double) (read_info->scene+read_info->number_scenes));
       else
-        (void) FormatMagickString(options,MaxTextExtent,
-          "-dFirstPage=%lu -dLastPage=%lu",read_info->scene+1,read_info->scene+
-          read_info->number_scenes);
+        (void) FormatLocaleString(options,MaxTextExtent,
+          "-dFirstPage=%.20g -dLastPage=%.20g",(double) read_info->scene+1,
+          (double) (read_info->scene+read_info->number_scenes));
       read_info->number_scenes=0;
       if (read_info->scenes != (char *) NULL)
         *read_info->scenes='\0';
     }
   if (read_info->authenticate != (char *) NULL)
-    (void) FormatMagickString(options+strlen(options),MaxTextExtent,
+    (void) FormatLocaleString(options+strlen(options),MaxTextExtent,
       " -sPCLPassword=%s",read_info->authenticate);
   (void) CopyMagickString(filename,read_info->filename,MaxTextExtent);
   (void) AcquireUniqueFilename(read_info->filename);
-  (void) FormatMagickString(command,MaxTextExtent,
+  (void) FormatLocaleString(command,MaxTextExtent,
     GetDelegateCommands(delegate_info),
     read_info->antialias != MagickFalse ? 4 : 1,
     read_info->antialias != MagickFalse ? 4 : 1,density,options,
     read_info->filename,input_filename);
-  status=SystemCommand(read_info->verbose,command) != 0 ? MagickTrue :
-    MagickFalse;
+  status=SystemCommand(MagickFalse,read_info->verbose,command,exception) != 0 ?
+    MagickTrue : MagickFalse;
   image=ReadImage(read_info,exception);
   (void) RelinquishUniqueFileResource(read_info->filename);
   (void) RelinquishUniqueFileResource(input_filename);
@@ -403,10 +406,10 @@ static Image *ReadPCLImage(const ImageInfo *image_info,ExceptionInfo *exception)
 %
 %  The format of the RegisterPCLImage method is:
 %
-%      unsigned long RegisterPCLImage(void)
+%      size_t RegisterPCLImage(void)
 %
 */
-ModuleExport unsigned long RegisterPCLImage(void)
+ModuleExport size_t RegisterPCLImage(void)
 {
   MagickInfo
     *entry;
@@ -483,7 +486,7 @@ static size_t PCLDeltaCompressImage(const size_t length,
     j,
     replacement;
 
-  register long
+  register ssize_t
     i,
     x;
 
@@ -491,10 +494,10 @@ static size_t PCLDeltaCompressImage(const size_t length,
     *q;
 
   q=compress_pixels;
-  for (x=0; x < (long) length; )
+  for (x=0; x < (ssize_t) length; )
   {
     j=0;
-    for (i=0; x < (long) length; x++)
+    for (i=0; x < (ssize_t) length; x++)
     {
       if (*pixels++ != *previous_pixels++)
         {
@@ -503,8 +506,9 @@ static size_t PCLDeltaCompressImage(const size_t length,
         }
       j++;
     }
-    for ( ; x < (long) length; x++)
+    while (x < (ssize_t) length)
     {
+      x++;
       if (*pixels == *previous_pixels)
         break;
       i++;
@@ -550,14 +554,14 @@ static size_t PCLPackbitsCompressImage(const size_t length,
   int
     count;
 
-  long
-    j;
-
-  register long
+  register ssize_t
     x;
 
   register unsigned char
     *q;
+
+  ssize_t
+    j;
 
   unsigned char
     packbits[128];
@@ -566,7 +570,7 @@ static size_t PCLPackbitsCompressImage(const size_t length,
     Compress pixels with Packbits encoding.
   */
   q=compress_pixels;
-  for (x=(long) length; x != 0; )
+  for (x=(ssize_t) length; x != 0; )
   {
     switch (x)
     {
@@ -608,7 +612,7 @@ static size_t PCLPackbitsCompressImage(const size_t length,
               Packed run.
             */
             count=3;
-            while (((long) count < x) && (*pixels == *(pixels+count)))
+            while (((ssize_t) count < x) && (*pixels == *(pixels+count)))
             {
               count++;
               if (count >= 127)
@@ -629,12 +633,12 @@ static size_t PCLPackbitsCompressImage(const size_t length,
         {
           packbits[count+1]=pixels[count];
           count++;
-          if (((long) count >= (x-3)) || (count >= 127))
+          if (((ssize_t) count >= (x-3)) || (count >= 127))
             break;
         }
         x-=count;
         *packbits=(unsigned char) (count-1);
-        for (j=0; j <= (long) count; j++)
+        for (j=0; j <= (ssize_t) count; j++)
           *q++=packbits[j];
         pixels+=count;
         break;
@@ -650,8 +654,8 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
   char
     buffer[MaxTextExtent];
 
-  long
-    y;
+  const char
+    *option;
 
   MagickBooleanType
     status;
@@ -662,28 +666,18 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
   register const IndexPacket
     *indexes;
 
-  register const PixelPacket
-    *p;
-
-  register long
-    i,
-    x;
-
-  register unsigned char
-    *q;
-
-  size_t
-    length,
+  register const PixelPacket *p; register ssize_t i, x; register unsigned char *q; size_t density, length,
+    one,
     packets;
+
+  ssize_t
+    y;
 
   unsigned char
     bits_per_pixel,
     *compress_pixels,
     *pixels,
     *previous_pixels;
-
-  unsigned long
-    density;
 
   /*
     Open output image file.
@@ -704,41 +698,32 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
         geometry;
 
       (void) ParseGeometry(image_info->density,&geometry);
-      density=(unsigned long) geometry.rho;
+      density=(size_t) geometry.rho;
     }
   scene=0;
+  one=1;
   do
   {
-    if (image->colorspace != RGBColorspace)
+    if (IsRGBColorspace(image->colorspace) == MagickFalse)
       (void) TransformImageColorspace(image,RGBColorspace);
     /*
       Initialize the printer.
     */
     (void) WriteBlobString(image,"\033E");  /* printer reset */
     (void) WriteBlobString(image,"\033*r3F");  /* set presentation mode */
-    (void) FormatMagickString(buffer,MaxTextExtent,"\033*r%lus%luT",
-      image->columns,image->rows);
+    (void) FormatLocaleString(buffer,MaxTextExtent,"\033*r%.20gs%.20gT",
+      (double) image->columns,(double) image->rows);
     (void) WriteBlobString(image,buffer);
-    (void) FormatMagickString(buffer,MaxTextExtent,"\033*t%ldR",density);
+    (void) FormatLocaleString(buffer,MaxTextExtent,"\033*t%.20gR",(double)
+      density);
     (void) WriteBlobString(image,buffer);
     (void) WriteBlobString(image,"\033&l0E");  /* top margin 0 */
     if (IsMonochromeImage(image,&image->exception) != MagickFalse)
       {
         /*
-          Monochrome image.
+          Monochrome image: use default printer monochrome setup.
         */
         bits_per_pixel=1;
-        (void) WriteBlobString(image,"\033*v6W"); /* set color mode... */
-        (void) WriteBlobByte(image,0); /* RGB */
-        (void) WriteBlobByte(image,1); /* indexed by pixel */
-        (void) WriteBlobByte(image,bits_per_pixel); /* bits per index */
-        (void) WriteBlobByte(image,8); /* bits per red component */
-        (void) WriteBlobByte(image,8); /* bits per green component */
-        (void) WriteBlobByte(image,8); /* bits per blue component */
-        (void) FormatMagickString(buffer,MaxTextExtent,"\033*v0a0b0c0I");
-        (void) WriteBlobString(image,buffer);
-        (void) FormatMagickString(buffer,MaxTextExtent,"\033*v1a1b1c1I");
-        (void) WriteBlobString(image,buffer);
       }
     else
       if (image->storage_class == DirectClass)
@@ -768,33 +753,41 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
           (void) WriteBlobByte(image,8); /* bits per red component */
           (void) WriteBlobByte(image,8); /* bits per green component */
           (void) WriteBlobByte(image,8); /* bits per blue component */
-          for (i=0; i < (long) image->colors; i++)
+          for (i=0; i < (ssize_t) image->colors; i++)
           {
-            (void) FormatMagickString(buffer,MaxTextExtent,
-              "\033*v%da%db%dc%ldI",ScaleQuantumToChar(image->colormap[i].red),
+            (void) FormatLocaleString(buffer,MaxTextExtent,
+              "\033*v%da%db%dc%.20gI",
+              ScaleQuantumToChar(image->colormap[i].red),
               ScaleQuantumToChar(image->colormap[i].green),
-              ScaleQuantumToChar(image->colormap[i].blue),i);
+              ScaleQuantumToChar(image->colormap[i].blue),(double) i);
             (void) WriteBlobString(image,buffer);
           }
-          for ( ; i < (1L << bits_per_pixel); i++)
+          for (one=1; i < (ssize_t) (one << bits_per_pixel); i++)
           {
-            (void) FormatMagickString(buffer,MaxTextExtent,"\033*v%luI",i);
+            (void) FormatLocaleString(buffer,MaxTextExtent,"\033*v%.20gI",
+              (double) i);
             (void) WriteBlobString(image,buffer);
           }
         }
-    (void) WriteBlobString(image,"\033*r1A");  /* start raster graphics */
+    option=GetImageOption(image_info,"pcl:fit-to-page");
+    if ((option != (const char *) NULL) &&
+        (IsMagickTrue(option) != MagickFalse))
+      (void) WriteBlobString(image,"\033*r3A");
+    else
+      (void) WriteBlobString(image,"\033*r1A");  /* start raster graphics */
     (void) WriteBlobString(image,"\033*b0Y");  /* set y offset */
     length=(image->columns*bits_per_pixel+7)/8;
-    pixels=(unsigned char *) AcquireQuantumMemory(length,sizeof(*pixels));
+    pixels=(unsigned char *) AcquireQuantumMemory(length+1,sizeof(*pixels));
     if (pixels == (unsigned char *) NULL)
       ThrowWriterException(ResourceLimitError,"MemoryAllocationFailed");
+    (void) ResetMagickMemory(pixels,0,(length+1)*sizeof(*pixels));
     compress_pixels=(unsigned char *) NULL;
     previous_pixels=(unsigned char *) NULL;
     switch (image->compression)
     {
       case NoCompression:
       {
-        (void) FormatMagickString(buffer,MaxTextExtent,"\033*b0M");
+        (void) FormatLocaleString(buffer,MaxTextExtent,"\033*b0M");
         (void) WriteBlobString(image,buffer);
         break;
       }
@@ -807,20 +800,24 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
             pixels=(unsigned char *) RelinquishMagickMemory(pixels);
             ThrowWriterException(ResourceLimitError,"MemoryAllocationFailed");
           }
-        (void) FormatMagickString(buffer,MaxTextExtent,"\033*b2M");
+        (void) ResetMagickMemory(compress_pixels,0,(length+256)*
+          sizeof(*compress_pixels));
+        (void) FormatLocaleString(buffer,MaxTextExtent,"\033*b2M");
         (void) WriteBlobString(image,buffer);
         break;
       }
       default:
       {
-        compress_pixels=(unsigned char *) AcquireQuantumMemory(length+
-          (length >> 3),sizeof(*compress_pixels));
+        compress_pixels=(unsigned char *) AcquireQuantumMemory(3*length+256,
+          sizeof(*compress_pixels));
         if (compress_pixels == (unsigned char *) NULL)
           {
             pixels=(unsigned char *) RelinquishMagickMemory(pixels);
             ThrowWriterException(ResourceLimitError,"MemoryAllocationFailed");
           }
-        previous_pixels=(unsigned char *) AcquireQuantumMemory(length,
+        (void) ResetMagickMemory(compress_pixels,0,(3*length+256)*
+          sizeof(*compress_pixels));
+        previous_pixels=(unsigned char *) AcquireQuantumMemory(length+1,
           sizeof(*previous_pixels));
         if (previous_pixels == (unsigned char *) NULL)
           {
@@ -829,12 +826,14 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
             pixels=(unsigned char *) RelinquishMagickMemory(pixels);
             ThrowWriterException(ResourceLimitError,"MemoryAllocationFailed");
           }
-        (void) FormatMagickString(buffer,MaxTextExtent,"\033*b3M");
+        (void) ResetMagickMemory(previous_pixels,0,(length+1)*
+          sizeof(*previous_pixels));
+        (void) FormatLocaleString(buffer,MaxTextExtent,"\033*b3M");
         (void) WriteBlobString(image,buffer);
         break;
       }
     }
-    for (y=0; y < (long) image->rows; y++)
+    for (y=0; y < (ssize_t) image->rows; y++)
     {
       p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
       if (p == (const PixelPacket *) NULL)
@@ -854,10 +853,10 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
           */
           bit=0;
           byte=0;
-          for (x=0; x < (long) image->columns; x++)
+          for (x=0; x < (ssize_t) image->columns; x++)
           {
             byte<<=1;
-            if (PixelIntensity(p) >= ((MagickRealType) QuantumRange/2.0))
+            if (PixelIntensity(p) < ((MagickRealType) QuantumRange/2.0))
               byte|=0x01;
             bit++;
             if (bit == 8)
@@ -877,8 +876,8 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
           /*
             Colormapped image.
           */
-          for (x=0; x < (long) image->columns; x++)
-            *q++=(unsigned char) indexes[x];
+          for (x=0; x < (ssize_t) image->columns; x++)
+            *q++=(unsigned char) GetPixelIndex(indexes+x);
           break;
         }
         case 24:
@@ -887,11 +886,11 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
           /*
             Truecolor image.
           */
-          for (x=0; x < (long) image->columns; x++)
+          for (x=0; x < (ssize_t) image->columns; x++)
           {
-            *q++=ScaleQuantumToChar(p->red);
-            *q++=ScaleQuantumToChar(p->green);
-            *q++=ScaleQuantumToChar(p->blue);
+            *q++=ScaleQuantumToChar(GetPixelRed(p));
+            *q++=ScaleQuantumToChar(GetPixelGreen(p));
+            *q++=ScaleQuantumToChar(GetPixelBlue(p));
             p++;
           }
           break;
@@ -901,18 +900,17 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
       {
         case NoCompression:
         {
-          (void) FormatMagickString(buffer,MaxTextExtent,"\033*b%luW",
-            (unsigned long) length);
+          (void) FormatLocaleString(buffer,MaxTextExtent,"\033*b%.20gW",
+            (double) length);
           (void) WriteBlobString(image,buffer);
           (void) WriteBlob(image,length,pixels);
           break;
         }
         case RLECompression:
         {
-          packets=PCLPackbitsCompressImage(length,pixels,
-            compress_pixels);
-          (void) FormatMagickString(buffer,MaxTextExtent,"\033*b%luW",
-            (unsigned long) packets);
+          packets=PCLPackbitsCompressImage(length,pixels,compress_pixels);
+          (void) FormatLocaleString(buffer,MaxTextExtent,"\033*b%.20gW",
+            (double) packets);
           (void) WriteBlobString(image,buffer);
           (void) WriteBlob(image,packets,compress_pixels);
           break;
@@ -920,12 +918,12 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
         default:
         {
           if (y == 0)
-            for (i=0; i < (long) length; i++)
+            for (i=0; i < (ssize_t) length; i++)
               previous_pixels[i]=(~pixels[i]);
           packets=PCLDeltaCompressImage(length,previous_pixels,pixels,
             compress_pixels);
-          (void) FormatMagickString(buffer,MaxTextExtent,"\033*b%luW",
-            (unsigned long) packets);
+          (void) FormatLocaleString(buffer,MaxTextExtent,"\033*b%.20gW",
+            (double) packets);
           (void) WriteBlobString(image,buffer);
           (void) WriteBlob(image,packets,compress_pixels);
           (void) CopyMagickMemory(previous_pixels,pixels,length*
@@ -934,7 +932,7 @@ static MagickBooleanType WritePCLImage(const ImageInfo *image_info,Image *image)
         }
       }
     }
-    (void) WriteBlobString(image,"\033*r0B");  /* end graphics */
+    (void) WriteBlobString(image,"\033*rB");  /* end graphics */
     switch (image->compression)
     {
       case NoCompression:

@@ -24,9 +24,9 @@ void Magick::adaptiveBlurImage::operator()( Magick::Image &image_ ) const
 }
 
 // Local adaptive threshold image
-Magick::adaptiveThresholdImage::adaptiveThresholdImage( const unsigned int width_,
-                                                        const unsigned int height_,
-                                                        const unsigned int offset_ )
+Magick::adaptiveThresholdImage::adaptiveThresholdImage( const size_t width_,
+                                                        const size_t height_,
+                                                        const ssize_t offset_ )
       : _width(width_),
         _height(height_),
         _offset(offset_)
@@ -157,6 +157,18 @@ void Magick::chopImage::operator()( Magick::Image &image_ ) const
   image_.chop( _geometry );
 }
 
+// accepts a lightweight Color Correction Collection (CCC) file which solely
+// contains one or more color corrections and applies the correction to the
+// image.
+Magick::cdlImage::cdlImage( const std::string &cdl_ )
+  : _cdl ( cdl_ )
+{
+}
+void Magick::cdlImage::operator()( Image &image_ ) const
+{
+  image_.cdl( _cdl.c_str() );
+}
+
 // Colorize image using pen color at specified percent opacity
 Magick::colorizeImage::colorizeImage( const unsigned int opacityRed_,
                                       const unsigned int opacityGreen_,
@@ -179,6 +191,19 @@ Magick::colorizeImage::colorizeImage( const unsigned int opacity_,
 void Magick::colorizeImage::operator()( Magick::Image &image_ ) const
 {
   image_.colorize( _opacityRed, _opacityGreen, _opacityBlue, _penColor );
+}
+
+// Apply a color matrix to the image channels.  The user supplied
+// matrix may be of order 1 to 5 (1x1 through 5x5).
+Magick::colorMatrixImage::colorMatrixImage( const size_t order_,
+              const double *color_matrix_ )
+  : _order( order_ ),
+    _color_matrix( color_matrix_ )
+{
+}
+void Magick::colorMatrixImage::operator()( Image &image_ ) const
+{
+  image_.colorMatrix( _order, _color_matrix );
 }
 
 // Convert the image colorspace representation
@@ -204,8 +229,8 @@ void Magick::commentImage::operator()( Magick::Image &image_ ) const
 // Compose an image onto another at specified offset and using
 // specified algorithm
 Magick::compositeImage::compositeImage( const Magick::Image &compositeImage_,
-                                        int xOffset_,
-                                        int yOffset_,
+                                        ssize_t xOffset_,
+                                        ssize_t yOffset_,
                                         Magick::CompositeOperator compose_  )
   : _compositeImage( compositeImage_ ),
     _xOffset ( xOffset_ ),
@@ -228,7 +253,7 @@ void Magick::compositeImage::operator()( Image &image_ ) const
 }
 
 // Contrast image (enhance intensity differences in image)
-Magick::contrastImage::contrastImage( const unsigned int sharpen_ )
+Magick::contrastImage::contrastImage( const size_t sharpen_ )
   : _sharpen( sharpen_ )
 {
 }
@@ -248,7 +273,7 @@ void Magick::cropImage::operator()( Magick::Image &image_ ) const
 }
 
 // Cycle image colormap
-Magick::cycleColormapImage::cycleColormapImage( const int amount_ )
+Magick::cycleColormapImage::cycleColormapImage( const ssize_t amount_ )
   : _amount( amount_ )
 {
 }
@@ -264,6 +289,34 @@ Magick::despeckleImage::despeckleImage( void )
 void Magick::despeckleImage::operator()( Magick::Image &image_ ) const
 {
   image_.despeckle( );
+}
+
+// Distort image.  distorts an image using various distortion methods, by
+// mapping color lookups of the source image to a new destination image
+// usally of the same size as the source image, unless 'bestfit' is set to
+// true.
+Magick::distortImage::distortImage( const Magick::DistortImageMethod method_,
+                                    const size_t number_arguments_,
+                                    const double *arguments_,
+                                    const bool bestfit_ )
+  : _method ( method_ ),
+    _number_arguments ( number_arguments_ ),
+    _arguments ( arguments_ ),
+    _bestfit( bestfit_ )
+{
+}
+Magick::distortImage::distortImage( const Magick::DistortImageMethod method_,
+                                    const size_t number_arguments_,
+                                    const double *arguments_ )
+  : _method ( method_ ),
+    _number_arguments ( number_arguments_ ),
+    _arguments ( arguments_ ),
+    _bestfit( false )
+{
+}
+void Magick::distortImage::operator()( Magick::Image &image_ ) const
+{
+  image_.distort( _method, _number_arguments, _arguments, _bestfit );
 }
 
 // Draw on image
@@ -348,8 +401,8 @@ void Magick::flipImage::operator()( Magick::Image &image_ ) const
 // Flood-fill color across pixels starting at target-pixel and
 // stopping at pixels matching specified border color.  Uses current
 // fuzz setting when determining color match.
-Magick::floodFillColorImage::floodFillColorImage( const unsigned int x_,
-                                                  const unsigned int y_,
+Magick::floodFillColorImage::floodFillColorImage( const ssize_t x_,
+                                                  const ssize_t y_,
                                                   const Magick::Color &fillColor_ )
   : _x(x_),
     _y(y_),
@@ -368,8 +421,8 @@ Magick::floodFillColorImage::floodFillColorImage( const Magick::Geometry &point_
 // Flood-fill color across pixels starting at target-pixel and
 // stopping at pixels matching specified border color.  Uses current
 // fuzz setting when determining color match.
-Magick::floodFillColorImage::floodFillColorImage( const unsigned int x_,
-                                                  const unsigned int y_,
+Magick::floodFillColorImage::floodFillColorImage( const ssize_t x_,
+                                                  const ssize_t y_,
                                                   const Magick::Color &fillColor_,
                                                   const Magick::Color &borderColor_ )
   : _x(x_),
@@ -404,8 +457,8 @@ void Magick::floodFillColorImage::operator()( Magick::Image &image_ ) const
 // Flood-fill texture across pixels that match the color of the target
 // pixel and are neighbors of the target pixel.  Uses current fuzz
 // setting when determining color match.
-Magick::floodFillTextureImage::floodFillTextureImage( const unsigned int x_,
-                                                      const unsigned int y_,
+Magick::floodFillTextureImage::floodFillTextureImage( const ssize_t x_,
+                                                      const ssize_t y_,
                                                       const Magick::Image &texture_ )
   : _x(x_),
     _y(y_),
@@ -424,8 +477,8 @@ Magick::floodFillTextureImage::floodFillTextureImage( const Magick::Geometry &po
 // Flood-fill texture across pixels starting at target-pixel and
 // stopping at pixels matching specified border color.  Uses current
 // fuzz setting when determining color match.
-Magick::floodFillTextureImage::floodFillTextureImage( const unsigned int x_,
-                                                      const unsigned int y_,
+Magick::floodFillTextureImage::floodFillTextureImage( const ssize_t x_,
+                                                      const ssize_t y_,
                                                       const Magick::Image &texture_,
                                                       const Magick::Color &borderColor_ )
   : _x(x_),
@@ -472,8 +525,8 @@ Magick::frameImage::frameImage( const Magick::Geometry &geometry_ )
     _innerBevel( geometry_.yOff() )
 {
 }
-Magick::frameImage::frameImage( const unsigned int width_, const unsigned int height_,
-                                const int innerBevel_, const int outerBevel_ )
+Magick::frameImage::frameImage( const size_t width_, const size_t height_,
+                                const ssize_t innerBevel_, const ssize_t outerBevel_ )
   : _width( width_ ),
     _height( height_ ),
     _outerBevel( outerBevel_ ),
@@ -520,6 +573,16 @@ void Magick::gaussianBlurImage::operator()( Magick::Image &image_ ) const
   image_.gaussianBlur( _width, _sigma );
 }
 
+// Apply a color lookup table (Hald CLUT) to the image.
+Magick::haldClutImage::haldClutImage( const Image &haldClutImage_ )
+  : _haldClutImage ( haldClutImage_ )
+{
+}
+void Magick::haldClutImage::operator()( Image &image_ ) const
+{
+  image_.haldClut( _haldClutImage );
+}
+
 // Implode image (special effect)
 Magick::implodeImage::implodeImage( const double factor_  )
   : _factor( factor_ )
@@ -528,6 +591,17 @@ Magick::implodeImage::implodeImage( const double factor_  )
 void Magick::implodeImage::operator()( Magick::Image &image_ ) const
 {
   image_.implode( _factor );
+}
+
+// Implements the inverse discrete Fourier transform (IFT) of the image
+// either as a magnitude / phase or real / imaginary image pair.
+Magick::inverseFourierTransformImage::inverseFourierTransformImage( const Magick::Image &phaseImage_ )
+  : _phaseImage( phaseImage_ )
+{
+}
+void Magick::inverseFourierTransformImage::operator()( Magick::Image &image_ ) const
+{
+  image_.inverseFourierTransform( _phaseImage );
 }
 
 // Set image validity. Valid images become empty (inValid) if argument
@@ -605,7 +679,7 @@ void Magick::mapImage::operator()( Magick::Image &image_ ) const
 // Floodfill designated area with a matte value
 Magick::matteFloodfillImage::matteFloodfillImage( const Color &target_ ,
                                                   const unsigned int matte_,
-                                                  const int x_, const int y_,
+                                                  const ssize_t x_, const ssize_t y_,
                                                   const PaintMethod method_ )
   : _target( target_ ),
     _matte( matte_ ),
@@ -739,7 +813,7 @@ Magick::reduceNoiseImage::reduceNoiseImage( void )
   : _order(3)
 {
 }
-Magick::reduceNoiseImage::reduceNoiseImage ( const unsigned int order_ )
+Magick::reduceNoiseImage::reduceNoiseImage ( const size_t order_ )
       : _order(order_)
 {
 }
@@ -755,8 +829,8 @@ Magick::rollImage::rollImage( const Magick::Geometry &roll_ )
     _rows( roll_.height() )
 {
 }
-Magick::rollImage::rollImage( const int columns_,
-                              const int rows_ )
+Magick::rollImage::rollImage( const ssize_t columns_,
+                              const ssize_t rows_ )
   : _columns( columns_ ),
     _rows( rows_ )
 {
@@ -812,15 +886,17 @@ void Magick::segmentImage::operator()( Magick::Image &image_ ) const
 }
 
 // Shade image using distant light source
-Magick::shadeImage::shadeImage( const double clusterThreshold_, 
-                                const double smoothingThreshold_ )
-  : _clusterThreshold( clusterThreshold_ ),
-    _smoothingThreshold( smoothingThreshold_ )
+Magick::shadeImage::shadeImage( const double azimuth_,
+                                const double elevation_,
+        const bool colorShading_)
+  : _azimuth( azimuth_ ),
+    _elevation( elevation_ ),
+    _colorShading (colorShading_)
 {
 }
 void Magick::shadeImage::operator()( Magick::Image &image_ ) const
 {
-  image_.shade( _clusterThreshold, _smoothingThreshold );
+  image_.shade( _azimuth, _elevation, _colorShading );
 }
 
 // Sharpen pixels in image
@@ -868,7 +944,7 @@ void Magick::solarizeImage::operator()( Magick::Image &image_ ) const
 }
 
 // Spread pixels randomly within image by specified ammount
-Magick::spreadImage::spreadImage( const unsigned int amount_ )
+Magick::spreadImage::spreadImage( const size_t amount_ )
   : _amount( amount_ )
 {
 }
@@ -1035,7 +1111,7 @@ void Magick::adjoinImage::operator()( Magick::Image &image_ ) const
 
 // Time in 1/100ths of a second which must expire before displaying
 // the next image in an animated sequence.
-Magick::animationDelayImage::animationDelayImage( const unsigned int delay_ )
+Magick::animationDelayImage::animationDelayImage( const size_t delay_ )
   : _delay( delay_ )
 {
 }
@@ -1046,7 +1122,7 @@ void Magick::animationDelayImage::operator()( Magick::Image &image_ ) const
 
 // Number of iterations to loop an animation (e.g. Netscape loop
 // extension) for.
-Magick::animationIterationsImage::animationIterationsImage( const unsigned int iterations_ )
+Magick::animationIterationsImage::animationIterationsImage( const size_t iterations_ )
   : _iterations( iterations_ )
 {
 }
@@ -1153,7 +1229,7 @@ void Magick::colorFuzzImage::operator()( Magick::Image &image_ ) const
 }
 
 // Color at colormap position index_
-Magick::colorMapImage::colorMapImage( const unsigned int index_,
+Magick::colorMapImage::colorMapImage( const size_t index_,
                                       const Color &color_ )
   : _index( index_ ),
     _color( color_ )
@@ -1196,7 +1272,7 @@ void Magick::densityImage::operator()( Magick::Image &image_ ) const
 }
 
 // Image depth (bits allocated to red/green/blue components)
-Magick::depthImage::depthImage( const unsigned int depth_ )
+Magick::depthImage::depthImage( const size_t depth_ )
   : _depth( depth_ )
 {
 }
@@ -1247,7 +1323,7 @@ void Magick::fontImage::operator()( Magick::Image &image_ ) const
 }
 
 // Font point size
-Magick::fontPointsizeImage::fontPointsizeImage( const unsigned int pointsize_ )
+Magick::fontPointsizeImage::fontPointsizeImage( const size_t pointsize_ )
   : _pointsize( pointsize_ )
 {
 }
@@ -1257,7 +1333,7 @@ void Magick::fontPointsizeImage::operator()( Magick::Image &image_ ) const
 }
 
 // GIF disposal method
-Magick::gifDisposeMethodImage::gifDisposeMethodImage( const unsigned int disposeMethod_ )
+Magick::gifDisposeMethodImage::gifDisposeMethodImage( const size_t disposeMethod_ )
   : _disposeMethod( disposeMethod_ )
 {
 }
@@ -1347,8 +1423,8 @@ void Magick::penTextureImage::operator()( Magick::Image &image_ ) const
 }
 
 // Set pixel color at location x & y.
-Magick::pixelColorImage::pixelColorImage( const unsigned int x_,
-                                          const unsigned int y_,
+Magick::pixelColorImage::pixelColorImage( const ssize_t x_,
+                                          const ssize_t y_,
                                           const Color &color_)
   : _x( x_ ),
     _y( y_ ),
@@ -1370,7 +1446,7 @@ void Magick::pageImage::operator()( Magick::Image &image_ ) const
 }
 
 // JPEG/MIFF/PNG compression level (default 75).
-Magick::qualityImage::qualityImage( const unsigned int quality_ )
+Magick::qualityImage::qualityImage( const size_t quality_ )
   : _quality( quality_ )
 {
 }
@@ -1380,7 +1456,7 @@ void Magick::qualityImage::operator()( Magick::Image &image_ ) const
 }
 
 // Maximum number of colors to quantize to
-Magick::quantizeColorsImage::quantizeColorsImage( const unsigned int colors_ )
+Magick::quantizeColorsImage::quantizeColorsImage( const size_t colors_ )
   : _colors( colors_ )
 {
 }
@@ -1410,7 +1486,7 @@ void Magick::quantizeDitherImage::operator()( Magick::Image &image_ ) const
 }
 
 // Quantization tree-depth
-Magick::quantizeTreeDepthImage::quantizeTreeDepthImage( const unsigned int treeDepth_ )
+Magick::quantizeTreeDepthImage::quantizeTreeDepthImage( const size_t treeDepth_ )
   : _treeDepth( treeDepth_ ) { }
 
 void Magick::quantizeTreeDepthImage::operator()( Magick::Image &image_ ) const
@@ -1439,7 +1515,7 @@ void Magick::resolutionUnitsImage::operator()( Magick::Image &image_ ) const
 }
 
 // Image scene number
-Magick::sceneImage::sceneImage( const unsigned int scene_ )
+Magick::sceneImage::sceneImage( const size_t scene_ )
   : _scene( scene_ )
 {
 }
@@ -1458,8 +1534,27 @@ void Magick::sizeImage::operator()( Magick::Image &image_ ) const
   image_.size( _geometry );
 }
 
+// Splice the background color into the image.
+Magick::spliceImage::spliceImage( const Magick::Geometry &geometry_ )
+  : _geometry( geometry_ )
+{
+}
+void Magick::spliceImage::operator()( Magick::Image &image_ ) const
+{
+  image_.splice( _geometry );
+}
+
+// stripImage strips an image of all profiles and comments.
+Magick::stripImage::stripImage( void )
+{
+}
+void Magick::stripImage::operator()( Magick::Image &image_ ) const
+{
+  image_.strip( );
+}
+
 // Subimage of an image sequence
-Magick::subImageImage::subImageImage( const unsigned int subImage_ )
+Magick::subImageImage::subImageImage( const size_t subImage_ )
   : _subImage( subImage_ )
 {
 }
@@ -1469,7 +1564,7 @@ void Magick::subImageImage::operator()( Magick::Image &image_ ) const
 }
 
 // Number of images relative to the base image
-Magick::subRangeImage::subRangeImage( const unsigned int subRange_ )
+Magick::subRangeImage::subRangeImage( const size_t subRange_ )
   : _subRange( subRange_ )
 {
 }

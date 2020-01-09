@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
   
   You may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ extern "C" {
 
 struct _MagickWand
 {
-  unsigned long
+  size_t
     id;
 
   char
@@ -56,7 +56,7 @@ struct _MagickWand
     pend,
     debug;
 
-  unsigned long
+  size_t
     signature;
 };
 

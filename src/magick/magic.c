@@ -2,6 +2,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                             %
 %                                                                             %
+%                                                                             %
 %                    M   M   AAA    GGGG  IIIII   CCCC                        %
 %                    MM MM  A   A  G        I    C                            %
 %                    M M M  AAAAA  G GGG    I    C                            %
@@ -16,7 +17,7 @@
 %                                 July 2000                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -49,6 +50,7 @@
 #include "magick/memory_.h"
 #include "magick/semaphore.h"
 #include "magick/string_.h"
+#include "magick/string-private.h"
 #include "magick/token.h"
 #include "magick/utility.h"
 #include "magick/xml-tree.h"
@@ -57,113 +59,143 @@
   Define declarations.
 */
 #define MagicFilename  "magic.xml"
+#define MagickString(magic)  (const unsigned char *) (magic), sizeof(magic)-1
+
+/*
+  Typedef declarations.
+*/
+typedef struct _MagicMapInfo
+{
+  const char
+    *name;
+
+  const MagickOffsetType
+    offset;
+
+  const unsigned char
+    *magic;
+
+  const size_t
+    length;
+} MagicMapInfo;
 
 /*
   Static declarations.
 */
-static const char
-  *MagicMap = (const char *)
-    "<?xml version=\"1.0\"?>"
-    "<magicmap>"
-    "  <magic name=\"AVI\" offset=\"0\" target=\"RIFF\" />"
-    "  <magic name=\"8BIMWTEXT\" offset=\"0\" target=\"8\\000B\\000I\\000M\\000#\" />"
-    "  <magic name=\"8BIMTEXT\" offset=\"0\" target=\"8BIM#\" />"
-    "  <magic name=\"8BIM\" offset=\"0\" target=\"8BIM\" />"
-    "  <magic name=\"BMP\" offset=\"0\" target=\"BA\" />"
-    "  <magic name=\"BMP\" offset=\"0\" target=\"BM\" />"
-    "  <magic name=\"BMP\" offset=\"0\" target=\"CI\" />"
-    "  <magic name=\"BMP\" offset=\"0\" target=\"CP\" />"
-    "  <magic name=\"BMP\" offset=\"0\" target=\"IC\" />"
-    "  <magic name=\"BMP\" offset=\"0\" target=\"PI\" />"
-    "  <magic name=\"CIN\" offset=\"0\" target=\"\\200\\052\\137\\327\" />"
-    "  <magic name=\"CGM\" offset=\"0\" target=\"BEGMF\" />"
-    "  <magic name=\"DCM\" offset=\"128\" target=\"DICM\" />"
-    "  <magic name=\"DCX\" offset=\"0\" target=\"\\261\\150\\336\\72\" />"
-    "  <magic name=\"DDS\" offset=\"0\" target=\"DDS \" />"
-    "  <magic name=\"DIB\" offset=\"0\" target=\"\\050\\000\" />"
-    "  <magic name=\"DJVU\" offset=\"0\" target=\"AT&TFORM\" />"
-    "  <magic name=\"DOT\" offset=\"0\" target=\"digraph\" />"
-    "  <magic name=\"DPX\" offset=\"0\" target=\"SDPX\" />"
-    "  <magic name=\"DPX\" offset=\"0\" target=\"XPDS\" />"
-    "  <magic name=\"EMF\" offset=\"40\" target=\"\\040\\105\\115\\106\\000\\000\\001\\000\" />"
-    "  <magic name=\"EPT\" offset=\"0\" target=\"\\305\\320\\323\\306\" />"
-    "  <magic name=\"EXR\" offset=\"0\" target=\"\\166\\057\\061\\001\" />"
-    "  <magic name=\"FAX\" offset=\"0\" target=\"DFAX\" />"
-    "  <magic name=\"FIG\" offset=\"0\" target=\"#FIG\" />"
-    "  <magic name=\"FITS\" offset=\"0\" target=\"IT0\" />"
-    "  <magic name=\"FITS\" offset=\"0\" target=\"SIMPLE\" />"
-    "  <magic name=\"FPX\" offset=\"0\" target=\"\\320\\317\\021\\340\" />"
-    "  <magic name=\"GIF\" offset=\"0\" target=\"GIF8\" />"
-    "  <magic name=\"GPLT\" offset=\"0\" target=\"#!/usr/local/bin/gnuplot\" />"
-    "  <magic name=\"HDF\" offset=\"1\" target=\"HDF\" />"
-    "  <magic name=\"HPGL\" offset=\"0\" target=\"IN;\" />"
-    "  <magic name=\"HTML\" offset=\"1\" target=\"HTML\" />"
-    "  <magic name=\"HTML\" offset=\"1\" target=\"html\" />"
-    "  <magic name=\"ILBM\" offset=\"8\" target=\"ILBM\" />"
-    "  <magic name=\"IPTCWTEXT\" offset=\"0\" target=\"\\062\\000#\\000\\060\\000=\\000\\042\\000&\\000#\\000\\060\\000;\\000&\\000#\\000\\062\\000;\\000\\042\\000\" />"
-    "  <magic name=\"IPTCTEXT\" offset=\"0\" target=\"2#0=\\042&#0;&#2;\\042\" />"
-    "  <magic name=\"IPTC\" offset=\"0\" target=\"\\034\\002\" />"
-    "  <magic name=\"JNG\" offset=\"0\" target=\"\\213JNG\\r\\n\\032\\n\" />"
-    "  <magic name=\"JPEG\" offset=\"0\" target=\"\\377\\330\\377\" />"
-    "  <magic name=\"JPC\" offset=\"0\" target=\"\\377\\117\" />"
-    "  <magic name=\"JP2\" offset=\"4\" target=\"\\152\\120\\040\\040\\015\" />"
-    "  <magic name=\"MIFF\" offset=\"0\" target=\"Id=ImageMagick\" />"
-    "  <magic name=\"MIFF\" offset=\"0\" target=\"id=ImageMagick\" />"
-    "  <magic name=\"MNG\" offset=\"0\" target=\"\\212MNG\\r\\n\\032\\n\" />"
-    "  <magic name=\"MPC\" offset=\"0\" target=\"id=MagickCache\" />"
-    "  <magic name=\"MPEG\" offset=\"0\" target=\"\\000\\000\\001\\263\" />"
-    "  <magic name=\"MVG\" offset=\"0\" target=\"push graphic-context\" />"
-    "  <magic name=\"PCD\" offset=\"2048\" target=\"PCD_\" />"
-    "  <magic name=\"PCL\" offset=\"0\" target=\"\\033E\\033\" />"
-    "  <magic name=\"PCX\" offset=\"0\" target=\"\\012\\002\" />"
-    "  <magic name=\"PCX\" offset=\"0\" target=\"\\012\\005\" />"
-    "  <magic name=\"PDB\" offset=\"60\" target=\"vIMGView\" />"
-    "  <magic name=\"PDF\" offset=\"0\" target=\"%PDF-\" />"
-    "  <magic name=\"PFA\" offset=\"0\" target=\"%!PS-AdobeFont-1.0\" />"
-    "  <magic name=\"PFB\" offset=\"6\" target=\"%!PS-AdobeFont-1.0\" />"
-    "  <magic name=\"PGX\" offset=\"0\" target=\"\\050\\107\\020\\115\\046\" />"
-    "  <magic name=\"PICT\" offset=\"522\" target=\"\\000\\021\\002\\377\\014\\000\" />"
-    "  <magic name=\"PNG\" offset=\"0\" target=\"\\211PNG\\r\\n\\032\\n\" />"
-    "  <magic name=\"PNM\" offset=\"0\" target=\"P1\" />"
-    "  <magic name=\"PNM\" offset=\"0\" target=\"P2\" />"
-    "  <magic name=\"PNM\" offset=\"0\" target=\"P3\" />"
-    "  <magic name=\"PNM\" offset=\"0\" target=\"P4\" />"
-    "  <magic name=\"PNM\" offset=\"0\" target=\"P5\" />"
-    "  <magic name=\"PNM\" offset=\"0\" target=\"P6\" />"
-    "  <magic name=\"PNM\" offset=\"0\" target=\"P7\" />"
-    "  <magic name=\"PNM\" offset=\"0\" target=\"PF\" />"
-    "  <magic name=\"PNM\" offset=\"0\" target=\"Pf\" />"
-    "  <magic name=\"PS\" offset=\"0\" target=\"%!\" />"
-    "  <magic name=\"PS\" offset=\"0\" target=\"\\004%!\" />"
-    "  <magic name=\"PS\" offset=\"0\" target=\"\\305\\320\\323\\306\" />"
-    "  <magic name=\"PSD\" offset=\"0\" target=\"8BPS\" />"
-    "  <magic name=\"PWP\" offset=\"0\" target=\"SFW95\" />"
-    "  <magic name=\"RAD\" offset=\"0\" target=\"#?RADIANCE\" />"
-    "  <magic name=\"RAD\" offset=\"0\" target=\"VIEW= \" />"
-    "  <magic name=\"RLE\" offset=\"0\" target=\"\\122\\314\" />"
-    "  <magic name=\"SCT\" offset=\"0\" target=\"CT\" />"
-    "  <magic name=\"SFW\" offset=\"0\" target=\"SFW94\" />"
-    "  <magic name=\"SGI\" offset=\"0\" target=\"\\001\\332\" />"
-    "  <magic name=\"SUN\" offset=\"0\" target=\"\\131\\246\\152\\225\" />"
-    "  <magic name=\"SVG\" offset=\"1\" target=\"?XML\" />"
-    "  <magic name=\"SVG\" offset=\"1\" target=\"?xml\" />"
-    "  <magic name=\"TXT\" offset=\"0\" target=\"# ImageMagick pixel enumeration:\" />"
-    "  <magic name=\"TIFF\" offset=\"0\" target=\"\\115\\115\\000\\052\" />"
-    "  <magic name=\"TIFF\" offset=\"0\" target=\"\\111\\111\\052\\000\" />"
-    "  <magic name=\"TIFF64\" offset=\"0\" target=\"\\115\\115\\000\\053\\000\\010\\000\\000\" />"
-    "  <magic name=\"TIFF64\" offset=\"0\" target=\"\\115\\115\\000\\053\\000\\010\\000\\000\" />"
-    "  <magic name=\"VICAR\" offset=\"0\" target=\"LBLSIZE\" />"
-    "  <magic name=\"VICAR\" offset=\"0\" target=\"NJPL1I\" />"
-    "  <magic name=\"VIFF\" offset=\"0\" target=\"\\253\\001\" />"
-    "  <magic name=\"WMF\" offset=\"0\" target=\"\\327\\315\\306\\232\" />"
-    "  <magic name=\"WMF\" offset=\"0\" target=\"\\001\\000\\011\\000\" />"
-    "  <magic name=\"WPG\" offset=\"0\" target=\"\\377WPC\" />"
-    "  <magic name=\"XBM\" offset=\"0\" target=\"#define\" />"
-    "  <magic name=\"XCF\" offset=\"0\" target=\"gimp xcf\" />"
-    "  <magic name=\"XPM\" offset=\"1\" target=\"* XPM *\" />"
-    "  <magic name=\"XWD\" offset=\"4\" target=\"\\007\\000\\000\" />"
-    "  <magic name=\"XWD\" offset=\"5\" target=\"\\000\\000\\007\" />"
-    "</magicmap>";
+static const MagicMapInfo
+  MagicMap[] =
+  {
+    { "8BIMWTEXT", 0, MagickString("8\000B\000I\000M\000#") },
+    { "8BIMTEXT", 0, MagickString("8BIM#") },
+    { "8BIM", 0, MagickString("8BIM") },
+    { "BMP", 0, MagickString("BA") },
+    { "BMP", 0, MagickString("BM") },
+    { "BMP", 0, MagickString("CI") },
+    { "BMP", 0, MagickString("CP") },
+    { "BMP", 0, MagickString("IC") },
+    { "BMP", 0, MagickString("PI") },
+    { "CALS", 21, MagickString("version: MIL-STD-1840") },
+    { "CALS", 0, MagickString("srcdocid:") },
+    { "CALS", 9, MagickString("srcdocid:") },
+    { "CALS", 8, MagickString("rorient:") },
+    { "CGM", 0, MagickString("BEGMF") },
+    { "CIN", 0, MagickString("\200\052\137\327") },
+    { "CRW", 0, MagickString("II\x1a\x00\x00\x00HEAPCCDR") },
+    { "DCM", 128, MagickString("DICM") },
+    { "DCX", 0, MagickString("\261\150\336\72") },
+    { "DIB", 0, MagickString("\050\000") },
+    { "DDS", 0, MagickString("DDS ") },
+    { "DJVU", 0, MagickString("AT&TFORM") },
+    { "DOT", 0, MagickString("digraph") },
+    { "DPX", 0, MagickString("SDPX") },
+    { "DPX", 0, MagickString("XPDS") },
+    { "EMF", 40, MagickString("\040\105\115\106\000\000\001\000") },
+    { "EPT", 0, MagickString("\305\320\323\306") },
+    { "EXR", 0, MagickString("\166\057\061\001") },
+    { "FAX", 0, MagickString("DFAX") },
+    { "FIG", 0, MagickString("#FIG") },
+    { "FITS", 0, MagickString("IT0") },
+    { "FITS", 0, MagickString("SIMPLE") },
+    { "FPX", 0, MagickString("\320\317\021\340") },
+    { "GIF", 0, MagickString("GIF8") },
+    { "GPLT", 0, MagickString("#!/usr/local/bin/gnuplot") },
+    { "HDF", 1, MagickString("HDF") },
+    { "HDR", 0, MagickString("#?RADIANCE") },
+    { "HDR", 0, MagickString("#?RGBE") },
+    { "HPGL", 0, MagickString("IN;") },
+    { "HTML", 1, MagickString("HTML") },
+    { "HTML", 1, MagickString("html") },
+    { "ILBM", 8, MagickString("ILBM") },
+    { "IPTCWTEXT", 0, MagickString("\062\000#\000\060\000=\000\042\000&\000#\000\060\000;\000&\000#\000\062\000;\000\042\000") },
+    { "IPTCTEXT", 0, MagickString("2#0=\042&#0;&#2;\042") },
+    { "IPTC", 0, MagickString("\034\002") },
+    { "JNG", 0, MagickString("\213JNG\r\n\032\n") },
+    { "JPEG", 0, MagickString("\377\330\377") },
+    { "JPC", 0, MagickString("\377\117") },
+    { "JP2", 4, MagickString("\152\120\040\040\015") },
+    { "MAT", 0, MagickString("MATLAB 5.0 MAT-file,") },
+    { "MIFF", 0, MagickString("Id=ImageMagick") },
+    { "MIFF", 0, MagickString("id=ImageMagick") },
+    { "MNG", 0, MagickString("\212MNG\r\n\032\n") },
+    { "MPC", 0, MagickString("id=MagickCache") },
+    { "MPEG", 0, MagickString("\000\000\001\263") },
+    { "MRW", 0, MagickString("\x00MRM") },
+    { "MVG", 0, MagickString("push graphic-context") },
+    { "ORF", 0, MagickString("IIRO\x08\x00\x00\x00") },
+    { "PCD", 2048, MagickString("PCD_") },
+    { "PCL", 0, MagickString("\033E\033") },
+    { "PCX", 0, MagickString("\012\002") },
+    { "PCX", 0, MagickString("\012\005") },
+    { "PDB", 60, MagickString("vIMGView") },
+    { "PDF", 0, MagickString("%PDF-") },
+    { "PES", 0, MagickString("#PES") },
+    { "PFA", 0, MagickString("%!PS-AdobeFont-1.0") },
+    { "PFB", 6, MagickString("%!PS-AdobeFont-1.0") },
+    { "PGX", 0, MagickString("\050\107\020\115\046") },
+    { "PICT", 522, MagickString("\000\021\002\377\014\000") },
+    { "PNG", 0, MagickString("\211PNG\r\n\032\n") },
+    { "PBM", 0, MagickString("P1") },
+    { "PGM", 0, MagickString("P2") },
+    { "PPM", 0, MagickString("P3") },
+    { "PBM", 0, MagickString("P4") },
+    { "PGM", 0, MagickString("P5") },
+    { "PPM", 0, MagickString("P6") },
+    { "PAM", 0, MagickString("P7") },
+    { "PFM", 0, MagickString("PF") },
+    { "PFM", 0, MagickString("Pf") },
+    { "PS", 0, MagickString("%!") },
+    { "PS", 0, MagickString("\004%!") },
+    { "PS", 0, MagickString("\305\320\323\306") },
+    { "PSB", 0, MagickString("8BPB") },
+    { "PSD", 0, MagickString("8BPS") },
+    { "PWP", 0, MagickString("SFW95") },
+    { "RAF", 0, MagickString("FUJIFILMCCD-RAW ") },
+    { "RLE", 0, MagickString("\122\314") },
+    { "SCT", 0, MagickString("CT") },
+    { "SFW", 0, MagickString("SFW94") },
+    { "SGI", 0, MagickString("\001\332") },
+    { "SUN", 0, MagickString("\131\246\152\225") },
+    { "SVG", 1, MagickString("?XML") },
+    { "SVG", 1, MagickString("?xml") },
+    { "TIFF", 0, MagickString("\115\115\000\052") },
+    { "TIFF", 0, MagickString("\111\111\052\000") },
+    { "TIFF64", 0, MagickString("\115\115\000\053\000\010\000\000") },
+    { "TIFF64", 0, MagickString("\111\111\053\000\010\000\000\000") },
+    { "TXT", 0, MagickString("# ImageMagick pixel enumeration:") },
+    { "VICAR", 0, MagickString("LBLSIZE") },
+    { "VICAR", 0, MagickString("NJPL1I") },
+    { "VIFF", 0, MagickString("\253\001") },
+    { "WEBP", 8, MagickString("WEBP") },
+    { "WMF", 0, MagickString("\327\315\306\232") },
+    { "WMF", 0, MagickString("\001\000\011\000") },
+    { "WPG", 0, MagickString("\377WPC") },
+    { "XBM", 0, MagickString("#define") },
+    { "XCF", 0, MagickString("gimp xcf") },
+    { "XEF", 0, MagickString("FOVb") },
+    { "XPM", 1, MagickString("* XPM *") },
+    { "XWD", 4, MagickString("\007\000\000") },
+    { "XWD", 5, MagickString("\000\000\007") }
+ };
 
 static LinkedListInfo
   *magic_list = (LinkedListInfo *) NULL;
@@ -180,53 +212,6 @@ static volatile MagickBooleanType
 static MagickBooleanType
   InitializeMagicList(ExceptionInfo *),
   LoadMagicLists(const char *,ExceptionInfo *);
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-+   D e s t r o y M a g i c L i s t                                           %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  DestroyMagicList() deallocates memory associated with the magic list.
-%
-%  The format of the DestroyMagicList method is:
-%
-%      DestroyMagicList(void)
-%
-*/
-
-static void *DestroyMagicElement(void *magic_info)
-{
-  register MagicInfo
-    *p;
-
-  p=(MagicInfo *) magic_info;
-  if (p->path != (char *) NULL)
-    p->path=DestroyString(p->path);
-  if (p->name != (char *) NULL)
-    p->name=DestroyString(p->name);
-  if (p->target != (char *) NULL)
-    p->target=DestroyString(p->target);
-  if (p->magic != (unsigned char *) NULL)
-    p->magic=(unsigned char *) RelinquishMagickMemory(p->magic);
-  p=(MagicInfo *) RelinquishMagickMemory(p);
-  return((void *) NULL);
-}
-
-MagickExport void DestroyMagicList(void)
-{
-  AcquireSemaphoreInfo(&magic_semaphore);
-  if (magic_list != (LinkedListInfo *) NULL)
-    magic_list=DestroyLinkedList(magic_list,DestroyMagicElement);
-  instantiate_magic=MagickFalse;
-  RelinquishSemaphoreInfo(magic_semaphore);
-  DestroySemaphoreInfo(&magic_semaphore);
-}
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -278,7 +263,7 @@ MagickExport const MagicInfo *GetMagicInfo(const unsigned char *magic,
   /*
     Search for magic tag.
   */
-  AcquireSemaphoreInfo(&magic_semaphore);
+  LockSemaphoreInfo(magic_semaphore);
   ResetLinkedListIterator(magic_list);
   p=(const MagicInfo *) GetNextValueInLinkedList(magic_list);
   while (p != (const MagicInfo *) NULL)
@@ -292,7 +277,7 @@ MagickExport const MagicInfo *GetMagicInfo(const unsigned char *magic,
   if (p != (const MagicInfo *) NULL)
     (void) InsertValueInLinkedList(magic_list,0,
       RemoveElementByValueFromLinkedList(magic_list,p));
-  RelinquishSemaphoreInfo(magic_semaphore);
+  UnlockSemaphoreInfo(magic_semaphore);
   return(p);
 }
 
@@ -313,14 +298,13 @@ MagickExport const MagicInfo *GetMagicInfo(const unsigned char *magic,
 %  The magic of the GetMagicInfoList function is:
 %
 %      const MagicInfo **GetMagicInfoList(const char *pattern,
-%        unsigned long *number_aliases,ExceptionInfo *exception)
+%        size_t *number_aliases,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
 %    o pattern: Specifies a pointer to a text string containing a pattern.
 %
-%    o number_aliases:  This integer returns the number of aliases in the
-%      list.
+%    o number_aliases:  This integer returns the number of aliases in the list.
 %
 %    o exception: return any errors or warnings in this structure.
 %
@@ -348,7 +332,7 @@ static int MagicInfoCompare(const void *x,const void *y)
 #endif
 
 MagickExport const MagicInfo **GetMagicInfoList(const char *pattern,
-  unsigned long *number_aliases,ExceptionInfo *exception)
+  size_t *number_aliases,ExceptionInfo *exception)
 {
   const MagicInfo
     **aliases;
@@ -356,7 +340,7 @@ MagickExport const MagicInfo **GetMagicInfoList(const char *pattern,
   register const MagicInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -364,9 +348,9 @@ MagickExport const MagicInfo **GetMagicInfoList(const char *pattern,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_aliases != (unsigned long *) NULL);
+  assert(number_aliases != (size_t *) NULL);
   *number_aliases=0;
-  p=GetMagicInfo((const unsigned char *) "*",0,exception);
+  p=GetMagicInfo((const unsigned char *) NULL,0,exception);
   if (p == (const MagicInfo *) NULL)
     return((const MagicInfo **) NULL);
   aliases=(const MagicInfo **) AcquireQuantumMemory((size_t)
@@ -376,7 +360,7 @@ MagickExport const MagicInfo **GetMagicInfoList(const char *pattern,
   /*
     Generate magic list.
   */
-  AcquireSemaphoreInfo(&magic_semaphore);
+  LockSemaphoreInfo(magic_semaphore);
   ResetLinkedListIterator(magic_list);
   p=(const MagicInfo *) GetNextValueInLinkedList(magic_list);
   for (i=0; p != (const MagicInfo *) NULL; )
@@ -386,10 +370,10 @@ MagickExport const MagicInfo **GetMagicInfoList(const char *pattern,
       aliases[i++]=p;
     p=(const MagicInfo *) GetNextValueInLinkedList(magic_list);
   }
-  RelinquishSemaphoreInfo(magic_semaphore);
+  UnlockSemaphoreInfo(magic_semaphore);
   qsort((void *) aliases,(size_t) i,sizeof(*aliases),MagicInfoCompare);
   aliases[i]=(MagicInfo *) NULL;
-  *number_aliases=(unsigned long) i;
+  *number_aliases=(size_t) i;
   return(aliases);
 }
 
@@ -409,7 +393,7 @@ MagickExport const MagicInfo **GetMagicInfoList(const char *pattern,
 %
 %  The format of the GetMagicList function is:
 %
-%      char **GetMagicList(const char *pattern,unsigned long *number_aliases,
+%      char **GetMagicList(const char *pattern,size_t *number_aliases,
 %        ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
@@ -443,7 +427,7 @@ static int MagicCompare(const void *x,const void *y)
 #endif
 
 MagickExport char **GetMagicList(const char *pattern,
-  unsigned long *number_aliases,ExceptionInfo *exception)
+  size_t *number_aliases,ExceptionInfo *exception)
 {
   char
     **aliases;
@@ -451,7 +435,7 @@ MagickExport char **GetMagicList(const char *pattern,
   register const MagicInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -459,16 +443,16 @@ MagickExport char **GetMagicList(const char *pattern,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_aliases != (unsigned long *) NULL);
+  assert(number_aliases != (size_t *) NULL);
   *number_aliases=0;
-  p=GetMagicInfo((const unsigned char *) "*",0,exception);
+  p=GetMagicInfo((const unsigned char *) NULL,0,exception);
   if (p == (const MagicInfo *) NULL)
     return((char **) NULL);
   aliases=(char **) AcquireQuantumMemory((size_t)
     GetNumberOfElementsInLinkedList(magic_list)+1UL,sizeof(*aliases));
   if (aliases == (char **) NULL)
     return((char **) NULL);
-  AcquireSemaphoreInfo(&magic_semaphore);
+  LockSemaphoreInfo(magic_semaphore);
   ResetLinkedListIterator(magic_list);
   p=(const MagicInfo *) GetNextValueInLinkedList(magic_list);
   for (i=0; p != (const MagicInfo *) NULL; )
@@ -478,10 +462,10 @@ MagickExport char **GetMagicList(const char *pattern,
       aliases[i++]=ConstantString(p->name);
     p=(const MagicInfo *) GetNextValueInLinkedList(magic_list);
   }
-  RelinquishSemaphoreInfo(magic_semaphore);
+  UnlockSemaphoreInfo(magic_semaphore);
   qsort((void *) aliases,(size_t) i,sizeof(*aliases),MagicCompare);
   aliases[i]=(char *) NULL;
-  *number_aliases=(unsigned long) i;
+  *number_aliases=(size_t) i;
   return(aliases);
 }
 
@@ -542,14 +526,16 @@ static MagickBooleanType InitializeMagicList(ExceptionInfo *exception)
   if ((magic_list == (LinkedListInfo *) NULL) &&
       (instantiate_magic == MagickFalse))
     {
-      AcquireSemaphoreInfo(&magic_semaphore);
+      if (magic_semaphore == (SemaphoreInfo *) NULL)
+        AcquireSemaphoreInfo(&magic_semaphore);
+      LockSemaphoreInfo(magic_semaphore);
       if ((magic_list == (LinkedListInfo *) NULL) &&
           (instantiate_magic == MagickFalse))
         {
           (void) LoadMagicLists(MagicFilename,exception);
           instantiate_magic=MagickTrue;
         }
-      RelinquishSemaphoreInfo(magic_semaphore);
+      UnlockSemaphoreInfo(magic_semaphore);
     }
   return(magic_list != (LinkedListInfo *) NULL ? MagickTrue : MagickFalse);
 }
@@ -587,14 +573,14 @@ MagickExport MagickBooleanType ListMagicInfo(FILE *file,
   const MagicInfo
     **magic_info;
 
-  long
-    j;
-
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     number_aliases;
+
+  ssize_t
+    j;
 
   if (file == (const FILE *) NULL)
     file=stdout;
@@ -603,7 +589,7 @@ MagickExport MagickBooleanType ListMagicInfo(FILE *file,
     return(MagickFalse);
   j=0;
   path=(const char *) NULL;
-  for (i=0; i < (long) number_aliases; i++)
+  for (i=0; i < (ssize_t) number_aliases; i++)
   {
     if (magic_info[i]->stealth != MagickFalse)
       continue;
@@ -611,19 +597,30 @@ MagickExport MagickBooleanType ListMagicInfo(FILE *file,
         (LocaleCompare(path,magic_info[i]->path) != 0))
       {
         if (magic_info[i]->path != (char *) NULL)
-          (void) fprintf(file,"\nPath: %s\n\n",magic_info[i]->path);
-        (void) fprintf(file,"Name      Offset Target\n");
-        (void) fprintf(file,"-------------------------------------------------"
+          (void) FormatLocaleFile(file,"\nPath: %s\n\n",magic_info[i]->path);
+        (void) FormatLocaleFile(file,"Name      Offset Target\n");
+        (void) FormatLocaleFile(file,
+          "-------------------------------------------------"
           "------------------------------\n");
       }
     path=magic_info[i]->path;
-    (void) fprintf(file,"%s",magic_info[i]->name);
-    for (j=(long) strlen(magic_info[i]->name); j <= 9; j++)
-      (void) fprintf(file," ");
-    (void) fprintf(file,"%6ld ",(long) magic_info[i]->offset);
+    (void) FormatLocaleFile(file,"%s",magic_info[i]->name);
+    for (j=(ssize_t) strlen(magic_info[i]->name); j <= 9; j++)
+      (void) FormatLocaleFile(file," ");
+    (void) FormatLocaleFile(file,"%6ld ",(long) magic_info[i]->offset);
     if (magic_info[i]->target != (char *) NULL)
-      (void) fprintf(file,"%s",magic_info[i]->target);
-    (void) fprintf(file,"\n");
+      {
+        register ssize_t
+          j;
+
+        for (j=0; magic_info[i]->target[j] != '\0'; j++)
+          if (isprint((int) ((unsigned char) magic_info[i]->target[j])) != 0)
+            (void) FormatLocaleFile(file,"%c",magic_info[i]->target[j]);
+          else
+            (void) FormatLocaleFile(file,"\\%03o",(unsigned int)
+              ((unsigned char) magic_info[i]->target[j]));
+      }
+    (void) FormatLocaleFile(file,"\n");
   }
   (void) fflush(file);
   magic_info=(const MagicInfo **) RelinquishMagickMemory((void *) magic_info);
@@ -647,13 +644,13 @@ MagickExport MagickBooleanType ListMagicInfo(FILE *file,
 %  The format of the LoadMagicList method is:
 %
 %      MagickBooleanType LoadMagicList(const char *xml,const char *filename,
-%        const unsigned long depth,ExceptionInfo *exception)
+%        const size_t depth,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
-%    o xml:  The magic list in XML format.
+%    o xml: The magic list in XML format.
 %
-%    o filename:  The magic list filename.
+%    o filename: The magic list filename.
 %
 %    o depth: depth of <include /> statements.
 %
@@ -661,7 +658,7 @@ MagickExport MagickBooleanType ListMagicInfo(FILE *file,
 %
 */
 static MagickBooleanType LoadMagicList(const char *xml,const char *filename,
-  const unsigned long depth,ExceptionInfo *exception)
+  const size_t depth,ExceptionInfo *exception)
 {
   char
     keyword[MaxTextExtent],
@@ -684,7 +681,15 @@ static MagickBooleanType LoadMagicList(const char *xml,const char *filename,
   if (xml == (char *) NULL)
     return(MagickFalse);
   if (magic_list == (LinkedListInfo *) NULL)
-    magic_list=NewLinkedList(0);
+    {
+      magic_list=NewLinkedList(0);
+      if (magic_list == (LinkedListInfo *) NULL)
+        {
+          ThrowFileException(exception,ResourceLimitError,
+            "MemoryAllocationFailed",filename);
+          return(MagickFalse);
+        }
+    }
   status=MagickTrue;
   magic_info=(MagicInfo *) NULL;
   token=AcquireString(xml);
@@ -767,6 +772,7 @@ static MagickBooleanType LoadMagicList(const char *xml,const char *filename,
           ThrowFatalException(ResourceLimitFatalError,"MemoryAllocationFailed");
         (void) ResetMagickMemory(magic_info,0,sizeof(*magic_info));
         magic_info->path=ConstantString(filename);
+        magic_info->exempt=MagickFalse;
         magic_info->signature=MagickSignature;
         continue;
       }
@@ -803,7 +809,7 @@ static MagickBooleanType LoadMagicList(const char *xml,const char *filename,
       {
         if (LocaleCompare((char *) keyword,"offset") == 0)
           {
-            magic_info->offset=(MagickOffsetType) atol(token);
+            magic_info->offset=(MagickOffsetType) StringToLong(token);
             break;
           }
         break;
@@ -915,9 +921,6 @@ static MagickBooleanType LoadMagicList(const char *xml,const char *filename,
 static MagickBooleanType LoadMagicLists(const char *filename,
   ExceptionInfo *exception)
 {
-#if defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
-  return(LoadMagicList(MagicMap,"built-in",0,exception));
-#else
   char
     path[MaxTextExtent];
 
@@ -930,7 +933,56 @@ static MagickBooleanType LoadMagicLists(const char *filename,
   MagickStatusType
     status;
 
+  register ssize_t
+    i;
+
+  /*
+    Load built-in magic map.
+  */
   status=MagickFalse;
+  if (magic_list == (LinkedListInfo *) NULL)
+    {
+      magic_list=NewLinkedList(0);
+      if (magic_list == (LinkedListInfo *) NULL)
+        {
+          ThrowFileException(exception,ResourceLimitError,
+            "MemoryAllocationFailed",filename);
+          return(MagickFalse);
+        }
+    }
+  for (i=0; i < (ssize_t) (sizeof(MagicMap)/sizeof(*MagicMap)); i++)
+  {
+    MagicInfo
+      *magic_info;
+
+    register const MagicMapInfo
+      *p;
+
+    p=MagicMap+i;
+    magic_info=(MagicInfo *) AcquireMagickMemory(sizeof(*magic_info));
+    if (magic_info == (MagicInfo *) NULL)
+      {
+        (void) ThrowMagickException(exception,GetMagickModule(),
+          ResourceLimitError,"MemoryAllocationFailed","`%s'",magic_info->name);
+        continue;
+      }
+    (void) ResetMagickMemory(magic_info,0,sizeof(*magic_info));
+    magic_info->path=(char *) "[built-in]";
+    magic_info->name=(char *) p->name;
+    magic_info->offset=p->offset;
+    magic_info->target=(char *) p->magic;
+    magic_info->magic=(unsigned char *) p->magic;
+    magic_info->length=p->length;
+    magic_info->exempt=MagickTrue;
+    magic_info->signature=MagickSignature;
+    status=AppendValueToLinkedList(magic_list,magic_info);
+    if (status == MagickFalse)
+      (void) ThrowMagickException(exception,GetMagickModule(),
+        ResourceLimitError,"MemoryAllocationFailed","`%s'",magic_info->name);
+  }
+  /*
+    Load external magic map.
+  */
   *path='\0';
   options=GetConfigureOptions(filename,exception);
   option=(const StringInfo *) GetNextValueInLinkedList(options);
@@ -942,13 +994,81 @@ static MagickBooleanType LoadMagicLists(const char *filename,
     option=(const StringInfo *) GetNextValueInLinkedList(options);
   }
   options=DestroyConfigureOptions(options);
-  if ((magic_list == (LinkedListInfo *) NULL) || 
-      (IsLinkedListEmpty(magic_list) != MagickFalse))
-    {
-      (void) ThrowMagickException(exception,GetMagickModule(),ConfigureWarning,
-        "UnableToOpenConfigureFile","`%s'",path);
-      status|=LoadMagicList(MagicMap,"built-in",0,exception);
-    }
   return(status != 0 ? MagickTrue : MagickFalse);
-#endif
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   M a g i c C o m p o n e n t G e n e s i s                                 %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagicComponentGenesis() instantiates the magic component.
+%
+%  The format of the MagicComponentGenesis method is:
+%
+%      MagickBooleanType MagicComponentGenesis(void)
+%
+*/
+MagickExport MagickBooleanType MagicComponentGenesis(void)
+{
+  AcquireSemaphoreInfo(&magic_semaphore);
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   M a g i c C o m p o n e n t T e r m i n u s                               %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagicComponentTerminus() destroys the magic component.
+%
+%  The format of the MagicComponentTerminus method is:
+%
+%      MagicComponentTerminus(void)
+%
+*/
+
+static void *DestroyMagicElement(void *magic_info)
+{
+  register MagicInfo
+    *p;
+
+  p=(MagicInfo *) magic_info;
+  if (p->exempt == MagickFalse)
+    {
+      if (p->path != (char *) NULL)
+        p->path=DestroyString(p->path);
+      if (p->name != (char *) NULL)
+        p->name=DestroyString(p->name);
+      if (p->target != (char *) NULL)
+        p->target=DestroyString(p->target);
+      if (p->magic != (unsigned char *) NULL)
+        p->magic=(unsigned char *) RelinquishMagickMemory(p->magic);
+    }
+  p=(MagicInfo *) RelinquishMagickMemory(p);
+  return((void *) NULL);
+}
+
+MagickExport void MagicComponentTerminus(void)
+{
+  if (magic_semaphore == (SemaphoreInfo *) NULL)
+    AcquireSemaphoreInfo(&magic_semaphore);
+  LockSemaphoreInfo(magic_semaphore);
+  if (magic_list != (LinkedListInfo *) NULL)
+    magic_list=DestroyLinkedList(magic_list,DestroyMagicElement);
+  instantiate_magic=MagickFalse;
+  UnlockSemaphoreInfo(magic_semaphore);
+  DestroySemaphoreInfo(&magic_semaphore);
 }

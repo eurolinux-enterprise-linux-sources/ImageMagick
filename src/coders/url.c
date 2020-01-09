@@ -18,7 +18,7 @@
 %                                March 2000                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -51,13 +51,14 @@
 #include "magick/list.h"
 #include "magick/magick.h"
 #include "magick/memory_.h"
+#include "magick/module.h"
 #include "magick/quantum-private.h"
 #include "magick/static.h"
 #include "magick/resource_.h"
 #include "magick/string_.h"
-#include "magick/module.h"
+#include "magick/utility.h"
 #if defined(MAGICKCORE_XML_DELEGATE)
-#  if defined(__WINDOWS__)
+#  if defined(MAGICKCORE_WINDOWS_SUPPORT)
 #    if defined(__MINGW32__)
 #      define _MSC_VER
 #    else
@@ -116,6 +117,7 @@ static void GetFTPData(void *userdata,const char *data,int size)
   if (size <= 0)
     return;
   length=fwrite(data,size,1,file);
+  (void) length;
 }
 #endif
 
@@ -210,6 +212,7 @@ static Image *ReadURLImage(const ImageInfo *image_info,ExceptionInfo *exception)
 
           while ((bytes=xmlNanoHTTPRead(context,buffer,MaxBufferExtent)) > 0)
             count=(ssize_t) fwrite(buffer,bytes,1,file);
+          (void) count;
           xmlNanoHTTPClose(context);
           xmlFree(type);
           xmlNanoHTTPCleanup();
@@ -222,7 +225,9 @@ static Image *ReadURLImage(const ImageInfo *image_info,ExceptionInfo *exception)
   if (unique_file != -1)
     (void) RelinquishUniqueFileResource(read_info->filename);
   read_info=DestroyImageInfo(read_info);
-  if (image == (Image *) NULL)
+  if (image != (Image *) NULL)
+    GetPathComponent(image_info->filename,TailPath,image->filename);
+  else
     (void) ThrowMagickException(exception,GetMagickModule(),CoderError,
       "NoDataReturned","`%s'",filename);
   return(GetFirstImageInList(image));
@@ -248,10 +253,10 @@ static Image *ReadURLImage(const ImageInfo *image_info,ExceptionInfo *exception)
 %
 %  The format of the RegisterURLImage method is:
 %
-%      unsigned long RegisterURLImage(void)
+%      size_t RegisterURLImage(void)
 %
 */
-ModuleExport unsigned long RegisterURLImage(void)
+ModuleExport size_t RegisterURLImage(void)
 {
   MagickInfo
     *entry;

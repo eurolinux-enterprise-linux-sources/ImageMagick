@@ -8,15 +8,14 @@
 %               A   A  N  NN  A   A  L        Y    ZZ     E                   %
 %               A   A  N   N  A   A  LLLLL    Y    ZZZZZ  EEEEE               %
 %                                                                             %
-%               Methods to Compute a Information about an Image               %
-%                                                                             %
+%                             Analyze An Image                                %
 %                                                                             %
 %                             Software Design                                 %
 %                               Bill Corbis                                   %
 %                              December 1998                                  %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -62,7 +61,7 @@
 %
 %  The format of the analyzeImage method is:
 %
-%      unsigned long analyzeImage(Image *images,const int argc,
+%      size_t analyzeImage(Image *images,const int argc,
 %        char **argv,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
@@ -78,7 +77,7 @@
 %    o exception: return any errors or warnings in this structure.
 %
 */
-ModuleExport unsigned long analyzeImage(Image **images,const int argc,
+ModuleExport size_t analyzeImage(Image **images,const int argc,
   const char **argv,ExceptionInfo *exception)
 {
   char
@@ -86,6 +85,7 @@ ModuleExport unsigned long analyzeImage(Image **images,const int argc,
 
   double
     area,
+    brightness,
     brightness_mean,
     brightness_standard_deviation,
     brightness_kurtosis,
@@ -94,6 +94,8 @@ ModuleExport unsigned long analyzeImage(Image **images,const int argc,
     brightness_sum_x2,
     brightness_sum_x3,
     brightness_sum_x4,
+    hue,
+    saturation,
     saturation_mean,
     saturation_standard_deviation,
     saturation_kurtosis,
@@ -103,22 +105,8 @@ ModuleExport unsigned long analyzeImage(Image **images,const int argc,
     saturation_sum_x3,
     saturation_sum_x4;
 
-  double
-    brightness,
-    hue,
-    saturation;
-
   Image
     *image;
-
-  long
-    y;
-
-  register const PixelPacket
-    *p;
-
-  register long
-    x;
 
   assert(images != (Image **) NULL);
   assert(*images != (Image *) NULL);
@@ -128,6 +116,15 @@ ModuleExport unsigned long analyzeImage(Image **images,const int argc,
   image=(*images);
   for ( ; image != (Image *) NULL; image=GetNextImageInList(image))
   {
+    CacheView
+      *image_view;
+
+    ssize_t
+      y;
+
+    MagickBooleanType
+      status;
+
     brightness_sum_x=0.0;
     brightness_sum_x2=0.0;
     brightness_sum_x3=0.0;
@@ -145,14 +142,31 @@ ModuleExport unsigned long analyzeImage(Image **images,const int argc,
     saturation_kurtosis=0.0;
     saturation_skewness=0.0;
     area=0.0;
-    for (y=0; y < (long) image->rows; y++)
+    status=MagickTrue;
+    image_view=AcquireCacheView(image);
+#if defined(MAGICKCORE_OPENMP_SUPPORT)
+    #pragma omp parallel for schedule(dynamic,4) shared(status)
+#endif
+    for (y=0; y < (ssize_t) image->rows; y++)
     {
-      p=GetVirtualPixels(image,0,y,image->columns,1,exception);
+      register const PixelPacket
+        *p;
+
+      register ssize_t
+        x;
+
+      if (status == MagickFalse)
+        continue;
+      p=GetCacheViewVirtualPixels(image_view,0,y,image->columns,1,exception);
       if (p == (const PixelPacket *) NULL)
-        break;
-      for (x=0; x < (long) image->columns; x++)
+        {
+          status=MagickFalse;
+          continue;
+        }
+      for (x=0; x < (ssize_t) image->columns; x++)
       {
-        ConvertRGBToHSB(p->red,p->green,p->blue,&hue,&saturation,&brightness);
+        ConvertRGBToHSB(GetPixelRed(p),GetPixelGreen(p),GetPixelBlue(p),
+          &hue,&saturation,&brightness);
         brightness*=QuantumRange;
         brightness_sum_x+=brightness;
         brightness_sum_x2+=brightness*brightness;
@@ -167,14 +181,15 @@ ModuleExport unsigned long analyzeImage(Image **images,const int argc,
         p++;
       }
     }
+    image_view=DestroyCacheView(image_view);
     if (area <= 0.0)
       break;
     brightness_mean=brightness_sum_x/area;
-    (void) FormatMagickString(text,MaxTextExtent,"%g",brightness_mean);
+    (void) FormatLocaleString(text,MaxTextExtent,"%g",brightness_mean);
     (void) SetImageProperty(image,"filter:brightness:mean",text);
     brightness_standard_deviation=sqrt(brightness_sum_x2/area-(brightness_sum_x/
       area*brightness_sum_x/area));
-    (void) FormatMagickString(text,MaxTextExtent,"%g",
+    (void) FormatLocaleString(text,MaxTextExtent,"%g",
       brightness_standard_deviation);
     (void) SetImageProperty(image,"filter:brightness:standard-deviation",text);
     if (brightness_standard_deviation != 0)
@@ -184,21 +199,21 @@ ModuleExport unsigned long analyzeImage(Image **images,const int argc,
         brightness_mean*brightness_mean)/(brightness_standard_deviation*
         brightness_standard_deviation*brightness_standard_deviation*
         brightness_standard_deviation)-3.0;
-    (void) FormatMagickString(text,MaxTextExtent,"%g",brightness_kurtosis);
+    (void) FormatLocaleString(text,MaxTextExtent,"%g",brightness_kurtosis);
     (void) SetImageProperty(image,"filter:brightness:kurtosis",text);
     if (brightness_standard_deviation != 0)
       brightness_skewness=(brightness_sum_x3/area-3.0*brightness_mean*
         brightness_sum_x2/area+2.0*brightness_mean*brightness_mean*
         brightness_mean)/(brightness_standard_deviation*
         brightness_standard_deviation*brightness_standard_deviation);
-    (void) FormatMagickString(text,MaxTextExtent,"%g",brightness_skewness);
+    (void) FormatLocaleString(text,MaxTextExtent,"%g",brightness_skewness);
     (void) SetImageProperty(image,"filter:brightness:skewness",text);
     saturation_mean=saturation_sum_x/area;
-    (void) FormatMagickString(text,MaxTextExtent,"%g",saturation_mean);
+    (void) FormatLocaleString(text,MaxTextExtent,"%g",saturation_mean);
     (void) SetImageProperty(image,"filter:saturation:mean",text);
     saturation_standard_deviation=sqrt(saturation_sum_x2/area-(saturation_sum_x/
       area*saturation_sum_x/area));
-    (void) FormatMagickString(text,MaxTextExtent,"%g",
+    (void) FormatLocaleString(text,MaxTextExtent,"%g",
       saturation_standard_deviation);
     (void) SetImageProperty(image,"filter:saturation:standard-deviation",text);
     if (saturation_standard_deviation != 0)
@@ -208,14 +223,14 @@ ModuleExport unsigned long analyzeImage(Image **images,const int argc,
         saturation_mean*saturation_mean)/(saturation_standard_deviation*
         saturation_standard_deviation*saturation_standard_deviation*
         saturation_standard_deviation)-3.0;
-    (void) FormatMagickString(text,MaxTextExtent,"%g",saturation_kurtosis);
+    (void) FormatLocaleString(text,MaxTextExtent,"%g",saturation_kurtosis);
     (void) SetImageProperty(image,"filter:saturation:kurtosis",text);
     if (saturation_standard_deviation != 0)
       saturation_skewness=(saturation_sum_x3/area-3.0*saturation_mean*
         saturation_sum_x2/area+2.0*saturation_mean*saturation_mean*
         saturation_mean)/(saturation_standard_deviation*
         saturation_standard_deviation*saturation_standard_deviation);
-    (void) FormatMagickString(text,MaxTextExtent,"%g",saturation_skewness);
+    (void) FormatLocaleString(text,MaxTextExtent,"%g",saturation_skewness);
     (void) SetImageProperty(image,"filter:saturation:skewness",text);
   }
   return(MagickImageFilterSignature);

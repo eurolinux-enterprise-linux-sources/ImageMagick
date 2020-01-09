@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -102,9 +102,6 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
     *canvas_image,
     *image;
 
-  long
-    y;
-
   MagickBooleanType
     status;
 
@@ -117,14 +114,15 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
   QuantumType
     quantum_type;
 
-  register long
+  register ssize_t
     i;
-
-  ssize_t
-    count;
 
   size_t
     length;
+
+  ssize_t
+    count,
+    y;
 
   unsigned char
     *pixels;
@@ -151,13 +149,9 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           image=DestroyImageList(image);
           return((Image *) NULL);
         }
-      for (i=0; i < image->offset; i++)
-        if (ReadBlobByte(image) == EOF)
-          {
-            ThrowFileException(exception,CorruptImageError,
-              "UnexpectedEndOfFile",image->filename);
-            break;
-          }
+      if (DiscardBlobBytes(image,image->offset) == MagickFalse)
+        ThrowFileException(exception,CorruptImageError,"UnexpectedEndOfFile",
+          image->filename);
     }
   /*
     Create virtual canvas to support cropping (i.e. image.cmyk[100x100+10+20]).
@@ -183,7 +177,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
       */
       image->scene++;
       length=GetQuantumExtent(canvas_image,quantum_info,quantum_type);
-      for (y=0; y < (long) image->rows; y++)
+      for (y=0; y < (ssize_t) image->rows; y++)
       {
         count=ReadBlob(image,length,pixels);
         if (count != (ssize_t) length)
@@ -214,26 +208,30 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           {
             length=GetQuantumExtent(canvas_image,quantum_info,quantum_type);
             count=ReadBlob(image,length,pixels);
-            if (count != (ssize_t) length)
-              break;
           }
-        for (y=0; y < (long) image->extract_info.height; y++)
+        for (y=0; y < (ssize_t) image->extract_info.height; y++)
         {
           register const IndexPacket
-            *__restrict canvas_indexes;
+            *restrict canvas_indexes;
 
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           register IndexPacket
-            *__restrict indexes;
-
-          register long
-            x;
+            *restrict indexes;
 
           register PixelPacket
-            *__restrict q;
+            *restrict q;
 
+          register ssize_t
+            x;
+
+          if (count != (ssize_t) length)
+            {
+              ThrowFileException(exception,CorruptImageError,
+                "UnexpectedEndOfFile",image->filename);
+              break;
+            }
           q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,
             exception);
           if (q == (PixelPacket *) NULL)
@@ -243,7 +241,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
             break;
           if (((y-image->extract_info.y) >= 0) && 
-              ((y-image->extract_info.y) < (long) image->rows))
+              ((y-image->extract_info.y) < (ssize_t) image->rows))
             {
               p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,0,
                 canvas_image->columns,1,exception);
@@ -254,15 +252,16 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
               canvas_indexes=GetVirtualIndexQueue(canvas_image);
               indexes=GetAuthenticIndexQueue(image);
-              for (x=0; x < (long) image->columns; x++)
+              for (x=0; x < (ssize_t) image->columns; x++)
               {
-                q->red=p->red;
-                q->green=p->green;
-                q->blue=p->blue;
-                indexes[x]=canvas_indexes[image->extract_info.x+x];
-                q->opacity=OpaqueOpacity;
+                SetPixelRed(q,GetPixelRed(p));
+                SetPixelGreen(q,GetPixelGreen(p));
+                SetPixelBlue(q,GetPixelBlue(p));
+                SetPixelBlack(indexes+x,GetPixelBlack(
+                  canvas_indexes+image->extract_info.x+x));
+                SetPixelOpacity(q,OpaqueOpacity);
                 if (image->matte != MagickFalse)
-                  q->opacity=p->opacity;
+                  SetPixelOpacity(q,GetPixelOpacity(p));
                 p++;
                 q++;
               }
@@ -271,13 +270,12 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
             }
           if (image->previous == (Image *) NULL)
             {
-              status=SetImageProgress(image,LoadImageTag,y,image->rows);
+              status=SetImageProgress(image,LoadImageTag,(MagickOffsetType) y,
+                image->rows);
               if (status == MagickFalse)
                 break;
             }
           count=ReadBlob(image,length,pixels);
-          if (count != (ssize_t) length)
-            break;
         }
         break;
       }
@@ -300,26 +298,30 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           {
             length=GetQuantumExtent(canvas_image,quantum_info,CyanQuantum);
             count=ReadBlob(image,length,pixels);
-            if (count != (ssize_t) length)
-              break;
           }
-        for (y=0; y < (long) image->extract_info.height; y++)
+        for (y=0; y < (ssize_t) image->extract_info.height; y++)
         {
           register const IndexPacket
-            *__restrict canvas_indexes;
+            *restrict canvas_indexes;
 
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           register IndexPacket
-            *__restrict indexes;
-
-          register long
-            x;
+            *restrict indexes;
 
           register PixelPacket
-            *__restrict q;
+            *restrict q;
 
+          register ssize_t
+            x;
+
+          if (count != (ssize_t) length)
+            {
+              ThrowFileException(exception,CorruptImageError,
+                "UnexpectedEndOfFile",image->filename);
+              break;
+            }
           for (i=0; i < (image->matte != MagickFalse ? 5 : 4); i++)
           {
             quantum_type=quantum_types[i];
@@ -332,7 +334,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
             if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
               break;
             if (((y-image->extract_info.y) >= 0) && 
-                ((y-image->extract_info.y) < (long) image->rows))
+                ((y-image->extract_info.y) < (ssize_t) image->rows))
               {
                 p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,
                   0,canvas_image->columns,1,exception);
@@ -343,17 +345,38 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                   break;
                 canvas_indexes=GetVirtualIndexQueue(canvas_image);
                 indexes=GetAuthenticIndexQueue(image);
-                for (x=0; x < (long) image->columns; x++)
+                for (x=0; x < (ssize_t) image->columns; x++)
                 {
                   switch (quantum_type)
                   {
-                    case CyanQuantum: q->red=p->red; break;
-                    case MagentaQuantum: q->green=p->green; break;
-                    case YellowQuantum: q->blue=p->blue; break;
-                    case BlackQuantum: indexes[x]=
-                      canvas_indexes[image->extract_info.x+x];; break;
-                    case OpacityQuantum: q->opacity=p->opacity; break;
-                    default: break;
+                    case CyanQuantum:
+                    {
+                      SetPixelCyan(q,GetPixelCyan(p));
+                      break;
+                    }
+                    case MagentaQuantum:
+                    {
+                      SetPixelMagenta(q,GetPixelMagenta(p));
+                      break;
+                    }
+                    case YellowQuantum:
+                    {
+                      SetPixelYellow(q,GetPixelYellow(p));
+                      break;
+                    }
+                    case BlackQuantum:
+                    {
+                      SetPixelIndex(indexes+x,GetPixelIndex(
+                        canvas_indexes+image->extract_info.x+x));
+                      break;
+                    }
+                    case OpacityQuantum:
+                    {
+                      SetPixelOpacity(q,GetPixelOpacity(p));
+                      break;
+                    }
+                    default:
+                      break;
                   }
                   p++;
                   q++;
@@ -362,12 +385,11 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                   break;
               }
             count=ReadBlob(image,length,pixels);
-            if (count != (ssize_t) length)
-              break;
           }
           if (image->previous == (Image *) NULL)
             {
-              status=SetImageProgress(image,LoadImageTag,y,image->rows);
+              status=SetImageProgress(image,LoadImageTag,(MagickOffsetType) y,
+                image->rows);
               if (status == MagickFalse)
                 break;
             }
@@ -383,20 +405,24 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           {
             length=GetQuantumExtent(canvas_image,quantum_info,CyanQuantum);
             count=ReadBlob(image,length,pixels);
-            if (count != (ssize_t) length)
-              break;
           }
-        for (y=0; y < (long) image->extract_info.height; y++)
+        for (y=0; y < (ssize_t) image->extract_info.height; y++)
         {
           register const PixelPacket
-            *__restrict p;
-
-          register long
-            x;
+            *restrict p;
 
           register PixelPacket
-            *__restrict q;
+            *restrict q;
 
+          register ssize_t
+            x;
+
+          if (count != (ssize_t) length)
+            {
+              ThrowFileException(exception,CorruptImageError,
+                "UnexpectedEndOfFile",image->filename);
+              break;
+            }
           q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,
             exception);
           if (q == (PixelPacket *) NULL)
@@ -406,7 +432,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
             break;
           if (((y-image->extract_info.y) >= 0) && 
-              ((y-image->extract_info.y) < (long) image->rows))
+              ((y-image->extract_info.y) < (ssize_t) image->rows))
             {
               p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,0,
                 canvas_image->columns,1,exception);
@@ -415,9 +441,9 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
               if ((p == (const PixelPacket *) NULL) ||
                   (q == (PixelPacket *) NULL))
                 break;
-              for (x=0; x < (long) image->columns; x++)
+              for (x=0; x < (ssize_t) image->columns; x++)
               {
-                q->red=p->red;
+                SetPixelRed(q,GetPixelRed(p));
                 p++;
                 q++;
               }
@@ -425,8 +451,6 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
             }
           count=ReadBlob(image,length,pixels);
-          if (count != (ssize_t) length)
-            break;
         }
         if (image->previous == (Image *) NULL)
           {
@@ -434,17 +458,23 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
             if (status == MagickFalse)
               break;
           }
-        for (y=0; y < (long) image->extract_info.height; y++)
+        for (y=0; y < (ssize_t) image->extract_info.height; y++)
         {
           register const PixelPacket
-            *__restrict p;
-
-          register long
-            x;
+            *restrict p;
 
           register PixelPacket
-            *__restrict q;
+            *restrict q;
 
+          register ssize_t
+            x;
+
+          if (count != (ssize_t) length)
+            {
+              ThrowFileException(exception,CorruptImageError,
+                "UnexpectedEndOfFile",image->filename);
+              break;
+            }
           q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,
             exception);
           if (q == (PixelPacket *) NULL)
@@ -454,7 +484,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
             break;
           if (((y-image->extract_info.y) >= 0) && 
-              ((y-image->extract_info.y) < (long) image->rows))
+              ((y-image->extract_info.y) < (ssize_t) image->rows))
             {
               p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,0,
                 canvas_image->columns,1,exception);
@@ -463,9 +493,9 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
               if ((p == (const PixelPacket *) NULL) ||
                   (q == (PixelPacket *) NULL))
                 break;
-              for (x=0; x < (long) image->columns; x++)
+              for (x=0; x < (ssize_t) image->columns; x++)
               {
-                q->green=p->green;
+                SetPixelGreen(q,GetPixelGreen(p));
                 p++;
                 q++;
               }
@@ -473,8 +503,6 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
            }
           count=ReadBlob(image,length,pixels);
-          if (count != (ssize_t) length)
-            break;
         }
         if (image->previous == (Image *) NULL)
           {
@@ -482,17 +510,23 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
             if (status == MagickFalse)
               break;
           }
-        for (y=0; y < (long) image->extract_info.height; y++)
+        for (y=0; y < (ssize_t) image->extract_info.height; y++)
         {
           register const PixelPacket
-            *__restrict p;
-
-          register long
-            x;
+            *restrict p;
 
           register PixelPacket
-            *__restrict q;
+            *restrict q;
 
+          register ssize_t
+            x;
+
+          if (count != (ssize_t) length)
+            {
+              ThrowFileException(exception,CorruptImageError,
+                "UnexpectedEndOfFile",image->filename);
+              break;
+            }
           q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,
             exception);
           if (q == (PixelPacket *) NULL)
@@ -502,7 +536,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
             break;
           if (((y-image->extract_info.y) >= 0) && 
-              ((y-image->extract_info.y) < (long) image->rows))
+              ((y-image->extract_info.y) < (ssize_t) image->rows))
             {
               p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,0,
                 canvas_image->columns,1,exception);
@@ -511,9 +545,9 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
               if ((p == (const PixelPacket *) NULL) ||
                   (q == (PixelPacket *) NULL))
                 break;
-              for (x=0; x < (long) image->columns; x++)
+              for (x=0; x < (ssize_t) image->columns; x++)
               {
-                q->blue=p->blue;
+                SetPixelBlue(q,GetPixelBlue(p));
                 p++;
                 q++;
               }
@@ -521,8 +555,6 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
             }
           count=ReadBlob(image,length,pixels);
-          if (count != (ssize_t) length)
-            break;
         }
         if (image->previous == (Image *) NULL)
           {
@@ -530,23 +562,29 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
             if (status == MagickFalse)
               break;
           }
-        for (y=0; y < (long) image->extract_info.height; y++)
+        for (y=0; y < (ssize_t) image->extract_info.height; y++)
         {
           register const IndexPacket
-            *__restrict canvas_indexes;
+            *restrict canvas_indexes;
 
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           register IndexPacket
-            *__restrict indexes;
-
-          register long
-            x;
+            *restrict indexes;
 
           register PixelPacket
-            *__restrict q;
+            *restrict q;
 
+          register ssize_t
+            x;
+
+          if (count != (ssize_t) length)
+            {
+              ThrowFileException(exception,CorruptImageError,
+                "UnexpectedEndOfFile",image->filename);
+              break;
+            }
           q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,
             exception);
           if (q == (PixelPacket *) NULL)
@@ -556,7 +594,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
             break;
           if (((y-image->extract_info.y) >= 0) && 
-              ((y-image->extract_info.y) < (long) image->rows))
+              ((y-image->extract_info.y) < (ssize_t) image->rows))
             {
               p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,0,
                 canvas_image->columns,1,exception);
@@ -567,9 +605,10 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
               canvas_indexes=GetVirtualIndexQueue(canvas_image);
               indexes=GetAuthenticIndexQueue(image);
-              for (x=0; x < (long) image->columns; x++)
+              for (x=0; x < (ssize_t) image->columns; x++)
               {
-                indexes[x]=canvas_indexes[image->extract_info.x+x];
+                SetPixelIndex(indexes+x,GetPixelIndex(
+                  canvas_indexes+image->extract_info.x+x));
                 p++;
                 q++;
               }
@@ -577,8 +616,6 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
             }
           count=ReadBlob(image,length,pixels);
-          if (count != (ssize_t) length)
-            break;
         }
         if (image->previous == (Image *) NULL)
           {
@@ -588,17 +625,23 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           }
         if (image->matte != MagickFalse)
           {
-            for (y=0; y < (long) image->extract_info.height; y++)
+            for (y=0; y < (ssize_t) image->extract_info.height; y++)
             {
               register const PixelPacket
-                *__restrict p;
-
-              register long
-                x;
+                *restrict p;
 
               register PixelPacket
-                *__restrict q;
+                *restrict q;
 
+              register ssize_t
+                x;
+
+              if (count != (ssize_t) length)
+                {
+                  ThrowFileException(exception,CorruptImageError,
+                    "UnexpectedEndOfFile",image->filename);
+                  break;
+                }
               q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,
                 exception);
               if (q == (PixelPacket *) NULL)
@@ -608,7 +651,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
               if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
                 break;
               if (((y-image->extract_info.y) >= 0) && 
-                  ((y-image->extract_info.y) < (long) image->rows))
+                  ((y-image->extract_info.y) < (ssize_t) image->rows))
                 {
                   p=GetVirtualPixels(canvas_image,
                     canvas_image->extract_info.x,0,canvas_image->columns,1,
@@ -618,9 +661,9 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                   if ((p == (const PixelPacket *) NULL) ||
                       (q == (PixelPacket *) NULL))
                     break;
-                  for (x=0; x < (long) image->columns; x++)
+                  for (x=0; x < (ssize_t) image->columns; x++)
                   {
-                    q->opacity=p->opacity;
+                    SetPixelOpacity(q,GetPixelOpacity(p));
                     p++;
                     q++;
                   }
@@ -628,8 +671,6 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                     break;
                 }
               count=ReadBlob(image,length,pixels);
-              if (count != (ssize_t) length)
-                break;
             }
             if (image->previous == (Image *) NULL)
               {
@@ -659,16 +700,12 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
             image=DestroyImageList(image);
             return((Image *) NULL);
           }
-        for (i=0; i < image->offset; i++)
-          if (ReadBlobByte(image) == EOF)
-            {
-              ThrowFileException(exception,CorruptImageError,
-                "UnexpectedEndOfFile",image->filename);
-              break;
-            }
+        if (DiscardBlobBytes(image,image->offset) == MagickFalse)
+          ThrowFileException(exception,CorruptImageError,"UnexpectedEndOfFile",
+            image->filename);
         length=GetQuantumExtent(canvas_image,quantum_info,CyanQuantum);
-        for (i=0; i < (long) scene; i++)
-          for (y=0; y < (long) image->extract_info.height; y++)
+        for (i=0; i < (ssize_t) scene; i++)
+          for (y=0; y < (ssize_t) image->extract_info.height; y++)
             if (ReadBlob(image,length,pixels) != (ssize_t) length)
               {
                 ThrowFileException(exception,CorruptImageError,
@@ -676,19 +713,23 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
               }
         count=ReadBlob(image,length,pixels);
-        if (count != (ssize_t) length)
-          break;
-        for (y=0; y < (long) image->extract_info.height; y++)
+        for (y=0; y < (ssize_t) image->extract_info.height; y++)
         {
           register const PixelPacket
-            *__restrict p;
-
-          register long
-            x;
+            *restrict p;
 
           register PixelPacket
-            *__restrict q;
+            *restrict q;
 
+          register ssize_t
+            x;
+
+          if (count != (ssize_t) length)
+            {
+              ThrowFileException(exception,CorruptImageError,
+                "UnexpectedEndOfFile",image->filename);
+              break;
+            }
           q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,
             exception);
           if (q == (PixelPacket *) NULL)
@@ -698,7 +739,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
             break;
           if (((y-image->extract_info.y) >= 0) && 
-              ((y-image->extract_info.y) < (long) image->rows))
+              ((y-image->extract_info.y) < (ssize_t) image->rows))
             {
               p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,0,
                 canvas_image->columns,1,exception);
@@ -707,9 +748,9 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
               if ((p == (const PixelPacket *) NULL) ||
                   (q == (PixelPacket *) NULL))
                 break;
-              for (x=0; x < (long) image->columns; x++)
+              for (x=0; x < (ssize_t) image->columns; x++)
               {
-                q->red=p->red;
+                SetPixelRed(q,GetPixelRed(p));
                 p++;
                 q++;
               }
@@ -717,8 +758,6 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
             }
           count=ReadBlob(image,length,pixels);
-          if (count != (ssize_t) length)
-            break;
         }
         if (image->previous == (Image *) NULL)
           {
@@ -736,8 +775,8 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
             return((Image *) NULL);
           }
         length=GetQuantumExtent(canvas_image,quantum_info,MagentaQuantum);
-        for (i=0; i < (long) scene; i++)
-          for (y=0; y < (long) image->extract_info.height; y++)
+        for (i=0; i < (ssize_t) scene; i++)
+          for (y=0; y < (ssize_t) image->extract_info.height; y++)
             if (ReadBlob(image,length,pixels) != (ssize_t) length)
               {
                 ThrowFileException(exception,CorruptImageError,
@@ -745,19 +784,23 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
               }
         count=ReadBlob(image,length,pixels);
-        if (count != (ssize_t) length)
-          break;
-        for (y=0; y < (long) image->extract_info.height; y++)
+        for (y=0; y < (ssize_t) image->extract_info.height; y++)
         {
           register const PixelPacket
-            *__restrict p;
-
-          register long
-            x;
+            *restrict p;
 
           register PixelPacket
-            *__restrict q;
+            *restrict q;
 
+          register ssize_t
+            x;
+
+          if (count != (ssize_t) length)
+            {
+              ThrowFileException(exception,CorruptImageError,
+                "UnexpectedEndOfFile",image->filename);
+              break;
+            }
           q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,
             exception);
           if (q == (PixelPacket *) NULL)
@@ -767,7 +810,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
             break;
           if (((y-image->extract_info.y) >= 0) && 
-              ((y-image->extract_info.y) < (long) image->rows))
+              ((y-image->extract_info.y) < (ssize_t) image->rows))
             {
               p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,0,
                 canvas_image->columns,1,exception);
@@ -776,9 +819,9 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
               if ((p == (const PixelPacket *) NULL) ||
                   (q == (PixelPacket *) NULL))
                 break;
-              for (x=0; x < (long) image->columns; x++)
+              for (x=0; x < (ssize_t) image->columns; x++)
               {
-                q->green=p->green;
+                SetPixelGreen(q,GetPixelGreen(p));
                 p++;
                 q++;
               }
@@ -786,8 +829,6 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
            }
           count=ReadBlob(image,length,pixels);
-          if (count != (ssize_t) length)
-            break;
         }
         if (image->previous == (Image *) NULL)
           {
@@ -805,8 +846,8 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
             return((Image *) NULL);
           }
         length=GetQuantumExtent(canvas_image,quantum_info,YellowQuantum);
-        for (i=0; i < (long) scene; i++)
-          for (y=0; y < (long) image->extract_info.height; y++)
+        for (i=0; i < (ssize_t) scene; i++)
+          for (y=0; y < (ssize_t) image->extract_info.height; y++)
             if (ReadBlob(image,length,pixels) != (ssize_t) length)
               {
                 ThrowFileException(exception,CorruptImageError,
@@ -814,19 +855,23 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
               }
         count=ReadBlob(image,length,pixels);
-        if (count != (ssize_t) length)
-          break;
-        for (y=0; y < (long) image->extract_info.height; y++)
+        for (y=0; y < (ssize_t) image->extract_info.height; y++)
         {
           register const PixelPacket
-            *__restrict p;
-
-          register long
-            x;
+            *restrict p;
 
           register PixelPacket
-            *__restrict q;
+            *restrict q;
 
+          register ssize_t
+            x;
+
+          if (count != (ssize_t) length)
+            {
+              ThrowFileException(exception,CorruptImageError,
+                "UnexpectedEndOfFile",image->filename);
+              break;
+            }
           q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,
             exception);
           if (q == (PixelPacket *) NULL)
@@ -836,7 +881,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
             break;
           if (((y-image->extract_info.y) >= 0) && 
-              ((y-image->extract_info.y) < (long) image->rows))
+              ((y-image->extract_info.y) < (ssize_t) image->rows))
             {
               p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,0,
                 canvas_image->columns,1,exception);
@@ -845,9 +890,9 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
               if ((p == (const PixelPacket *) NULL) ||
                   (q == (PixelPacket *) NULL))
                 break;
-              for (x=0; x < (long) image->columns; x++)
+              for (x=0; x < (ssize_t) image->columns; x++)
               {
-                q->blue=p->blue;
+                SetPixelBlue(q,GetPixelBlue(p));
                 p++;
                 q++;
               }
@@ -855,8 +900,6 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
            }
           count=ReadBlob(image,length,pixels);
-          if (count != (ssize_t) length)
-            break;
         }
         if (image->previous == (Image *) NULL)
           {
@@ -874,8 +917,8 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
             return((Image *) NULL);
           }
         length=GetQuantumExtent(canvas_image,quantum_info,BlackQuantum);
-        for (i=0; i < (long) scene; i++)
-          for (y=0; y < (long) image->extract_info.height; y++)
+        for (i=0; i < (ssize_t) scene; i++)
+          for (y=0; y < (ssize_t) image->extract_info.height; y++)
             if (ReadBlob(image,length,pixels) != (ssize_t) length)
               {
                 ThrowFileException(exception,CorruptImageError,
@@ -883,25 +926,29 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
               }
         count=ReadBlob(image,length,pixels);
-        if (count != (ssize_t) length)
-          break;
-        for (y=0; y < (long) image->extract_info.height; y++)
+        for (y=0; y < (ssize_t) image->extract_info.height; y++)
         {
           register const IndexPacket
-            *__restrict canvas_indexes;
+            *restrict canvas_indexes;
 
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           register IndexPacket
-            *__restrict indexes;
-
-          register long
-            x;
+            *restrict indexes;
 
           register PixelPacket
-            *__restrict q;
+            *restrict q;
 
+          register ssize_t
+            x;
+
+          if (count != (ssize_t) length)
+            {
+              ThrowFileException(exception,CorruptImageError,
+                "UnexpectedEndOfFile",image->filename);
+              break;
+            }
           q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,
             exception);
           if (q == (PixelPacket *) NULL)
@@ -911,7 +958,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
           if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
             break;
           if (((y-image->extract_info.y) >= 0) && 
-              ((y-image->extract_info.y) < (long) image->rows))
+              ((y-image->extract_info.y) < (ssize_t) image->rows))
             {
               p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,0,
                 canvas_image->columns,1,exception);
@@ -922,9 +969,10 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
               canvas_indexes=GetVirtualIndexQueue(canvas_image);
               indexes=GetAuthenticIndexQueue(image);
-              for (x=0; x < (long) image->columns; x++)
+              for (x=0; x < (ssize_t) image->columns; x++)
               {
-                indexes[x]=canvas_indexes[image->extract_info.x+x];
+                SetPixelIndex(indexes+x,GetPixelIndex(
+                  canvas_indexes+image->extract_info.x+x));
                 p++;
                 q++;
               }
@@ -932,8 +980,6 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 break;
            }
           count=ReadBlob(image,length,pixels);
-          if (count != (ssize_t) length)
-            break;
         }
         if (image->previous == (Image *) NULL)
           {
@@ -953,8 +999,8 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                 return((Image *) NULL);
               }
             length=GetQuantumExtent(canvas_image,quantum_info,AlphaQuantum);
-            for (i=0; i < (long) scene; i++)
-              for (y=0; y < (long) image->extract_info.height; y++)
+            for (i=0; i < (ssize_t) scene; i++)
+              for (y=0; y < (ssize_t) image->extract_info.height; y++)
                 if (ReadBlob(image,length,pixels) != (ssize_t) length)
                   {
                     ThrowFileException(exception,CorruptImageError,
@@ -962,19 +1008,23 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                     break;
                   }
             count=ReadBlob(image,length,pixels);
-            if (count != (ssize_t) length)
-              break;
-            for (y=0; y < (long) image->extract_info.height; y++)
+            for (y=0; y < (ssize_t) image->extract_info.height; y++)
             {
               register const PixelPacket
-                *__restrict p;
-
-              register long
-                x;
+                *restrict p;
 
               register PixelPacket
-                *__restrict q;
+                *restrict q;
 
+              register ssize_t
+                x;
+
+              if (count != (ssize_t) length)
+                {
+                  ThrowFileException(exception,CorruptImageError,
+                    "UnexpectedEndOfFile",image->filename);
+                  break;
+                }
               q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,
                 exception);
               if (q == (PixelPacket *) NULL)
@@ -984,7 +1034,7 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
               if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
                 break;
               if (((y-image->extract_info.y) >= 0) && 
-                  ((y-image->extract_info.y) < (long) image->rows))
+                  ((y-image->extract_info.y) < (ssize_t) image->rows))
                 {
                   p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,
                     0,canvas_image->columns,1,exception);
@@ -993,9 +1043,9 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                   if ((p == (const PixelPacket *) NULL) ||
                       (q == (PixelPacket *) NULL))
                     break;
-                  for (x=0; x < (long) image->columns; x++)
+                  for (x=0; x < (ssize_t) image->columns; x++)
                   {
-                    q->opacity=p->opacity;
+                    SetPixelOpacity(q,GetPixelOpacity(p));
                     p++;
                     q++;
                   }
@@ -1003,8 +1053,6 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
                     break;
                }
               count=ReadBlob(image,length,pixels);
-              if (count != (ssize_t) length)
-                break;
             }
             if (image->previous == (Image *) NULL)
               {
@@ -1048,8 +1096,8 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
       }
     scene++;
   } while (count == (ssize_t) length);
-  InheritException(exception,&image->exception);
   quantum_info=DestroyQuantumInfo(quantum_info);
+  InheritException(&image->exception,&canvas_image->exception);
   canvas_image=DestroyImage(canvas_image);
   (void) CloseBlob(image);
   return(GetFirstImageInList(image));
@@ -1075,10 +1123,10 @@ static Image *ReadCMYKImage(const ImageInfo *image_info,
 %
 %  The format of the RegisterCMYKImage method is:
 %
-%      unsigned long RegisterCMYKImage(void)
+%      size_t RegisterCMYKImage(void)
 %
 */
-ModuleExport unsigned long RegisterCMYKImage(void)
+ModuleExport size_t RegisterCMYKImage(void)
 {
   MagickInfo
     *entry;
@@ -1088,7 +1136,6 @@ ModuleExport unsigned long RegisterCMYKImage(void)
   entry->encoder=(EncodeImageHandler *) WriteCMYKImage;
   entry->raw=MagickTrue;
   entry->endian_support=MagickTrue;
-  entry->format_type=ExplicitFormatType;
   entry->description=ConstantString("Raw cyan, magenta, yellow, and black "
     "samples");
   entry->module=ConstantString("CMYK");
@@ -1098,7 +1145,6 @@ ModuleExport unsigned long RegisterCMYKImage(void)
   entry->encoder=(EncodeImageHandler *) WriteCMYKImage;
   entry->raw=MagickTrue;
   entry->endian_support=MagickTrue;
-  entry->format_type=ExplicitFormatType;
   entry->description=ConstantString("Raw cyan, magenta, yellow, black, and "
     "alpha samples");
   entry->module=ConstantString("CMYK");
@@ -1160,9 +1206,6 @@ ModuleExport void UnregisterCMYKImage(void)
 static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
   Image *image)
 {
-  long
-    y;
-
   MagickBooleanType
     status;
 
@@ -1176,7 +1219,8 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
     quantum_type;
 
   ssize_t
-    count;
+    count,
+    y;
 
   size_t
     length;
@@ -1231,22 +1275,23 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
         /*
           No interlacing:  CMYKCMYKCMYKCMYKCMYKCMYK...
         */
-        for (y=0; y < (long) image->rows; y++)
+        for (y=0; y < (ssize_t) image->rows; y++)
         {
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
           if (p == (const PixelPacket *) NULL)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            quantum_type,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,quantum_type,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
           if (image->previous == (Image *) NULL)
             {
-              status=SetImageProgress(image,SaveImageTag,y,image->rows);
+              status=SetImageProgress(image,SaveImageTag,(MagickOffsetType) y,
+                image->rows);
               if (status == MagickFalse)
                 break;
             }
@@ -1258,31 +1303,31 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
         /*
           Line interlacing:  CCC...MMM...YYY...KKK...CCC...MMM...YYY...KKK...
         */
-        for (y=0; y < (long) image->rows; y++)
+        for (y=0; y < (ssize_t) image->rows; y++)
         {
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
           if (p == (const PixelPacket *) NULL)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            CyanQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,CyanQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            MagentaQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,MagentaQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            YellowQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,YellowQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            BlackQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,BlackQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
@@ -1296,7 +1341,8 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
             }
           if (image->previous == (Image *) NULL)
             {
-              status=SetImageProgress(image,SaveImageTag,y,image->rows);
+              status=SetImageProgress(image,SaveImageTag,(MagickOffsetType) y,
+                image->rows);
               if (status == MagickFalse)
                 break;
             }
@@ -1308,16 +1354,16 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
         /*
           Plane interlacing:  CCCCCC...MMMMMM...YYYYYY...KKKKKK...
         */
-        for (y=0; y < (long) image->rows; y++)
+        for (y=0; y < (ssize_t) image->rows; y++)
         {
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
           if (p == (const PixelPacket *) NULL)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            CyanQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,CyanQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
@@ -1328,16 +1374,16 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
             if (status == MagickFalse)
               break;
           }
-        for (y=0; y < (long) image->rows; y++)
+        for (y=0; y < (ssize_t) image->rows; y++)
         {
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
           if (p == (const PixelPacket *) NULL)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            MagentaQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,MagentaQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
@@ -1348,16 +1394,16 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
             if (status == MagickFalse)
               break;
           }
-        for (y=0; y < (long) image->rows; y++)
+        for (y=0; y < (ssize_t) image->rows; y++)
         {
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
           if (p == (const PixelPacket *) NULL)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            YellowQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,YellowQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
@@ -1368,16 +1414,16 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
             if (status == MagickFalse)
               break;
           }
-        for (y=0; y < (long) image->rows; y++)
+        for (y=0; y < (ssize_t) image->rows; y++)
         {
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
           if (p == (const PixelPacket *) NULL)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            BlackQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,BlackQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
@@ -1390,13 +1436,12 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
           }
         if (quantum_type == CMYKAQuantum)
           {
-            for (y=0; y < (long) image->rows; y++)
+            for (y=0; y < (ssize_t) image->rows; y++)
             {
               register const PixelPacket
-                *__restrict p;
+                *restrict p;
 
-              p=GetVirtualPixels(image,0,y,image->columns,1,
-                &image->exception);
+              p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
               if (p == (const PixelPacket *) NULL)
                 break;
               length=ExportQuantumPixels(image,(const CacheView *) NULL,
@@ -1433,16 +1478,16 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
           AppendBinaryBlobMode,&image->exception);
         if (status == MagickFalse)
           return(status);
-        for (y=0; y < (long) image->rows; y++)
+        for (y=0; y < (ssize_t) image->rows; y++)
         {
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
           if (p == (const PixelPacket *) NULL)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            CyanQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,CyanQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
@@ -1459,16 +1504,16 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
           AppendBinaryBlobMode,&image->exception);
         if (status == MagickFalse)
           return(status);
-        for (y=0; y < (long) image->rows; y++)
+        for (y=0; y < (ssize_t) image->rows; y++)
         {
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
           if (p == (const PixelPacket *) NULL)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            MagentaQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,MagentaQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
@@ -1485,16 +1530,16 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
           AppendBinaryBlobMode,&image->exception);
         if (status == MagickFalse)
           return(status);
-        for (y=0; y < (long) image->rows; y++)
+        for (y=0; y < (ssize_t) image->rows; y++)
         {
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
           if (p == (const PixelPacket *) NULL)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            YellowQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,YellowQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
@@ -1511,16 +1556,16 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
           AppendBinaryBlobMode,&image->exception);
         if (status == MagickFalse)
           return(status);
-        for (y=0; y < (long) image->rows; y++)
+        for (y=0; y < (ssize_t) image->rows; y++)
         {
           register const PixelPacket
-            *__restrict p;
+            *restrict p;
 
           p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
           if (p == (const PixelPacket *) NULL)
             break;
-          length=ExportQuantumPixels(image,(const CacheView *) NULL,quantum_info,
-            BlackQuantum,pixels,&image->exception);
+          length=ExportQuantumPixels(image,(const CacheView *) NULL,
+            quantum_info,BlackQuantum,pixels,&image->exception);
           count=WriteBlob(image,length,pixels);
           if (count != (ssize_t) length)
             break;
@@ -1539,10 +1584,10 @@ static MagickBooleanType WriteCMYKImage(const ImageInfo *image_info,
               AppendBinaryBlobMode,&image->exception);
             if (status == MagickFalse)
               return(status);
-            for (y=0; y < (long) image->rows; y++)
+            for (y=0; y < (ssize_t) image->rows; y++)
             {
               register const PixelPacket
-                *__restrict p;
+                *restrict p;
 
               p=GetVirtualPixels(image,0,y,image->columns,1,
                 &image->exception);

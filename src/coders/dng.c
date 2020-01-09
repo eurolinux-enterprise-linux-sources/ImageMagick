@@ -17,7 +17,7 @@
 %                                 July 1999                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -91,6 +91,9 @@
 */
 static Image *ReadDNGImage(const ImageInfo *image_info,ExceptionInfo *exception)
 {
+  ExceptionInfo
+    *sans_exception;
+
   Image
     *image;
 
@@ -124,11 +127,20 @@ static Image *ReadDNGImage(const ImageInfo *image_info,ExceptionInfo *exception)
   */
   image=AcquireImage(image_info);
   read_info=CloneImageInfo(image_info);
+  SetImageInfoBlob(read_info,(void *) NULL,0);
   (void) InvokeDelegate(read_info,image,"dng:decode",(char *) NULL,exception);
   image=DestroyImage(image);
-  (void) FormatMagickString(read_info->filename,MaxTextExtent,"%s.ppm",
+  (void) FormatLocaleString(read_info->filename,MaxTextExtent,"%s.png",
     read_info->unique);
-  image=ReadImage(read_info,exception);
+  sans_exception=AcquireExceptionInfo();
+  image=ReadImage(read_info,sans_exception);
+  sans_exception=DestroyExceptionInfo(sans_exception);
+  if (image == (Image *) NULL)
+    {
+      (void) FormatLocaleString(read_info->filename,MaxTextExtent,"%s.ppm",
+        read_info->unique);
+      image=ReadImage(read_info,exception);
+    }
   (void) RelinquishUniqueFileResource(read_info->filename);
   if (image != (Image *) NULL)
     {
@@ -140,7 +152,7 @@ static Image *ReadDNGImage(const ImageInfo *image_info,ExceptionInfo *exception)
         *sans;
 
       (void) CopyMagickString(image->magick,read_info->magick,MaxTextExtent);
-      (void) FormatMagickString(filename,MaxTextExtent,"%s.ufraw",
+      (void) FormatLocaleString(filename,MaxTextExtent,"%s.ufraw",
         read_info->unique);
       sans=AcquireExceptionInfo();
       xml=FileToString(filename,MaxTextExtent,sans);
@@ -148,7 +160,7 @@ static Image *ReadDNGImage(const ImageInfo *image_info,ExceptionInfo *exception)
       if (xml != (char *) NULL)
         {
           XMLTreeInfo
-           *ufraw;
+            *ufraw;
 
           /*
             Inject 
@@ -176,7 +188,7 @@ static Image *ReadDNGImage(const ImageInfo *image_info,ExceptionInfo *exception)
                 tag=GetXMLTreeTag(next);
                 if (tag == (char *) NULL)
                   tag="unknown";
-                (void) FormatMagickString(property,MaxTextExtent,"dng:%s",tag);
+                (void) FormatLocaleString(property,MaxTextExtent,"dng:%s",tag);
                 content=ConstantString(GetXMLTreeContent(next)); 
                 StripString(content);
                 if ((LocaleCompare(tag,"log") != 0) &&
@@ -219,14 +231,22 @@ static Image *ReadDNGImage(const ImageInfo *image_info,ExceptionInfo *exception)
 %
 %  The format of the RegisterDNGImage method is:
 %
-%      unsigned long RegisterDNGImage(void)
+%      size_t RegisterDNGImage(void)
 %
 */
-ModuleExport unsigned long RegisterDNGImage(void)
+ModuleExport size_t RegisterDNGImage(void)
 {
   MagickInfo
     *entry;
 
+  entry=SetMagickInfo("3FR");
+  entry->decoder=(DecodeImageHandler *) ReadDNGImage;
+  entry->blob_support=MagickFalse;
+  entry->seekable_stream=MagickTrue;
+  entry->format_type=ExplicitFormatType;
+  entry->description=ConstantString("Hasselblad CFV/H3D39II");
+  entry->module=ConstantString("DNG");
+  (void) RegisterMagickInfo(entry);
   entry=SetMagickInfo("ARW");
   entry->decoder=(DecodeImageHandler *) ReadDNGImage;
   entry->blob_support=MagickFalse;
@@ -394,4 +414,5 @@ ModuleExport void UnregisterDNGImage(void)
   (void) UnregisterMagickInfo("CR2");
   (void) UnregisterMagickInfo("DNG");
   (void) UnregisterMagickInfo("ARW");
+  (void) UnregisterMagickInfo("3FR");
 }

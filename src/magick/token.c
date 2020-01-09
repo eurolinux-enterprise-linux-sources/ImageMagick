@@ -17,7 +17,7 @@
 %                              January 1993                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -46,6 +46,7 @@
 #include "magick/image.h"
 #include "magick/memory_.h"
 #include "magick/string_.h"
+#include "magick/string-private.h"
 #include "magick/token.h"
 #include "magick/token-private.h"
 #include "magick/utility.h"
@@ -61,13 +62,13 @@ struct _TokenInfo
   MagickStatusType
     flag;
 
-  long
+  ssize_t
     offset;
 
   char
     quote;
 
-  unsigned long
+  size_t
     signature;
 };
 
@@ -145,10 +146,11 @@ MagickExport TokenInfo *DestroyTokenInfo(TokenInfo *token_info)
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  GetMagickToken() gets a token from the token stream.  A token is defined as a
-%  sequence of characters delimited by whitespace (e.g. clip-path), a sequence
-%  delimited with quotes (.e.g "Quote me"), or a sequence enclosed in
-%  parenthesis (e.g. rgb(0,0,0)).
+%  GetMagickToken() gets a token from the token stream.  A token is defined as
+%  a sequence of characters delimited by whitespace (e.g. clip-path), a
+%  sequence delimited with quotes (.e.g "Quote me"), or a sequence enclosed in
+%  parenthesis (e.g. rgb(0,0,0)).  GetMagickToken() also recognizes these
+%  separator characters: ':', '=', ',', and ';'.
 %
 %  The format of the GetMagickToken method is:
 %
@@ -171,9 +173,11 @@ MagickExport void GetMagickToken(const char *start,const char **end,char *token)
   register const char
     *p;
 
-  register long
+  register ssize_t
     i;
 
+  assert(start != (const char *) NULL);
+  assert(token != (char *) NULL);
   i=0;
   for (p=start; *p != '\0'; )
   {
@@ -225,7 +229,8 @@ MagickExport void GetMagickToken(const char *start,const char **end,char *token)
         char
           *q;
 
-        value=strtod(p,&q);
+        value=InterpretLocaleValue(p,&q);
+        (void) value;
         if ((p != q) && (*p != ','))
           {
             for ( ; (p < q) && (*p != ','); p++)
@@ -234,7 +239,7 @@ MagickExport void GetMagickToken(const char *start,const char **end,char *token)
               token[i++]=(*p++);
             break;
           }
-        if ((isalpha((int) ((unsigned char) *p)) == 0) &&
+        if ((*p != '\0') && (isalpha((int) ((unsigned char) *p)) == 0) &&
             (*p != *DirectorySeparator) && (*p != '#') && (*p != '<'))
           {
             token[i++]=(*p++);
@@ -243,7 +248,7 @@ MagickExport void GetMagickToken(const char *start,const char **end,char *token)
         for ( ; *p != '\0'; p++)
         {
           if (((isspace((int) ((unsigned char) *p)) != 0) || (*p == '=') ||
-              (*p == ',') || (*p == ':')) && (*(p-1) != '\\'))
+              (*p == ',') || (*p == ':') || (*p == ';')) && (*(p-1) != '\\'))
             break;
           if ((i > 0) && (*p == '<'))
             break;
@@ -272,7 +277,7 @@ MagickExport void GetMagickToken(const char *start,const char **end,char *token)
       offset=4;
       if (token[offset] == '#')
         offset++;
-      i=(long) strlen(token);
+      i=(ssize_t) strlen(token);
       (void) CopyMagickString(token,token+offset,MaxTextExtent);
       token[i-offset-1]='\0';
     }
@@ -344,7 +349,7 @@ MagickExport MagickBooleanType GlobExpression(const char *expression,
       image_info=AcquireImageInfo();
       (void) CopyMagickString(image_info->filename,pattern,MaxTextExtent);
       exception=AcquireExceptionInfo();
-      (void) SetImageInfo(image_info,MagickTrue,exception);
+      (void) SetImageInfo(image_info,0,exception);
       exception=DestroyExceptionInfo(exception);
       if (LocaleCompare(image_info->filename,pattern) != 0)
         {
@@ -364,13 +369,6 @@ MagickExport MagickBooleanType GlobExpression(const char *expression,
         break;
     switch (GetUTFCode(pattern))
     {
-      case '\\':
-      {
-        pattern+=GetUTFOctets(pattern);
-        if (GetUTFCode(pattern) != 0)
-          pattern+=GetUTFOctets(pattern);
-        break;
-      }
       case '*':
       {
         MagickBooleanType
@@ -394,7 +392,7 @@ MagickExport MagickBooleanType GlobExpression(const char *expression,
       }
       case '[':
       {
-        unsigned long
+        int
           c;
 
         pattern+=GetUTFOctets(pattern);
@@ -532,6 +530,12 @@ MagickExport MagickBooleanType GlobExpression(const char *expression,
               pattern+=GetUTFOctets(pattern);
           }
         break;
+      }
+      case '\\':
+      {
+        pattern+=GetUTFOctets(pattern);
+        if (GetUTFCode(pattern) == 0)
+          break;
       }
       default:
       {
@@ -768,21 +772,21 @@ MagickExport MagickBooleanType IsGlob(const char *path)
 #define IN_QUOTE 2
 #define IN_OZONE 3
 
-static long sindex(int c,const char *string)
+static ssize_t sindex(int c,const char *string)
 {
   register const char
     *p;
 
   for (p=string; *p != '\0'; p++)
     if (c == (int) (*p))
-      return(p-string);
+      return((ssize_t) (p-string));
   return(-1);
 }
 
 static void StoreToken(TokenInfo *token_info,char *string,
   size_t max_token_length,int c)
 {
-  register long
+  register ssize_t
     i;
 
   if ((token_info->offset < 0) ||
@@ -817,7 +821,7 @@ MagickExport int Tokenizer(TokenInfo *token_info,const unsigned flag,
   int
     c;
 
-  register long
+  register ssize_t
     i;
 
   *breaker='\0';

@@ -1,12 +1,12 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
-  
+
   You may not use this file except in compliance with the License.
   obtain a copy of the License at
-  
+
     http://www.imagemagick.org/script/license.php
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -38,8 +38,8 @@ static inline MagickRealType RoundToUnity(const MagickRealType value)
 static inline MagickRealType MagickOver_(const MagickRealType p,
   const MagickRealType alpha,const MagickRealType q,const MagickRealType beta)
 {
-  return((1.0-QuantumScale*alpha)*p+
-         (1.0-QuantumScale*beta)*q*QuantumScale*alpha);
+  return((1.0-QuantumScale*alpha)*p+(1.0-QuantumScale*beta)*q*
+    QuantumScale*alpha);
 }
 
 static inline void MagickCompositeOver(const PixelPacket *p,
@@ -54,28 +54,35 @@ static inline void MagickCompositeOver(const PixelPacket *p,
   */
   if (alpha == TransparentOpacity)
     {
-      *composite=(*q);
+      if (composite != q)
+        *composite=(*q);
       return;
     }
   gamma=1.0-QuantumScale*QuantumScale*alpha*beta;
 #if !defined(MAGICKCORE_HDRI_SUPPORT)
   composite->opacity=(Quantum) (QuantumRange*(1.0-gamma)+0.5);
   gamma=1.0/(gamma <= MagickEpsilon ? 1.0 : gamma);
-  composite->red=(Quantum) (gamma*MagickOver_((MagickRealType) p->red,alpha,
-    (MagickRealType) q->red,beta)+0.5);
-  composite->green=(Quantum) (gamma*MagickOver_((MagickRealType) p->green,alpha,
-    (MagickRealType) q->green,beta)+0.5);
-  composite->blue=(Quantum) (gamma*MagickOver_((MagickRealType) p->blue,alpha,
-    (MagickRealType) q->blue,beta)+0.5);
+  SetPixelRed(composite,gamma*MagickOver_((MagickRealType)
+    GetPixelRed(p),alpha,(MagickRealType)
+    GetPixelRed(q),beta)+0.5);
+  SetPixelGreen(composite,gamma*MagickOver_((MagickRealType)
+    GetPixelGreen(p),alpha,(MagickRealType)
+    GetPixelGreen(q),beta)+0.5);
+  SetPixelBlue(composite,gamma*MagickOver_((MagickRealType)
+    GetPixelBlue(p),alpha,(MagickRealType)
+    GetPixelBlue(q),beta)+0.5);
 #else
-  composite->opacity=(Quantum) (QuantumRange*(1.0-gamma));
+  SetPixelOpacity(composite,QuantumRange*(1.0-gamma));
   gamma=1.0/(gamma <= MagickEpsilon ? 1.0 : gamma);
-  composite->red=(Quantum) (gamma*MagickOver_((MagickRealType) p->red,alpha,
-    (MagickRealType) q->red,beta));
-  composite->green=(Quantum) (gamma*MagickOver_((MagickRealType) p->green,alpha,
-    (MagickRealType) q->green,beta));
-  composite->blue=(Quantum) (gamma*MagickOver_((MagickRealType) p->blue,alpha,
-    (MagickRealType) q->blue,beta));
+  SetPixelRed(composite,gamma*MagickOver_((MagickRealType)
+    GetPixelRed(p),alpha,(MagickRealType)
+    GetPixelRed(q),beta));
+  SetPixelGreen(composite,gamma*MagickOver_((MagickRealType)
+    GetPixelGreen(p),alpha,(MagickRealType)
+    GetPixelGreen(q),beta));
+  SetPixelBlue(composite,gamma*MagickOver_((MagickRealType)
+    GetPixelBlue(p),alpha,(MagickRealType)
+    GetPixelBlue(q),beta));
 #endif
 }
 
@@ -128,17 +135,29 @@ static inline void MagickPixelCompositePlus(const MagickPixelPacket *p,
     composite->index=gamma*(Sa*p->index+Da*q->index);
 }
 
+/*
+  Blend pixel colors p and q by the amount given.
+*/
 static inline void MagickPixelCompositeBlend(const MagickPixelPacket *p,
+  const MagickRealType alpha,const MagickPixelPacket *q,
+  const MagickRealType beta,MagickPixelPacket *composite)
+{
+  MagickPixelCompositePlus(p,(MagickRealType) (QuantumRange-alpha*
+    (QuantumRange-p->opacity)),q,(MagickRealType) (QuantumRange-beta*
+    (QuantumRange-q->opacity)),composite);
+}
+
+/*
+  Blend pixel colors p and q by the amount given and area.
+*/
+static inline void MagickPixelCompositeAreaBlend(const MagickPixelPacket *p,
   const MagickRealType alpha,const MagickPixelPacket *q,
   const MagickRealType beta,const MagickRealType area,
   MagickPixelPacket *composite)
 {
-  /*
-    Blend pixel colors.
-  */
-  MagickPixelCompositePlus(p,area*(QuantumRange-alpha*
-    (QuantumRange-p->opacity)),q,(1.0-area)*(QuantumRange-beta*
-    (QuantumRange-q->opacity)),composite);
+  MagickPixelCompositePlus(p,(MagickRealType) QuantumRange-(1.0-area)*
+    (QuantumRange-alpha),q,(MagickRealType) (QuantumRange-area*(QuantumRange-
+    beta)),composite);
 }
 
 #if defined(__cplusplus) || defined(c_plusplus)

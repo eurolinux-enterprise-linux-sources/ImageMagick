@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
   
   You may not use this file except in compliance with the License.
@@ -22,12 +22,10 @@
 extern "C" {
 #endif
 
-#include <magick/draw.h>
-
 /*
   These two enum are linked, with common enumerated values.  Both
-  DistortImages() and SparseColor() often share code to determine
-  functional coefficients for common methods.
+  DistortImages() and SparseColor() often share code to determine functional
+  coefficients for common methods.
 
   Caution should be taken to ensure that only the common methods contain the
   same enumerated value, while all others remain unique across both
@@ -48,12 +46,14 @@ typedef enum
   ArcDistortion,
   PolarDistortion,
   DePolarDistortion,
+  Cylinder2PlaneDistortion,
+  Plane2CylinderDistortion,
   BarrelDistortion,
   BarrelInverseDistortion,
   ShepardsDistortion,
+  ResizeDistortion,
   SentinelDistortion
 } DistortImageMethod;
-
 
 typedef enum
 {
@@ -62,15 +62,19 @@ typedef enum
   BilinearColorInterpolate = BilinearReverseDistortion,
   PolynomialColorInterpolate = PolynomialDistortion,
   ShepardsColorInterpolate = ShepardsDistortion,
-  /* Methods unique to SparseColor(): */
-  VoronoiColorInterpolate = SentinelDistortion
+  /*
+    Methods unique to SparseColor().
+  */
+  VoronoiColorInterpolate = SentinelDistortion,
+  InverseColorInterpolate
 } SparseColorMethod;
 
 extern MagickExport Image
-  *DistortImage(const Image *,const DistortImageMethod,const unsigned long,
+  *DistortImage(const Image *,const DistortImageMethod,const size_t,
     const double *,MagickBooleanType,ExceptionInfo *exception),
+  *DistortResizeImage(const Image *,const size_t,const size_t,ExceptionInfo *),
   *SparseColorImage(const Image *,const ChannelType,const SparseColorMethod,
-    const unsigned long,const double *,ExceptionInfo *);
+    const size_t,const double *,ExceptionInfo *);
 
 #if defined(__cplusplus) || defined(c_plusplus)
 }

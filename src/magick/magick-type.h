@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
   
   You may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ extern "C" {
 #define MAGICKCORE_QUANTUM_DEPTH  16
 #endif
 
-#if defined(__WINDOWS__) && !defined(__MINGW32__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT) && !defined(__MINGW32__)
 #  define MagickLLConstant(c)  (MagickOffsetType) (c ## i64)
 #  define MagickULLConstant(c)  (MagickSizeType) (c ## ui64)
 #else
@@ -91,40 +91,36 @@ typedef unsigned int Quantum;
 #define MaxMap  65535UL
 
 typedef long double MagickRealType;
-#if defined(MAGICKCORE_HDRI_SUPPORT)
 typedef double Quantum;
 #define QuantumRange  18446744073709551615.0
 #define QuantumFormat  "%g"
 #else
-typedef unsigned long long Quantum;
-#define QuantumRange  MagickULLConstant(18446744073709551615)
-#define QuantumFormat  "%llu"
-#endif
-#else
 #if !defined(_CH_)
-# error "Specified value of MAGICKCORE_QUANTUM_DEPTH is not supported"
+# error "MAGICKCORE_QUANTUM_DEPTH must be one of 8, 16, 32, or 64"
 #endif
 #endif
-#define MaxRGB  QuantumRange  /* deprecated */
 
 /*
   Typedef declarations.
 */
 typedef unsigned int MagickStatusType;
-#if !defined(__WINDOWS__)
+#if !defined(MAGICKCORE_WINDOWS_SUPPORT)
 #if (MAGICKCORE_SIZEOF_UNSIGNED_LONG_LONG == 8)
 typedef long long MagickOffsetType;
 typedef unsigned long long MagickSizeType;
-#define MagickSizeFormat  "%10llu"
+#define MagickOffsetFormat  "lld"
+#define MagickSizeFormat  "llu"
 #else
-typedef long MagickOffsetType;
-typedef unsigned long MagickSizeType;
-#define MagickSizeFormat  "%10lu"
+typedef ssize_t MagickOffsetType;
+typedef size_t MagickSizeType;
+#define MagickOffsetFormat  "ld"
+#define MagickSizeFormat  "lu"
 #endif
 #else
 typedef __int64 MagickOffsetType;
 typedef unsigned __int64 MagickSizeType;
-#define MagickSizeFormat  "%10llu"
+#define MagickOffsetFormat  "I64i"
+#define MagickSizeFormat  "I64u"
 #endif
 
 #if defined(_MSC_VER) && (_MSC_VER == 1200)
@@ -149,14 +145,19 @@ typedef enum
   YellowChannel = 0x0004,
   AlphaChannel = 0x0008,
   OpacityChannel = 0x0008,
-  MatteChannel = 0x0008,  /* deprecated */
+  MatteChannel = 0x0008,     /* deprecated */
   BlackChannel = 0x0020,
   IndexChannel = 0x0020,
-  TrueAlphaChannel = 0x0040,
-  RGBChannels = 0x0080,
+  CompositeChannels = 0x002F,
+  AllChannels = 0x7ffffff,
+  /*
+    Special purpose channel types.
+  */
+  TrueAlphaChannel = 0x0040, /* extract actual alpha channel from opacity */
+  RGBChannels = 0x0080,      /* set alpha from  grayscale mask in RGB */
   GrayChannels = 0x0080,
-  AllChannels = 0x003F,
-  DefaultChannels = (AllChannels &~ OpacityChannel)
+  SyncChannels = 0x0100,     /* channels should be modified equally */
+  DefaultChannels = ((AllChannels | SyncChannels) &~ OpacityChannel)
 } ChannelType;
 
 typedef enum

@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
 
   You may not use this file except in compliance with the License.
@@ -38,12 +38,15 @@ extern "C" {
 }
 #define FinalizeImageSettings(image_info,image,advance) \
 { \
-  ResetImageOptions(image_info); \
   FireImageStack(MagickTrue,advance,MagickTrue); \
-  (void) SyncImagesSettings(image_info,image); \
+  if (image != (Image *) NULL) \
+    { \
+      InheritException(exception,&(image)->exception); \
+      (void) SyncImagesSettings(image_info,image); \
+    } \
 }
 #define FireImageStack(postfix,advance,fire) \
-  if ((j <= i) && (i < argc)) \
+  if ((j <= i) && (i < (ssize_t) argc)) \
     { \
       if (image_stack[k].image == (Image *) NULL) \
         status&=MogrifyImageInfo(image_stack[k].image_info,(int) (i-j+1), \
@@ -118,9 +121,6 @@ typedef struct _ImageStack
   Image
     *image;
 } ImageStack;
-
-static MagickBooleanType
-  respect_parenthesis = MagickFalse;
 
 static inline MagickRealType MagickPixelIntensity(
   const MagickPixelPacket *pixel)

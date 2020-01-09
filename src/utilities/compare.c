@@ -18,7 +18,7 @@
 %                            December 2003                                    %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -34,24 +34,16 @@
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  Compare describes the format and characteristics of one or more image
-%  files.  It will also report if an image is incomplete or corrupt.
-%
+% The compare utility mathematically and visually annotates the difference
+% between an image and its reconstruction.
 %
 */
 
 /*
   Include declarations.
 */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <time.h>
+#include "wand/studio.h"
 #include "wand/MagickWand.h"
-#if defined(__WINDOWS__)
-#include <windows.h>
-#endif
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -66,15 +58,11 @@
 %
 %
 */
-int main(int argc,char **argv)
+
+int CompareMain(int argc,char **argv)
 {
   char
-    *metadata,
-    *option;
-
-  double
-    elapsed_time,
-    user_time;
+    *metadata;
 
   ExceptionInfo
     *exception;
@@ -83,65 +71,44 @@ int main(int argc,char **argv)
     *image_info;
 
   MagickBooleanType
-    regard_warnings,
     status;
-
-  register long
-    i;
-
-  TimerInfo
-    timer;
-
-  unsigned long
-    iterations;
 
   MagickCoreGenesis(*argv,MagickTrue);
   exception=AcquireExceptionInfo();
-  iterations=1;
-  status=MagickFalse;
-  regard_warnings=MagickFalse;
-  for (i=1; i < (long) (argc-1); i++)
-  {
-    option=argv[i];
-    if ((strlen(option) == 1) || ((*option != '-') && (*option != '+')))
-      continue;
-    if (LocaleCompare("bench",option+1) == 0)
-      iterations=(unsigned long) atol(argv[++i]);
-    if (LocaleCompare("debug",option+1) == 0)
-      (void) SetLogEventMask(argv[++i]);
-    if (LocaleCompare("regard-warnings",option+1) == 0)
-      regard_warnings=MagickTrue;
-  }
-  GetTimerInfo(&timer);
-  for (i=0; i < (long) iterations; i++)
-  {
-    image_info=AcquireImageInfo();
-    metadata=(char *) NULL;
-    status=CompareImageCommand(image_info,argc,argv,&metadata,exception);
-    if (exception->severity != UndefinedException)
-      {
-        if ((exception->severity > ErrorException) ||
-            (regard_warnings != MagickFalse))
-          status=MagickTrue;
-        CatchException(exception);
-      }
-    if (metadata != (char *) NULL)
-      {
-        (void) fputs(metadata,stdout);
-        (void) fputc('\n',stdout);
-        metadata=DestroyString(metadata);
-      }
-    image_info=DestroyImageInfo(image_info);
-  }
-  if (iterations > 1)
-    {
-      elapsed_time=GetElapsedTime(&timer);
-      user_time=GetUserTime(&timer);
-      (void) fprintf(stderr,"Performance: %lui %gips %0.3fu %ld:%02ld\n",
-        iterations,1.0*iterations/elapsed_time,user_time,(long)
-        (elapsed_time/60.0+0.5),(long) ceil(fmod(elapsed_time,60.0)));
-    }
+  image_info=AcquireImageInfo();
+  metadata=(char *) NULL;
+  status=MagickCommandGenesis(image_info,CompareImageCommand,argc,argv,
+    &metadata,exception);
+  if (metadata != (char *) NULL)
+    metadata=DestroyString(metadata);
+  image_info=DestroyImageInfo(image_info);
   exception=DestroyExceptionInfo(exception);
   MagickCoreTerminus();
-  return(status == MagickFalse ? 0 : 1);
+  return(status);
 }
+
+#if !defined(MAGICKCORE_WINDOWS_SUPPORT) || defined(__CYGWIN__) || defined(__MINGW32__)
+int main(int argc,char **argv)
+{
+  return(CompareMain(argc,argv));
+}
+#else
+int wmain(int argc,wchar_t *argv[])
+{
+  char
+    **utf8;
+
+  int
+    status;
+
+  register int
+    i;
+
+  utf8=NTArgvToUTF8(argc,argv);
+  status=CompareMain(argc,utf8);
+  for (i=0; i < argc; i++)
+    utf8[i]=DestroyString(utf8[i]);
+  utf8=(char **) RelinquishMagickMemory(utf8);
+  return(status);
+}
+#endif

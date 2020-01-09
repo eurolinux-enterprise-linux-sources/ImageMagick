@@ -53,6 +53,7 @@
 #include "magick/semaphore.h"
 #include "magick/splay-tree.h"
 #include "magick/string_.h"
+#include "magick/string-private.h"
 #include "magick/type.h"
 #include "magick/token.h"
 #include "magick/utility.h"
@@ -89,7 +90,7 @@
 #define FC_WEIGHT_HEAVY            FC_WEIGHT_BLACK
 #endif
 #endif
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
 # include "magick/nt-feature.h"
 #endif
 
@@ -127,34 +128,6 @@ static SplayTreeInfo
 static MagickBooleanType
   InitializeTypeList(ExceptionInfo *),
   LoadTypeLists(const char *,ExceptionInfo *);
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-+   D e s t r o y T y p e L i s t                                             %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  DestroyTypeList() deallocates memory associated with the font list.
-%
-%  The format of the DestroyTypeList method is:
-%
-%      void DestroyTypeList(void)
-%
-*/
-MagickExport void DestroyTypeList(void)
-{
-  AcquireSemaphoreInfo(&type_semaphore);
-  if (type_list != (SplayTreeInfo *) NULL)
-    type_list=DestroySplayTree(type_list);
-  instantiate_type=MagickFalse;
-  RelinquishSemaphoreInfo(type_semaphore);
-  DestroySemaphoreInfo(&type_semaphore);
-}
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -220,7 +193,7 @@ MagickExport const TypeInfo *GetTypeInfo(const char *name,
 %
 %      const TypeInfo *GetTypeInfoByFamily(const char *family,
 %        const StyleType style,const StretchType stretch,
-%        const unsigned long weight,ExceptionInfo *exception)
+%        const size_t weight,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
@@ -236,16 +209,16 @@ MagickExport const TypeInfo *GetTypeInfo(const char *name,
 %
 */
 
-static inline unsigned long MagickMax(const unsigned long x,
-  const unsigned long y)
+static inline size_t MagickMax(const size_t x,
+  const size_t y)
 {
   if (x > y)
     return(x);
   return(y);
 }
 
-static inline unsigned long MagickMin(const unsigned long x,
-  const unsigned long y)
+static inline size_t MagickMin(const size_t x,
+  const size_t y)
 {
   if (x < y)
     return(x);
@@ -253,7 +226,7 @@ static inline unsigned long MagickMin(const unsigned long x,
 }
 
 MagickExport const TypeInfo *GetTypeInfoByFamily(const char *family,
-  const StyleType style,const StretchType stretch,const unsigned long weight,
+  const StyleType style,const StretchType stretch,const size_t weight,
   ExceptionInfo *exception)
 {
   typedef struct _Fontmap
@@ -266,16 +239,16 @@ MagickExport const TypeInfo *GetTypeInfoByFamily(const char *family,
   const TypeInfo
     *type_info;
 
-  long
-    range;
-
   register const TypeInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
-  static Fontmap
+  ssize_t
+    range;
+
+  static const Fontmap
     fontmap[] =
     {
       { "fixed", "courier" },
@@ -288,7 +261,7 @@ MagickExport const TypeInfo *GetTypeInfoByFamily(const char *family,
       { NULL, NULL }
     };
 
-  unsigned long
+  size_t
     max_score,
     score;
 
@@ -298,7 +271,7 @@ MagickExport const TypeInfo *GetTypeInfoByFamily(const char *family,
   (void) GetTypeInfo("*",exception);
   if (type_list == (SplayTreeInfo *) NULL)
     return((TypeInfo *) NULL);
-  AcquireSemaphoreInfo(&type_semaphore);
+  LockSemaphoreInfo(type_semaphore);
   ResetSplayTreeIterator(type_list);
   type_info=(const TypeInfo *) NULL;
   p=(const TypeInfo *) GetNextValueInSplayTree(type_list);
@@ -343,14 +316,14 @@ MagickExport const TypeInfo *GetTypeInfoByFamily(const char *family,
     type_info=p;
     break;
   }
-  RelinquishSemaphoreInfo(type_semaphore);
+  UnlockSemaphoreInfo(type_semaphore);
   if (type_info != (const TypeInfo *) NULL)
     return(type_info);
   /*
     Check for types in the same family.
   */
   max_score=0;
-  AcquireSemaphoreInfo(&type_semaphore);
+  LockSemaphoreInfo(type_semaphore);
   ResetSplayTreeIterator(type_list);
   p=(const TypeInfo *) GetNextValueInSplayTree(type_list);
   while (p != (const TypeInfo *) NULL)
@@ -385,15 +358,15 @@ MagickExport const TypeInfo *GetTypeInfoByFamily(const char *family,
     if (weight == 0)
       score+=16;
     else
-      score+=(16*(800-((long) MagickMax(MagickMin(weight,900),p->weight)-
-        (long) MagickMin(MagickMin(weight,900),p->weight))))/800;
+      score+=(16*(800-((ssize_t) MagickMax(MagickMin(weight,900),p->weight)-
+        (ssize_t) MagickMin(MagickMin(weight,900),p->weight))))/800;
     if ((stretch == UndefinedStretch) || (stretch == AnyStretch))
       score+=8;
     else
       {
-        range=(long) UltraExpandedStretch-(long) NormalStretch;
-        score+=(8*(range-((long) MagickMax(stretch,p->stretch)-
-          (long) MagickMin(stretch,p->stretch))))/range;
+        range=(ssize_t) UltraExpandedStretch-(ssize_t) NormalStretch;
+        score+=(8*(range-((ssize_t) MagickMax(stretch,p->stretch)-
+          (ssize_t) MagickMin(stretch,p->stretch))))/range;
       }
     if (score > max_score)
       {
@@ -402,7 +375,7 @@ MagickExport const TypeInfo *GetTypeInfoByFamily(const char *family,
       }
     p=(const TypeInfo *) GetNextValueInSplayTree(type_list);
   }
-  RelinquishSemaphoreInfo(type_semaphore);
+  UnlockSemaphoreInfo(type_semaphore);
   if (type_info != (const TypeInfo *) NULL)
     return(type_info);
   /*
@@ -451,7 +424,7 @@ MagickExport const TypeInfo *GetTypeInfoByFamily(const char *family,
 %  The format of the GetTypeInfoList function is:
 %
 %      const TypeInfo **GetTypeInfoList(const char *pattern,
-%        unsigned long *number_fonts,ExceptionInfo *exception)
+%        size_t *number_fonts,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
@@ -485,7 +458,7 @@ static int TypeInfoCompare(const void *x,const void *y)
 #endif
 
 MagickExport const TypeInfo **GetTypeInfoList(const char *pattern,
-  unsigned long *number_fonts,ExceptionInfo *exception)
+  size_t *number_fonts,ExceptionInfo *exception)
 {
   const TypeInfo
     **fonts;
@@ -493,7 +466,7 @@ MagickExport const TypeInfo **GetTypeInfoList(const char *pattern,
   register const TypeInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -501,7 +474,7 @@ MagickExport const TypeInfo **GetTypeInfoList(const char *pattern,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_fonts != (unsigned long *) NULL);
+  assert(number_fonts != (size_t *) NULL);
   *number_fonts=0;
   p=GetTypeInfo("*",exception);
   if (p == (const TypeInfo *) NULL)
@@ -513,7 +486,7 @@ MagickExport const TypeInfo **GetTypeInfoList(const char *pattern,
   /*
     Generate type list.
   */
-  AcquireSemaphoreInfo(&type_semaphore);
+  LockSemaphoreInfo(type_semaphore);
   ResetSplayTreeIterator(type_list);
   p=(const TypeInfo *) GetNextValueInSplayTree(type_list);
   for (i=0; p != (const TypeInfo *) NULL; )
@@ -523,10 +496,10 @@ MagickExport const TypeInfo **GetTypeInfoList(const char *pattern,
       fonts[i++]=p;
     p=(const TypeInfo *) GetNextValueInSplayTree(type_list);
   }
-  RelinquishSemaphoreInfo(type_semaphore);
+  UnlockSemaphoreInfo(type_semaphore);
   qsort((void *) fonts,(size_t) i,sizeof(*fonts),TypeInfoCompare);
   fonts[i]=(TypeInfo *) NULL;
-  *number_fonts=(unsigned long) i;
+  *number_fonts=(size_t) i;
   return(fonts);
 }
 
@@ -545,7 +518,7 @@ MagickExport const TypeInfo **GetTypeInfoList(const char *pattern,
 %
 %  The format of the GetTypeList function is:
 %
-%      char **GetTypeList(const char *pattern,unsigned long *number_fonts,
+%      char **GetTypeList(const char *pattern,size_t *number_fonts,
 %        ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
@@ -577,7 +550,7 @@ static int TypeCompare(const void *x,const void *y)
 }
 #endif
 
-MagickExport char **GetTypeList(const char *pattern,unsigned long *number_fonts,
+MagickExport char **GetTypeList(const char *pattern,size_t *number_fonts,
   ExceptionInfo *exception)
 {
   char
@@ -586,7 +559,7 @@ MagickExport char **GetTypeList(const char *pattern,unsigned long *number_fonts,
   register const TypeInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -594,7 +567,7 @@ MagickExport char **GetTypeList(const char *pattern,unsigned long *number_fonts,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_fonts != (unsigned long *) NULL);
+  assert(number_fonts != (size_t *) NULL);
   *number_fonts=0;
   p=GetTypeInfo("*",exception);
   if (p == (const TypeInfo *) NULL)
@@ -606,7 +579,7 @@ MagickExport char **GetTypeList(const char *pattern,unsigned long *number_fonts,
   /*
     Generate type list.
   */
-  AcquireSemaphoreInfo(&type_semaphore);
+  LockSemaphoreInfo(type_semaphore);
   ResetSplayTreeIterator(type_list);
   p=(const TypeInfo *) GetNextValueInSplayTree(type_list);
   for (i=0; p != (const TypeInfo *) NULL; )
@@ -616,10 +589,10 @@ MagickExport char **GetTypeList(const char *pattern,unsigned long *number_fonts,
       fonts[i++]=ConstantString(p->name);
     p=(const TypeInfo *) GetNextValueInSplayTree(type_list);
   }
-  RelinquishSemaphoreInfo(type_semaphore);
+  UnlockSemaphoreInfo(type_semaphore);
   qsort((void *) fonts,(size_t) i,sizeof(*fonts),TypeCompare);
   fonts[i]=(char *) NULL;
-  *number_fonts=(unsigned long) i;
+  *number_fonts=(size_t) i;
   return(fonts);
 }
 
@@ -679,7 +652,7 @@ MagickExport MagickBooleanType LoadFontConfigFonts(SplayTreeInfo *type_list,
     width,
     weight;
 
-  register long
+  register ssize_t
     i;
 
   TypeInfo
@@ -710,7 +683,7 @@ MagickExport MagickBooleanType LoadFontConfigFonts(SplayTreeInfo *type_list,
       FcConfigDestroy(font_config);
       return(MagickFalse);
     }
-  for (i=0; i < (long) font_set->nfont; i++)
+  for (i=0; i < (ssize_t) font_set->nfont; i++)
   {
     status=FcPatternGetString(font_set->fonts[i],FC_FAMILY,0,&family);
     if (status != FcResultMatch)
@@ -799,12 +772,14 @@ static MagickBooleanType InitializeTypeList(ExceptionInfo *exception)
   if ((type_list == (SplayTreeInfo *) NULL) &&
       (instantiate_type == MagickFalse))
     {
-      AcquireSemaphoreInfo(&type_semaphore);
+      if (type_semaphore == (SemaphoreInfo *) NULL)
+        AcquireSemaphoreInfo(&type_semaphore);
+      LockSemaphoreInfo(type_semaphore);
       if ((type_list == (SplayTreeInfo *) NULL) &&
           (instantiate_type == MagickFalse))
         {
           (void) LoadTypeLists(MagickTypeFilename,exception);
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
           (void) NTLoadTypeLists(type_list,exception);
 #endif
 #if defined(MAGICKCORE_FONTCONFIG_DELEGATE)
@@ -812,7 +787,7 @@ static MagickBooleanType InitializeTypeList(ExceptionInfo *exception)
 #endif
           instantiate_type=MagickTrue;
         }
-      RelinquishSemaphoreInfo(type_semaphore);
+      UnlockSemaphoreInfo(type_semaphore);
     }
   return(type_list != (SplayTreeInfo *) NULL ? MagickTrue : MagickFalse);
 }
@@ -857,10 +832,10 @@ MagickExport MagickBooleanType ListTypeInfo(FILE *file,ExceptionInfo *exception)
   const TypeInfo
     **type_info;
 
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     number_fonts;
 
   if (file == (FILE *) NULL)
@@ -871,14 +846,14 @@ MagickExport MagickBooleanType ListTypeInfo(FILE *file,ExceptionInfo *exception)
     return(MagickFalse);
   *weight='\0';
   path=(const char *) NULL;
-  for (i=0; i < (long) number_fonts; i++)
+  for (i=0; i < (ssize_t) number_fonts; i++)
   {
     if (type_info[i]->stealth != MagickFalse)
       continue;
     if (((path == (const char *) NULL) ||
          (LocaleCompare(path,type_info[i]->path) != 0)) &&
          (type_info[i]->path != (char *) NULL))
-      (void) fprintf(file,"\nPath: %s\n",type_info[i]->path);
+      (void) FormatLocaleFile(file,"\nPath: %s\n",type_info[i]->path);
     path=type_info[i]->path;
     name="unknown";
     if (type_info[i]->name != (char *) NULL)
@@ -886,18 +861,19 @@ MagickExport MagickBooleanType ListTypeInfo(FILE *file,ExceptionInfo *exception)
     family="unknown";
     if (type_info[i]->family != (char *) NULL)
       family=type_info[i]->family;
-    style=MagickOptionToMnemonic(MagickStyleOptions,type_info[i]->style);
-    stretch=MagickOptionToMnemonic(MagickStretchOptions,type_info[i]->stretch);
+    style=CommandOptionToMnemonic(MagickStyleOptions,type_info[i]->style);
+    stretch=CommandOptionToMnemonic(MagickStretchOptions,type_info[i]->stretch);
     glyphs="unknown";
     if (type_info[i]->glyphs != (char *) NULL)
       glyphs=type_info[i]->glyphs;
-    (void) FormatMagickString(weight,MaxTextExtent,"%lu",type_info[i]->weight);
-    (void) fprintf(file,"  Font: %s\n",name);
-    (void) fprintf(file,"    family: %s\n",family);
-    (void) fprintf(file,"    style: %s\n",style);
-    (void) fprintf(file,"    stretch: %s\n",stretch);
-    (void) fprintf(file,"    weight: %s\n",weight);
-    (void) fprintf(file,"    glyphs: %s\n",glyphs);
+    (void) FormatLocaleString(weight,MaxTextExtent,"%.20g",(double)
+      type_info[i]->weight);
+    (void) FormatLocaleFile(file,"  Font: %s\n",name);
+    (void) FormatLocaleFile(file,"    family: %s\n",family);
+    (void) FormatLocaleFile(file,"    style: %s\n",style);
+    (void) FormatLocaleFile(file,"    stretch: %s\n",stretch);
+    (void) FormatLocaleFile(file,"    weight: %s\n",weight);
+    (void) FormatLocaleFile(file,"    glyphs: %s\n",glyphs);
   }
   (void) fflush(file);
   type_info=(const TypeInfo **) RelinquishMagickMemory((void *) type_info);
@@ -921,7 +897,7 @@ MagickExport MagickBooleanType ListTypeInfo(FILE *file,ExceptionInfo *exception)
 %  The format of the LoadTypeList method is:
 %
 %      MagickBooleanType LoadTypeList(const char *xml,const char *filename,
-%        const unsigned long depth,ExceptionInfo *exception)
+%        const size_t depth,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
@@ -963,7 +939,7 @@ static void *DestroyTypeNode(void *type_info)
 }
 
 static MagickBooleanType LoadTypeList(const char *xml,const char *filename,
-  const unsigned long depth,ExceptionInfo *exception)
+  const size_t depth,ExceptionInfo *exception)
 {
   char
     font_path[MaxTextExtent],
@@ -1000,7 +976,7 @@ static MagickBooleanType LoadTypeList(const char *xml,const char *filename,
   status=MagickTrue;
   type_info=(TypeInfo *) NULL;
   token=AcquireString(xml);
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
   /*
     Determine the Ghostscript font path.
   */
@@ -1128,7 +1104,7 @@ static MagickBooleanType LoadTypeList(const char *xml,const char *filename,
       {
         if (LocaleCompare((char *) keyword,"face") == 0)
           {
-            type_info->face=(unsigned long) atol(token);
+            type_info->face=StringToUnsignedLong(token);
             break;
           }
         if (LocaleCompare((char *) keyword,"family") == 0)
@@ -1162,7 +1138,7 @@ static MagickBooleanType LoadTypeList(const char *xml,const char *filename,
               *path;
 
             path=ConstantString(token);
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
             if (strchr(path,'@') != (char *) NULL)
               SubstituteString(&path,"@ghostscript_font_path@",font_path);
 #endif
@@ -1177,6 +1153,11 @@ static MagickBooleanType LoadTypeList(const char *xml,const char *filename,
                   MaxTextExtent);
                 (void) ConcatenateMagickString(font_path,token,MaxTextExtent);
                 path=ConstantString(font_path);
+                if (IsPathAccessible(path) == MagickFalse)
+                  {
+                    path=DestroyString(path);
+                    path=ConstantString(token);
+                  }
               }
             type_info->glyphs=path;
             break;
@@ -1192,7 +1173,7 @@ static MagickBooleanType LoadTypeList(const char *xml,const char *filename,
               *path;
 
             path=ConstantString(token);
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
             if (strchr(path,'@') != (char *) NULL)
               SubstituteString(&path,"@ghostscript_font_path@",font_path);
 #endif
@@ -1233,13 +1214,13 @@ static MagickBooleanType LoadTypeList(const char *xml,const char *filename,
           }
         if (LocaleCompare((char *) keyword,"stretch") == 0)
           {
-            type_info->stretch=(StretchType) ParseMagickOption(
+            type_info->stretch=(StretchType) ParseCommandOption(
               MagickStretchOptions,MagickFalse,token);
             break;
           }
         if (LocaleCompare((char *) keyword,"style") == 0)
           {
-            type_info->style=(StyleType) ParseMagickOption(MagickStyleOptions,
+            type_info->style=(StyleType) ParseCommandOption(MagickStyleOptions,
               MagickFalse,token);
             break;
           }
@@ -1250,7 +1231,7 @@ static MagickBooleanType LoadTypeList(const char *xml,const char *filename,
       {
         if (LocaleCompare((char *) keyword,"weight") == 0)
           {
-            type_info->weight=(unsigned long) atol(token);
+            type_info->weight=StringToUnsignedLong(token);
             if (LocaleCompare(token,"bold") == 0)
               type_info->weight=700;
             if (LocaleCompare(token,"normal") == 0)
@@ -1296,7 +1277,7 @@ static MagickBooleanType LoadTypeList(const char *xml,const char *filename,
 static MagickBooleanType LoadTypeLists(const char *filename,
   ExceptionInfo *exception)
 {
-#if defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
+#if defined(MAGICKCORE_ZERO_CONFIGURATION_SUPPORT)
   return(LoadTypeList(TypeMap,"built-in",0,exception));
 #else
   char
@@ -1333,7 +1314,7 @@ static MagickBooleanType LoadTypeLists(const char *filename,
       /*
         Search MAGICK_FONT_PATH.
       */
-      (void) FormatMagickString(path,MaxTextExtent,"%s%s%s",font_path,
+      (void) FormatLocaleString(path,MaxTextExtent,"%s%s%s",font_path,
         DirectorySeparator,filename);
       option=FileToString(path,~0,exception);
       if (option != (void *) NULL)
@@ -1348,4 +1329,58 @@ static MagickBooleanType LoadTypeLists(const char *filename,
     status|=LoadTypeList(TypeMap,"built-in",0,exception);
   return(status != 0 ? MagickTrue : MagickFalse);
 #endif
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   T y p e C o m p o n e n t G e n e s i s                                   %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  TypeComponentGenesis() instantiates the type component.
+%
+%  The format of the TypeComponentGenesis method is:
+%
+%      MagickBooleanType TypeComponentGenesis(void)
+%
+*/
+MagickExport MagickBooleanType TypeComponentGenesis(void)
+{
+  AcquireSemaphoreInfo(&type_semaphore);
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   T y p e C o m p o n e n t T e r m i n u s                                 %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  TypeComponentTerminus() destroy type component.
+%
+%  The format of the TypeComponentTerminus method is:
+%
+%      void TypeComponentTerminus(void)
+%
+*/
+MagickExport void TypeComponentTerminus(void)
+{
+  if (type_semaphore == (SemaphoreInfo *) NULL)
+    AcquireSemaphoreInfo(&type_semaphore);
+  LockSemaphoreInfo(type_semaphore);
+  if (type_list != (SplayTreeInfo *) NULL)
+    type_list=DestroySplayTree(type_list);
+  instantiate_type=MagickFalse;
+  UnlockSemaphoreInfo(type_semaphore);
+  DestroySemaphoreInfo(&type_semaphore);
 }

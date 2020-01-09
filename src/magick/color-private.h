@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
 
   You may not use this file except in compliance with the License.
@@ -29,24 +29,17 @@ extern "C" {
 static inline MagickBooleanType IsColorEqual(const PixelPacket *p,
   const PixelPacket *q)
 {
-  if ((p->red == q->red) && (p->green == q->green) && (p->blue == q->blue))
+  if ((GetPixelRed(p) == GetPixelRed(q)) &&
+      (GetPixelGreen(p) == GetPixelGreen(q)) &&
+      (GetPixelBlue(p) == GetPixelBlue(q)))
     return(MagickTrue);
   return(MagickFalse);
 }
 
-static inline IndexPacket ConstrainColormapIndex(Image *image,
-  const unsigned long index)
-{
-  if (index < image->colors)
-    return((IndexPacket) index);
-  (void) ThrowMagickException(&image->exception,GetMagickModule(),
-    CorruptImageError,"InvalidColormapIndex","`%s'",image->filename);
-  return((IndexPacket) 0);
-}
-
 static inline MagickBooleanType IsGray(const PixelPacket *pixel)
 {
-  if ((pixel->red == pixel->green) && (pixel->green == pixel->blue))
+  if ((GetPixelRed(pixel) == GetPixelGreen(pixel)) &&
+      (GetPixelGreen(pixel) == GetPixelBlue(pixel)))
     return(MagickTrue);
   return(MagickFalse);
 }
@@ -54,6 +47,7 @@ static inline MagickBooleanType IsGray(const PixelPacket *pixel)
 static inline MagickBooleanType IsMagickColorEqual(const MagickPixelPacket *p,
   const MagickPixelPacket *q)
 {
+#if !defined(MAGICKCORE_HDRI_SUPPORT)
   if ((p->matte != MagickFalse) && (q->matte == MagickFalse) &&
       (p->opacity != OpaqueOpacity))
     return(MagickFalse);
@@ -75,6 +69,29 @@ static inline MagickBooleanType IsMagickColorEqual(const MagickPixelPacket *p,
     return(MagickFalse);
   if ((p->colorspace == CMYKColorspace) && (p->index != q->index))
     return(MagickFalse);
+#else
+  if ((p->matte != MagickFalse) && (q->matte == MagickFalse) &&
+      (fabs(p->opacity-OpaqueOpacity) > 0.5))
+    return(MagickFalse);
+  if ((q->matte != MagickFalse) && (p->matte == MagickFalse) &&
+      (fabs(q->opacity-OpaqueOpacity)) > 0.5)
+    return(MagickFalse);
+  if ((p->matte != MagickFalse) && (q->matte != MagickFalse))
+    {
+      if (fabs(p->opacity-q->opacity) > 0.5)
+        return(MagickFalse);
+      if (fabs(p->opacity-TransparentOpacity) <= 0.5)
+        return(MagickTrue);
+    }
+  if (fabs(p->red-q->red) > 0.5)
+    return(MagickFalse);
+  if (fabs(p->green-q->green) > 0.5)
+    return(MagickFalse);
+  if (fabs(p->blue-q->blue) > 0.5)
+    return(MagickFalse);
+  if ((p->colorspace == CMYKColorspace) && (fabs(p->index-q->index) > 0.5))
+    return(MagickFalse);
+#endif
   return(MagickTrue);
 }
 
@@ -90,11 +107,7 @@ static inline MagickBooleanType IsMagickGray(const MagickPixelPacket *pixel)
 static inline MagickRealType MagickPixelIntensity(
   const MagickPixelPacket *pixel)
 {
-  MagickRealType
-    intensity;
-
-  intensity=0.299*pixel->red+0.587*pixel->green+0.114*pixel->blue;
-  return(intensity);
+  return((MagickRealType) (0.299*pixel->red+0.587*pixel->green+0.114*pixel->blue));
 }
 
 static inline Quantum MagickPixelIntensityToQuantum(
@@ -122,29 +135,35 @@ static inline MagickRealType PixelIntensity(const PixelPacket *pixel)
   MagickRealType
     intensity;
 
-  if ((pixel->red == pixel->green) && (pixel->green == pixel->blue))
+  if ((GetPixelRed(pixel) == GetPixelGreen(pixel)) &&
+      (GetPixelGreen(pixel) == GetPixelBlue(pixel)))
     return((MagickRealType) pixel->red);
-  intensity=(MagickRealType) (0.299*pixel->red+0.587*pixel->green+0.114*
-    pixel->blue);
+  intensity=(MagickRealType) (0.299*GetPixelRed(pixel)+0.587*
+    GetPixelGreen(pixel)+0.114*GetPixelBlue(pixel));
   return(intensity);
 }
 
 static inline Quantum PixelIntensityToQuantum(const PixelPacket *pixel)
 {
 #if !defined(MAGICKCORE_HDRI_SUPPORT)
-  if ((pixel->red == pixel->green) && (pixel->green == pixel->blue))
-    return(pixel->red);
-#if (MAGICKCORE_QUANTUM_DEPTH <= 16)
-  return((Quantum) ((306U*(unsigned int) pixel->red+
-    601U*(unsigned int) pixel->green+117U*(unsigned int) pixel->blue) >> 10U));
+  if ((GetPixelRed(pixel) == GetPixelGreen(pixel)) &&
+      (GetPixelGreen(pixel) == GetPixelBlue(pixel)))
+    return(GetPixelRed(pixel));
+  return((Quantum) (0.299*GetPixelRed(pixel)+0.587*
+    GetPixelGreen(pixel)+0.114*GetPixelBlue(pixel)+0.5));
 #else
-  return((Quantum) (0.299*pixel->red+0.587*pixel->green+0.114*pixel->blue+0.5));
-#endif
-#else
-  if ((fabs(pixel->red-pixel->green) <= MagickEpsilon) &&
-      (fabs(pixel->green-pixel->blue) <= MagickEpsilon))
-    return((Quantum) pixel->red);
-  return((Quantum) (0.299*pixel->red+0.587*pixel->green+0.114*pixel->blue));
+  {
+    double
+      alpha,
+      beta;
+
+    alpha=GetPixelRed(pixel)-GetPixelGreen(pixel);
+    beta=GetPixelGreen(pixel)-GetPixelBlue(pixel);
+    if ((fabs(alpha) <= MagickEpsilon) && (fabs(beta) <= MagickEpsilon))
+      return(GetPixelRed(pixel));
+    return((Quantum) (0.299*GetPixelRed(pixel)+0.587*
+      GetPixelGreen(pixel)+0.114*GetPixelBlue(pixel)));
+  }
 #endif
 }
 

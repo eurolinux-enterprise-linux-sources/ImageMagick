@@ -17,7 +17,7 @@
 %                               December 2002                                 %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -75,7 +75,7 @@ typedef struct _EntryInfo
 
 struct _LinkedListInfo
 {
-  unsigned long
+  size_t
     capacity,
     elements;
 
@@ -90,7 +90,7 @@ struct _LinkedListInfo
   SemaphoreInfo
     *semaphore;
 
-  unsigned long
+  size_t
     signature;
 };
 
@@ -106,7 +106,7 @@ struct _HashmapInfo
     *(*relinquish_key)(void *),
     *(*relinquish_value)(void *);
 
-  unsigned long
+  size_t
     capacity,
     entries,
     next;
@@ -123,7 +123,7 @@ struct _HashmapInfo
   SemaphoreInfo
     *semaphore;
 
-  unsigned long
+  size_t
     signature;
 };
 
@@ -170,7 +170,7 @@ MagickExport MagickBooleanType AppendValueToLinkedList(
     return(MagickFalse);
   next->value=(void *) value;
   next->next=(ElementInfo *) NULL;
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   if (list_info->next == (ElementInfo *) NULL)
     list_info->next=next;
   if (list_info->elements == 0)
@@ -179,7 +179,7 @@ MagickExport MagickBooleanType AppendValueToLinkedList(
     list_info->tail->next=next;
   list_info->tail=next;
   list_info->elements++;
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
   return(MagickTrue);
 }
 
@@ -222,7 +222,7 @@ MagickExport void ClearLinkedList(LinkedListInfo *list_info,
   assert(list_info->signature == MagickSignature);
   if (list_info->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   next=list_info->head;
   while (next != (ElementInfo *) NULL)
   {
@@ -236,7 +236,7 @@ MagickExport void ClearLinkedList(LinkedListInfo *list_info,
   list_info->tail=(ElementInfo *) NULL;
   list_info->next=(ElementInfo *) NULL;
   list_info->elements=0;
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
 }
 
 /*
@@ -250,8 +250,8 @@ MagickExport void ClearLinkedList(LinkedListInfo *list_info,
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  Specify the CompareHashmapString() method in NewHashmap() to find an entry
-%  in a hash-map based on the contents of a string.
+%  CompareHashmapString() finds an entry in a hash-map based on the contents
+%  of a string.
 %
 %  The format of the CompareHashmapString method is:
 %
@@ -288,8 +288,8 @@ MagickExport MagickBooleanType CompareHashmapString(const void *target,
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  Specify the CompareHashmapStringInfo() method in NewHashmap() to find an
-%  entry in a hash-map based on the contents of a string.
+%  CompareHashmapStringInfo() finds an entry in a hash-map based on the
+%  contents of a string.
 %
 %  The format of the CompareHashmapStringInfo method is:
 %
@@ -345,15 +345,15 @@ MagickExport HashmapInfo *DestroyHashmap(HashmapInfo *hashmap_info)
   register EntryInfo
     *entry;
 
-  register long
+  register ssize_t
     i;
 
   assert(hashmap_info != (HashmapInfo *) NULL);
   assert(hashmap_info->signature == MagickSignature);
   if (hashmap_info->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  (void) LockSemaphoreInfo(hashmap_info->semaphore);
-  for (i=0; i < (long) hashmap_info->capacity; i++)
+  LockSemaphoreInfo(hashmap_info->semaphore);
+  for (i=0; i < (ssize_t) hashmap_info->capacity; i++)
   {
     list_info=hashmap_info->map[i];
     if (list_info != (LinkedListInfo *) NULL)
@@ -375,7 +375,7 @@ MagickExport HashmapInfo *DestroyHashmap(HashmapInfo *hashmap_info)
   hashmap_info->map=(LinkedListInfo **) RelinquishMagickMemory(
     hashmap_info->map);
   hashmap_info->signature=(~MagickSignature);
-  (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+  UnlockSemaphoreInfo(hashmap_info->semaphore);
   DestroySemaphoreInfo(&hashmap_info->semaphore);
   hashmap_info=(HashmapInfo *) RelinquishMagickMemory(hashmap_info);
   return(hashmap_info);
@@ -420,7 +420,7 @@ MagickExport LinkedListInfo *DestroyLinkedList(LinkedListInfo *list_info,
   assert(list_info->signature == MagickSignature);
   if (list_info->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   for (next=list_info->head; next != (ElementInfo *) NULL; )
   {
     if (relinquish_value != (void *(*)(void *)) NULL)
@@ -430,7 +430,7 @@ MagickExport LinkedListInfo *DestroyLinkedList(LinkedListInfo *list_info,
     entry=(ElementInfo *) RelinquishMagickMemory(entry);
   }
   list_info->signature=(~MagickSignature);
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
   DestroySemaphoreInfo(&list_info->semaphore);
   list_info=(LinkedListInfo *) RelinquishMagickMemory(list_info);
   return(list_info);
@@ -469,9 +469,9 @@ MagickExport void *GetLastValueInLinkedList(LinkedListInfo *list_info)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   if (list_info->elements == 0)
     return((void *) NULL);
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   value=list_info->tail->value;
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
   return(value);
 }
 
@@ -512,7 +512,7 @@ MagickExport void *GetNextKeyInHashmap(HashmapInfo *hashmap_info)
   assert(hashmap_info->signature == MagickSignature);
   if (hashmap_info->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  (void) LockSemaphoreInfo(hashmap_info->semaphore);
+  LockSemaphoreInfo(hashmap_info->semaphore);
   while (hashmap_info->next < hashmap_info->capacity)
   {
     list_info=hashmap_info->map[hashmap_info->next];
@@ -527,14 +527,14 @@ MagickExport void *GetNextKeyInHashmap(HashmapInfo *hashmap_info)
         if (entry != (EntryInfo *) NULL)
           {
             key=entry->key;
-            (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+            UnlockSemaphoreInfo(hashmap_info->semaphore);
             return(key);
           }
         hashmap_info->head_of_list=MagickFalse;
       }
     hashmap_info->next++;
   }
-  (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+  UnlockSemaphoreInfo(hashmap_info->semaphore);
   return((void *) NULL);
 }
 
@@ -575,7 +575,7 @@ MagickExport void *GetNextValueInHashmap(HashmapInfo *hashmap_info)
   assert(hashmap_info->signature == MagickSignature);
   if (hashmap_info->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  (void) LockSemaphoreInfo(hashmap_info->semaphore);
+  LockSemaphoreInfo(hashmap_info->semaphore);
   while (hashmap_info->next < hashmap_info->capacity)
   {
     list_info=hashmap_info->map[hashmap_info->next];
@@ -590,14 +590,14 @@ MagickExport void *GetNextValueInHashmap(HashmapInfo *hashmap_info)
         if (entry != (EntryInfo *) NULL)
           {
             value=entry->value;
-            (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+            UnlockSemaphoreInfo(hashmap_info->semaphore);
             return(value);
           }
         hashmap_info->head_of_list=MagickFalse;
       }
     hashmap_info->next++;
   }
-  (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+  UnlockSemaphoreInfo(hashmap_info->semaphore);
   return((void *) NULL);
 }
 
@@ -632,15 +632,15 @@ MagickExport void *GetNextValueInLinkedList(LinkedListInfo *list_info)
   assert(list_info->signature == MagickSignature);
   if (list_info->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   if (list_info->next == (ElementInfo *) NULL)
     {
-      (void) UnlockSemaphoreInfo(list_info->semaphore);
+      UnlockSemaphoreInfo(list_info->semaphore);
       return((void *) NULL);
     }
   value=list_info->next->value;
   list_info->next=list_info->next->next;
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
   return(value);
 }
 
@@ -659,14 +659,14 @@ MagickExport void *GetNextValueInLinkedList(LinkedListInfo *list_info)
 %
 %  The format of the GetNumberOfEntriesInHashmap method is:
 %
-%      unsigned long GetNumberOfEntriesInHashmap(const HashmapInfo *hashmap_info)
+%      size_t GetNumberOfEntriesInHashmap(const HashmapInfo *hashmap_info)
 %
 %  A description of each parameter follows:
 %
 %    o hashmap_info: the hashmap info.
 %
 */
-MagickExport unsigned long GetNumberOfEntriesInHashmap(
+MagickExport size_t GetNumberOfEntriesInHashmap(
   const HashmapInfo *hashmap_info)
 {
   assert(hashmap_info != (HashmapInfo *) NULL);
@@ -692,7 +692,7 @@ MagickExport unsigned long GetNumberOfEntriesInHashmap(
 %
 %  The format of the GetNumberOfElementsInLinkedList method is:
 %
-%      unsigned long GetNumberOfElementsInLinkedList(
+%      size_t GetNumberOfElementsInLinkedList(
 %        const LinkedListInfo *list_info)
 %
 %  A description of each parameter follows:
@@ -700,7 +700,7 @@ MagickExport unsigned long GetNumberOfEntriesInHashmap(
 %    o list_info: the linked-list info.
 %
 */
-MagickExport unsigned long GetNumberOfElementsInLinkedList(
+MagickExport size_t GetNumberOfElementsInLinkedList(
   const LinkedListInfo *list_info)
 {
   assert(list_info != (LinkedListInfo *) NULL);
@@ -755,7 +755,7 @@ MagickExport void *GetValueFromHashmap(HashmapInfo *hashmap_info,
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   if (key == (const void *) NULL)
     return((void *) NULL);
-  (void) LockSemaphoreInfo(hashmap_info->semaphore);
+  LockSemaphoreInfo(hashmap_info->semaphore);
   hash=hashmap_info->hash(key);
   list_info=hashmap_info->map[hash % hashmap_info->capacity];
   if (list_info != (LinkedListInfo *) NULL)
@@ -776,14 +776,14 @@ MagickExport void *GetValueFromHashmap(HashmapInfo *hashmap_info,
             if (compare == MagickTrue)
               {
                 value=entry->value;
-                (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+                UnlockSemaphoreInfo(hashmap_info->semaphore);
                 return(value);
               }
           }
         entry=(EntryInfo *) GetNextValueInLinkedList(list_info);
       }
     }
-  (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+  UnlockSemaphoreInfo(hashmap_info->semaphore);
   return((void *) NULL);
 }
 
@@ -804,7 +804,7 @@ MagickExport void *GetValueFromHashmap(HashmapInfo *hashmap_info,
 %  The format of the GetValueFromLinkedList method is:
 %
 %      void *GetValueFromLinkedList(LinkedListInfo *list_info,
-%        const unsigned long index)
+%        const size_t index)
 %
 %  A description of each parameter follows:
 %
@@ -814,12 +814,12 @@ MagickExport void *GetValueFromHashmap(HashmapInfo *hashmap_info,
 %
 */
 MagickExport void *GetValueFromLinkedList(LinkedListInfo *list_info,
-  const unsigned long index)
+  const size_t index)
 {
   register ElementInfo
     *next;
 
-  register long
+  register ssize_t
     i;
 
   void
@@ -831,24 +831,24 @@ MagickExport void *GetValueFromLinkedList(LinkedListInfo *list_info,
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   if (index >= list_info->elements)
     return((void *) NULL);
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   if (index == 0)
     {
       value=list_info->head->value;
-      (void) UnlockSemaphoreInfo(list_info->semaphore);
+      UnlockSemaphoreInfo(list_info->semaphore);
       return(value);
     }
   if (index == (list_info->elements-1))
     {
       value=list_info->tail->value;
-      (void) UnlockSemaphoreInfo(list_info->semaphore);
+      UnlockSemaphoreInfo(list_info->semaphore);
       return(value);
     }
   next=list_info->head;
-  for (i=0; i < (long) index; i++)
+  for (i=0; i < (ssize_t) index; i++)
     next=next->next;
   value=next->value;
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
   return(value);
 }
 
@@ -863,8 +863,8 @@ MagickExport void *GetValueFromLinkedList(LinkedListInfo *list_info,
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  Specify the HashPointerType() method in NewHashmap() to find an entry
-%  in a hash-map based on the address of a pointer.
+%  HashPointerType() finds an entry in a hash-map based on the address of a
+%  pointer.
 %
 %  The format of the HashPointerType method is:
 %
@@ -899,8 +899,8 @@ MagickExport size_t HashPointerType(const void *pointer)
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  Specify the HashStringType() method in NewHashmap() to find an entry
-%  in a hash-map based on the contents of a string.
+%  HashStringType() finds an entry in a hash-map based on the contents of a
+%  string.
 %
 %  The format of the HashStringType method is:
 %
@@ -916,7 +916,7 @@ MagickExport size_t HashStringType(const void *string)
   const unsigned char
     *digest;
 
-  register long
+  register ssize_t
     i;
 
   SignatureInfo
@@ -969,7 +969,7 @@ MagickExport size_t HashStringInfoType(const void *string_info)
   const unsigned char
     *digest;
 
-  register long
+  register ssize_t
     i;
 
   SignatureInfo
@@ -1006,7 +1006,7 @@ MagickExport size_t HashStringInfoType(const void *string_info)
 %  The format of the InsertValueInLinkedList method is:
 %
 %      MagickBooleanType InsertValueInLinkedList(ListInfo *list_info,
-%        const unsigned long index,const void *value)
+%        const size_t index,const void *value)
 %
 %  A description of each parameter follows:
 %
@@ -1018,12 +1018,12 @@ MagickExport size_t HashStringInfoType(const void *string_info)
 %
 */
 MagickExport MagickBooleanType InsertValueInLinkedList(
-  LinkedListInfo *list_info,const unsigned long index,const void *value)
+  LinkedListInfo *list_info,const size_t index,const void *value)
 {
   register ElementInfo
     *next;
 
-  register long
+  register ssize_t
     i;
 
   assert(list_info != (LinkedListInfo *) NULL);
@@ -1040,7 +1040,7 @@ MagickExport MagickBooleanType InsertValueInLinkedList(
     return(MagickFalse);
   next->value=(void *) value;
   next->next=(ElementInfo *) NULL;
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   if (list_info->elements == 0)
     {
       if (list_info->next == (ElementInfo *) NULL)
@@ -1072,7 +1072,7 @@ MagickExport MagickBooleanType InsertValueInLinkedList(
 
             element=list_info->head;
             next->next=element->next;
-            for (i=1; i < (long) index; i++)
+            for (i=1; i < (ssize_t) index; i++)
             {
               element=element->next;
               next->next=element->next;
@@ -1084,7 +1084,7 @@ MagickExport MagickBooleanType InsertValueInLinkedList(
           }
     }
   list_info->elements++;
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
   return(MagickTrue);
 }
 
@@ -1130,7 +1130,7 @@ MagickExport MagickBooleanType InsertValueInSortedLinkedList(
   register ElementInfo
     *next;
 
-  register long
+  register ssize_t
     i;
 
   assert(list_info != (LinkedListInfo *) NULL);
@@ -1147,11 +1147,11 @@ MagickExport MagickBooleanType InsertValueInSortedLinkedList(
     return(MagickFalse);
   next->value=(void *) value;
   element=(ElementInfo *) NULL;
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   next->next=list_info->head;
   while (next->next != (ElementInfo *) NULL)
   {
-    i=compare(value,next->next->value);
+    i=(ssize_t) compare(value,next->next->value);
     if ((i < 0) || ((replace != (void **) NULL) && (i == 0)))
       {
         if (i == 0)
@@ -1181,7 +1181,7 @@ MagickExport MagickBooleanType InsertValueInSortedLinkedList(
       list_info->tail=next;
     }
   list_info->elements++;
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
   return(MagickTrue);
 }
 
@@ -1279,7 +1279,7 @@ MagickExport MagickBooleanType LinkedListToArray(LinkedListInfo *list_info,
   register ElementInfo
     *next;
 
-  register long
+  register ssize_t
     i;
 
   assert(list_info != (LinkedListInfo *) NULL);
@@ -1288,14 +1288,14 @@ MagickExport MagickBooleanType LinkedListToArray(LinkedListInfo *list_info,
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   if (array == (void **) NULL)
     return(MagickFalse);
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   next=list_info->head;
   for (i=0; next != (ElementInfo *) NULL; i++)
   {
     array[i]=next->value;
     next=next->next;
   }
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
   return(MagickTrue);
 }
 
@@ -1316,7 +1316,7 @@ MagickExport MagickBooleanType LinkedListToArray(LinkedListInfo *list_info,
 %
 %  The format of the NewHashmap method is:
 %
-%      HashmapInfo *NewHashmap(const unsigned long capacity,
+%      HashmapInfo *NewHashmap(const size_t capacity,
 %        size_t (*hash)(const void *),
 %        MagickBooleanType (*compare)(const void *,const void *),
 %        void *(*relinquish_key)(void *),void *(*relinquish_value)(void *))
@@ -1342,7 +1342,7 @@ MagickExport MagickBooleanType LinkedListToArray(LinkedListInfo *list_info,
 %      the hash-map.
 %
 */
-MagickExport HashmapInfo *NewHashmap(const unsigned long capacity,
+MagickExport HashmapInfo *NewHashmap(const size_t capacity,
   size_t (*hash)(const void *),
   MagickBooleanType (*compare)(const void *,const void *),
   void *(*relinquish_key)(void *),void *(*relinquish_value)(void *))
@@ -1394,14 +1394,14 @@ MagickExport HashmapInfo *NewHashmap(const unsigned long capacity,
 %
 %  The format of the NewLinkedList method is:
 %
-%      LinkedListInfo *NewLinkedList(const unsigned long capacity)
+%      LinkedListInfo *NewLinkedList(const size_t capacity)
 %
 %  A description of each parameter follows:
 %
 %    o capacity: the maximum number of elements in the list.
 %
 */
-MagickExport LinkedListInfo *NewLinkedList(const unsigned long capacity)
+MagickExport LinkedListInfo *NewLinkedList(const size_t capacity)
 {
   LinkedListInfo
     *list_info;
@@ -1410,7 +1410,7 @@ MagickExport LinkedListInfo *NewLinkedList(const unsigned long capacity)
   if (list_info == (LinkedListInfo *) NULL)
     ThrowFatalException(ResourceLimitFatalError,"MemoryAllocationFailed");
   (void) ResetMagickMemory(list_info,0,sizeof(*list_info));
-  list_info->capacity=capacity == 0 ? (unsigned long) (~0) : capacity;
+  list_info->capacity=capacity == 0 ? (size_t) (~0) : capacity;
   list_info->elements=0;
   list_info->head=(ElementInfo *) NULL;
   list_info->tail=(ElementInfo *) NULL;
@@ -1454,7 +1454,7 @@ static MagickBooleanType IncreaseHashmapCapacity(HashmapInfo *hashmap_info)
 {
 #define MaxCapacities  20
 
-  const unsigned long
+  const size_t
     capacities[MaxCapacities] =
     {
       17, 31, 61, 131, 257, 509, 1021, 2053, 4099, 8191, 16381, 32771,
@@ -1475,10 +1475,10 @@ static MagickBooleanType IncreaseHashmapCapacity(HashmapInfo *hashmap_info)
   register ElementInfo
     *next;
 
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     capacity;
 
   /*
@@ -1498,12 +1498,12 @@ static MagickBooleanType IncreaseHashmapCapacity(HashmapInfo *hashmap_info)
   /*
     Copy entries to new hashmap with increased capacity.
   */
-  for (i=0; i < (long) hashmap_info->capacity; i++)
+  for (i=0; i < (ssize_t) hashmap_info->capacity; i++)
   {
     list_info=hashmap_info->map[i];
     if (list_info == (LinkedListInfo *) NULL)
       continue;
-    (void) LockSemaphoreInfo(list_info->semaphore);
+    LockSemaphoreInfo(list_info->semaphore);
     for (next=list_info->head; next != (ElementInfo *) NULL; )
     {
       element=next;
@@ -1521,7 +1521,7 @@ static MagickBooleanType IncreaseHashmapCapacity(HashmapInfo *hashmap_info)
       map_info->elements++;
     }
     list_info->signature=(~MagickSignature);
-    (void) UnlockSemaphoreInfo(list_info->semaphore);
+    UnlockSemaphoreInfo(list_info->semaphore);
     DestroySemaphoreInfo(&list_info->semaphore);
     list_info=(LinkedListInfo *) RelinquishMagickMemory(list_info);
   }
@@ -1542,7 +1542,7 @@ MagickExport MagickBooleanType PutEntryInHashmap(HashmapInfo *hashmap_info,
   LinkedListInfo
     *list_info;
 
-  register unsigned long
+  register size_t
     i;
 
   assert(hashmap_info != (HashmapInfo *) NULL);
@@ -1554,7 +1554,7 @@ MagickExport MagickBooleanType PutEntryInHashmap(HashmapInfo *hashmap_info,
   next=(EntryInfo *) AcquireMagickMemory(sizeof(*next));
   if (next == (EntryInfo *) NULL)
     return(MagickFalse);
-  (void) LockSemaphoreInfo(hashmap_info->semaphore);
+  LockSemaphoreInfo(hashmap_info->semaphore);
   next->hash=hashmap_info->hash(key);
   next->key=(void *) key;
   next->value=(void *) value;
@@ -1596,17 +1596,17 @@ MagickExport MagickBooleanType PutEntryInHashmap(HashmapInfo *hashmap_info,
   if (InsertValueInLinkedList(list_info,0,next) == MagickFalse)
     {
       next=(EntryInfo *) RelinquishMagickMemory(next);
-      (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+      UnlockSemaphoreInfo(hashmap_info->semaphore);
       return(MagickFalse);
     }
   if (list_info->elements >= (hashmap_info->capacity-1))
     if (IncreaseHashmapCapacity(hashmap_info) == MagickFalse)
       {
-        (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+        UnlockSemaphoreInfo(hashmap_info->semaphore);
         return(MagickFalse);
       }
   hashmap_info->entries++;
-  (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+  UnlockSemaphoreInfo(hashmap_info->semaphore);
   return(MagickTrue);
 }
 
@@ -1648,7 +1648,7 @@ MagickExport void *RemoveElementByValueFromLinkedList(LinkedListInfo *list_info,
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   if ((list_info->elements == 0) || (value == (const void *) NULL))
     return((void *) NULL);
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   if (value == list_info->head->value)
     {
       if (list_info->next == list_info->head)
@@ -1668,7 +1668,7 @@ MagickExport void *RemoveElementByValueFromLinkedList(LinkedListInfo *list_info,
         next=next->next;
       if (next->next == (ElementInfo *) NULL)
         {
-          (void) UnlockSemaphoreInfo(list_info->semaphore);
+          UnlockSemaphoreInfo(list_info->semaphore);
           return((void *) NULL);
         }
       element=next->next;
@@ -1680,7 +1680,7 @@ MagickExport void *RemoveElementByValueFromLinkedList(LinkedListInfo *list_info,
       element=(ElementInfo *) RelinquishMagickMemory(element);
     }
   list_info->elements--;
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
   return((void *) value);
 }
 
@@ -1701,7 +1701,7 @@ MagickExport void *RemoveElementByValueFromLinkedList(LinkedListInfo *list_info,
 %  The format of the RemoveElementFromLinkedList method is:
 %
 %      void *RemoveElementFromLinkedList(LinkedListInfo *list_info,
-%        const unsigned long index)
+%        const size_t index)
 %
 %  A description of each parameter follows:
 %
@@ -1711,12 +1711,12 @@ MagickExport void *RemoveElementByValueFromLinkedList(LinkedListInfo *list_info,
 %
 */
 MagickExport void *RemoveElementFromLinkedList(LinkedListInfo *list_info,
-  const unsigned long index)
+  const size_t index)
 {
   ElementInfo
     *next;
 
-  register long
+  register ssize_t
     i;
 
   void
@@ -1728,7 +1728,7 @@ MagickExport void *RemoveElementFromLinkedList(LinkedListInfo *list_info,
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   if (index >= list_info->elements)
     return((void *) NULL);
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   if (index == 0)
     {
       if (list_info->next == list_info->head)
@@ -1744,7 +1744,7 @@ MagickExport void *RemoveElementFromLinkedList(LinkedListInfo *list_info,
         *element;
 
       next=list_info->head;
-      for (i=1; i < (long) index; i++)
+      for (i=1; i < (ssize_t) index; i++)
         next=next->next;
       element=next->next;
       next->next=element->next;
@@ -1756,7 +1756,7 @@ MagickExport void *RemoveElementFromLinkedList(LinkedListInfo *list_info,
       element=(ElementInfo *) RelinquishMagickMemory(element);
     }
   list_info->elements--;
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
   return(value);
 }
 
@@ -1793,7 +1793,7 @@ MagickExport void *RemoveEntryFromHashmap(HashmapInfo *hashmap_info,
   LinkedListInfo
     *list_info;
 
-  register unsigned long
+  register size_t
     i;
 
   size_t
@@ -1808,7 +1808,7 @@ MagickExport void *RemoveEntryFromHashmap(HashmapInfo *hashmap_info,
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   if (key == (const void *) NULL)
     return((void *) NULL);
-  (void) LockSemaphoreInfo(hashmap_info->semaphore);
+  LockSemaphoreInfo(hashmap_info->semaphore);
   hash=hashmap_info->hash(key);
   list_info=hashmap_info->map[hash % hashmap_info->capacity];
   if (list_info != (LinkedListInfo *) NULL)
@@ -1831,7 +1831,7 @@ MagickExport void *RemoveEntryFromHashmap(HashmapInfo *hashmap_info,
                 entry=(EntryInfo *) RemoveElementFromLinkedList(list_info,i);
                 if (entry == (EntryInfo *) NULL)
                   {
-                    (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+                    UnlockSemaphoreInfo(hashmap_info->semaphore);
                     return((void *) NULL);
                   }
                 if (hashmap_info->relinquish_key != (void *(*)(void *)) NULL)
@@ -1839,14 +1839,14 @@ MagickExport void *RemoveEntryFromHashmap(HashmapInfo *hashmap_info,
                 value=entry->value;
                 entry=(EntryInfo *) RelinquishMagickMemory(entry);
                 hashmap_info->entries--;
-                (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+                UnlockSemaphoreInfo(hashmap_info->semaphore);
                 return(value);
               }
           }
         entry=(EntryInfo *) GetNextValueInLinkedList(list_info);
       }
     }
-  (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+  UnlockSemaphoreInfo(hashmap_info->semaphore);
   return((void *) NULL);
 }
 
@@ -1884,7 +1884,7 @@ MagickExport void *RemoveLastElementFromLinkedList(LinkedListInfo *list_info)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   if (list_info->elements == 0)
     return((void *) NULL);
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   if (list_info->next == list_info->tail)
     list_info->next=(ElementInfo *) NULL;
   if (list_info->elements == 1UL)
@@ -1907,7 +1907,7 @@ MagickExport void *RemoveLastElementFromLinkedList(LinkedListInfo *list_info)
       next->next=(ElementInfo *) NULL;
     }
   list_info->elements--;
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
   return(value);
 }
 
@@ -1940,10 +1940,10 @@ MagickExport void ResetHashmapIterator(HashmapInfo *hashmap_info)
   assert(hashmap_info->signature == MagickSignature);
   if (hashmap_info->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  (void) LockSemaphoreInfo(hashmap_info->semaphore);
+  LockSemaphoreInfo(hashmap_info->semaphore);
   hashmap_info->next=0;
   hashmap_info->head_of_list=MagickFalse;
-  (void) UnlockSemaphoreInfo(hashmap_info->semaphore);
+  UnlockSemaphoreInfo(hashmap_info->semaphore);
 }
 
 /*
@@ -1976,7 +1976,7 @@ MagickExport void ResetLinkedListIterator(LinkedListInfo *list_info)
   assert(list_info->signature == MagickSignature);
   if (list_info->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  (void) LockSemaphoreInfo(list_info->semaphore);
+  LockSemaphoreInfo(list_info->semaphore);
   list_info->next=list_info->head;
-  (void) UnlockSemaphoreInfo(list_info->semaphore);
+  UnlockSemaphoreInfo(list_info->semaphore);
 }

@@ -1,103 +1,143 @@
 /*
- *
- * Test program for C drawing API
- * Written by Bob Friesenhahn
- *
- */
-
-#if !defined(_VISUALC_)
-#include <magick/magick-config.h>
-#endif
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%                         DDDD   RRRR    AAA   W   W                          %
+%                         D   D  R   R  A   A  W   W                          %
+%                         D   D  RRRR   AAAAA  W   W                          %
+%                         D   D  R R    A   A  W W W                          %
+%                         DDDD   R  R   A   A   W W                           %
+%                                                                             %
+%                         TTTTT  EEEEE  SSSSS  TTTTT                          %
+%                           T    E      SS       T                            %
+%                           T    EEE     SSS     T                            %
+%                           T    E         SS    T                            %
+%                           T    EEEEE  SSSSS    T                            %
+%                                                                             %
+%                                                                             %
+%                         MagickWand Drawing Tests                            %
+%                                                                             %
+%                              Software Design                                %
+%                                John Cristy                                  %
+%                              Bob Friesenhahn                                %
+%                                March 2002                                   %
+%                                                                             %
+%                                                                             %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
+%  dedicated to making software imaging solutions freely available.           %
+%                                                                             %
+%  You may not use this file except in compliance with the License.  You may  %
+%  obtain a copy of the License at                                            %
+%                                                                             %
+%    http://www.imagemagick.org/script/license.php                            %
+%                                                                             %
+%  Unless required by applicable law or agreed to in writing, software        %
+%  distributed under the License is distributed on an "AS IS" BASIS,          %
+%  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.   %
+%  See the License for the specific language governing permissions and        %
+%  limitations under the License.                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%
+%
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#if defined(_VISUALC_)
-#include <stdlib.h>
-#include <sys\types.h>
-#endif
-#include <time.h>
 #include <wand/MagickWand.h>
 
-static void ScribbleImage (Image *image)
+#define ThrowWandException(wand) \
+{ \
+  char \
+    *description; \
+ \
+  ExceptionType \
+    severity; \
+ \
+  description=MagickGetException(wand,&severity); \
+  (void) FormatLocaleFile(stderr,"%s %s %lu %s\n",GetMagickModule(), \
+    description); \
+  description=(char *) MagickRelinquishMemory(description); \
+  exit(-1); \
+}
+
+static MagickBooleanType ScribbleImage (MagickWand *canvas)
 {
   DrawingWand
-    *draw_wand;
+    *picasso;
 
   PixelWand
     *color;
 
-  draw_wand=DrawAllocateWand((DrawInfo*) NULL,image);
+  picasso=NewDrawingWand();
   color=NewPixelWand();
-  (void) PushDrawingWand(draw_wand);
+  (void) PushDrawingWand(picasso);
   {
-    DrawSetViewbox(draw_wand,0,0,image->columns,image->rows);
-    DrawScale(draw_wand,1.101,1.08);
-    DrawTranslate(draw_wand,-23.69,-22.97);
-    DrawRotate(draw_wand,0);
+    DrawSetViewbox(picasso,0,0,(ssize_t) MagickGetImageWidth(canvas),
+      (ssize_t) MagickGetImageHeight(canvas));
+    DrawScale(picasso,1.101,1.08);
+    DrawTranslate(picasso,-23.69,-22.97);
+    DrawRotate(picasso,0);
     (void) PixelSetColor(color,"#ffffff");
-    DrawSetFillColor(draw_wand,color);
-    DrawRectangle(draw_wand,23.69,22.97,564.6,802.2);
-    DrawSetFillAlpha(draw_wand,1.0);
+    DrawSetFillColor(picasso,color);
+    DrawRectangle(picasso,23.69,22.97,564.6,802.2);
+    DrawSetFillOpacity(picasso,1.0);
     (void) PixelSetColor(color,"none");
-    DrawSetFillColor(draw_wand,color);
-    DrawSetStrokeColor(draw_wand,color);
-
-    DrawSetStrokeAntialias(draw_wand,MagickTrue);
-    DrawSetStrokeLineCap(draw_wand,RoundCap);
-    DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-
-    DrawPushDefs(draw_wand);
+    DrawSetFillColor(picasso,color);
+    DrawSetStrokeColor(picasso,color);
+    DrawSetStrokeAntialias(picasso,MagickTrue);
+    DrawSetStrokeLineCap(picasso,RoundCap);
+    DrawSetStrokeLineJoin(picasso,RoundJoin);
+    DrawPushDefs(picasso);
     {
-      DrawPushClipPath(draw_wand,"clip_1");
+      DrawPushClipPath(picasso,"clip_1");
       {
-        (void) PushDrawingWand(draw_wand);
+        (void) PushDrawingWand(picasso);
         {
-          DrawRectangle(draw_wand,0,0,595.3,841.9);
+          DrawRectangle(picasso,0,0,595.3,841.9);
         }
-        (void) PopDrawingWand(draw_wand);
+        (void) PopDrawingWand(picasso);
       }
-      DrawPopClipPath(draw_wand);
+      DrawPopClipPath(picasso);
     }
-    DrawPopDefs(draw_wand);
-    
-    (void) PushDrawingWand(draw_wand);
+    DrawPopDefs(picasso);
+    (void) PushDrawingWand(picasso);
     {
-      (void) DrawSetClipPath(draw_wand, "url(#clip_1)");
-      
-      (void) PushDrawingWand(draw_wand);
+      (void) DrawSetClipPath(picasso, "url(#clip_1)");
+
+      (void) PushDrawingWand(picasso);
       {
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,4.032);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,4.032);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#ff0000");
-        DrawSetStrokeColor(draw_wand,color);
-        DrawSetFillRule(draw_wand,EvenOddRule);
+        DrawSetStrokeColor(picasso,color);
+        DrawSetFillRule(picasso,EvenOddRule);
         (void) PixelSetColor(color,"#ff00ff");
-        DrawSetFillColor(draw_wand,color);
-        DrawRectangle(draw_wand,72,72,144,144);
+        DrawSetFillColor(picasso,color);
+        DrawRectangle(picasso,72,72,144,144);
       }
-      (void) PopDrawingWand(draw_wand);
-      
-      (void) PushDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
+      (void) PushDrawingWand(picasso);
       {
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,9);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,9);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#00ff00");
-        DrawSetStrokeColor(draw_wand,color);
-        DrawSetFillRule(draw_wand,EvenOddRule);
+        DrawSetStrokeColor(picasso,color);
+        DrawSetFillRule(picasso,EvenOddRule);
         (void) PixelSetColor(color,"#0080ff");
-        DrawSetFillColor(draw_wand,color);
-        DrawRoundRectangle(draw_wand,72,216,360,432,9,9);
+        DrawSetFillColor(picasso,color);
+        DrawRoundRectangle(picasso,72,216,360,432,9,9);
       }
-      (void) PopDrawingWand(draw_wand);
-      
-      (void) PushDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
+      (void) PushDrawingWand(picasso);
       {
         const PointInfo points[37] =
         {
@@ -112,38 +152,36 @@ static void ScribbleImage (Image *image)
           { 346,114.8 },   { 347.1,111.5 }, { 348.9,108.5 }, { 351.4,105.8 },
           { 378.1,81.72 }
         };
-        
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,2.016);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,2.016);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#000080");
-        DrawSetStrokeColor(draw_wand,color);
-        DrawSetFillRule(draw_wand,EvenOddRule);
+        DrawSetStrokeColor(picasso,color);
+        DrawSetFillRule(picasso,EvenOddRule);
         (void) PixelSetColor(color,"#c2c280");
-        DrawSetFillColor(draw_wand,color);
-        DrawPolygon(draw_wand,37,points);
+        DrawSetFillColor(picasso,color);
+        DrawPolygon(picasso,37,points);
       }
-      (void) PopDrawingWand(draw_wand);
-      
-      (void) PushDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
+      (void) PushDrawingWand(picasso);
       {
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,3.024);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,3.024);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#000080");
-        DrawSetStrokeColor(draw_wand,color);
-        DrawSetFillRule(draw_wand,EvenOddRule);
+        DrawSetStrokeColor(picasso,color);
+        DrawSetFillRule(picasso,EvenOddRule);
         (void) PixelSetColor(color,"#000080");
-        DrawSetFillColor(draw_wand,color);
-        DrawEllipse(draw_wand,489.6,424.8,72,129.6,0,360);
+        DrawSetFillColor(picasso,color);
+        DrawEllipse(picasso,489.6,424.8,72,129.6,0,360);
       }
-      (void) PopDrawingWand(draw_wand);
-      
-      (void) PushDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
+      (void) PushDrawingWand(picasso);
       {
         const PointInfo points[48] =
         {
@@ -160,75 +198,71 @@ static void ScribbleImage (Image *image)
           { 204,55.3 },    { 204.3,44.35 }, { 204.9,39.6 },  { 205.9,35.42 },
           { 207.4,31.82 }, { 209.2,28.87 }, { 211.3,26.64},  { 213.8,25.13 }
         };
-        
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,3.024);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,3.024);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#ff8000");
-        DrawSetStrokeColor(draw_wand,color);
-        DrawSetFillRule(draw_wand,EvenOddRule);
+        DrawSetStrokeColor(picasso,color);
+        DrawSetFillRule(picasso,EvenOddRule);
         (void) PixelSetColor(color,"#00ffff");
-        DrawSetFillColor(draw_wand,color);
-        DrawPolygon(draw_wand,48,points);
+        DrawSetFillColor(picasso,color);
+        DrawPolygon(picasso,48,points);
       }
-      (void) PopDrawingWand(draw_wand);
-      
-      (void) PushDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
+      (void) PushDrawingWand(picasso);
       {
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,12.02);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,12.02);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#4000c2");
-        DrawSetStrokeColor(draw_wand,color);
+        DrawSetStrokeColor(picasso,color);
         (void) PixelSetColor(color,"none");
-        DrawSetFillColor(draw_wand,color);
-        DrawArc(draw_wand,360,554.4,187.2,237.6,0,90);
+        DrawSetFillColor(picasso,color);
+        DrawArc(picasso,360,554.4,187.2,237.6,0,90);
       }
-      (void) PopDrawingWand(draw_wand);
-
-      (void) PushDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
+      (void) PushDrawingWand(picasso);
       {
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,9);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,9);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#4000c2");
-        DrawSetStrokeColor(draw_wand,color);
-        DrawSetFillRule(draw_wand,EvenOddRule);
+        DrawSetStrokeColor(picasso,color);
+        DrawSetFillRule(picasso,EvenOddRule);
         (void) PixelSetColor(color,"#4000c2");
-        DrawSetFillColor(draw_wand,color);
-        DrawEllipse(draw_wand,388.8,626.4,100.8,122.4,0,90);
+        DrawSetFillColor(picasso,color);
+        DrawEllipse(picasso,388.8,626.4,100.8,122.4,0,90);
       }
-      (void) PopDrawingWand(draw_wand);
-
-      (void) PushDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
+      (void) PushDrawingWand(picasso);
       {
         const PointInfo points[6] =
         {
           { 180,504 }, { 282.7,578.6 }, { 243.5,699.4 }, { 116.5,699.4 },
           { 77.26,578.6 }, { 180,504 }
         };
-        
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,9);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,9);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#4000c2");
-        DrawSetStrokeColor(draw_wand,color);
-        DrawSetFillRule(draw_wand,EvenOddRule);
+        DrawSetStrokeColor(picasso,color);
+        DrawSetFillRule(picasso,EvenOddRule);
         (void) PixelSetColor(color,"#800000");
-        DrawSetFillColor(draw_wand,color);
-        DrawPolygon(draw_wand,6,points);
+        DrawSetFillColor(picasso,color);
+        DrawPolygon(picasso,6,points);
       }
-      (void) PopDrawingWand(draw_wand);
-      
-      (void) PushDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
+      (void) PushDrawingWand(picasso);
       {
         const PointInfo points[11] =
         {
@@ -236,22 +270,21 @@ static void ScribbleImage (Image *image)
           { 243.5,699.4 }, { 180,666 },     { 116.5,699.4 }, { 128.7,628.7 },
           { 77.26,578.6 }, { 148.2,568.3 }, { 180,504 }
         };
-        
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,9);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,9);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#4000c2");
-        DrawSetStrokeColor(draw_wand,color);
-        DrawSetFillRule(draw_wand,EvenOddRule);
+        DrawSetStrokeColor(picasso,color);
+        DrawSetFillRule(picasso,EvenOddRule);
         (void) PixelSetColor(color,"#800000");
-        DrawSetFillColor(draw_wand,color);
-        DrawPolygon(draw_wand,11,points);
+        DrawSetFillColor(picasso,color);
+        DrawPolygon(picasso,11,points);
       }
-      (void) PopDrawingWand(draw_wand);
-      
-      (void) PushDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
+      (void) PushDrawingWand(picasso);
       {
         const PointInfo points[15] =
         {
@@ -260,44 +293,42 @@ static void ScribbleImage (Image *image)
           { 525.6,93.6 },  { 496.8,158.4 }, { 532.8,136.8 }, { 518.4,180 },
           { 540,172.8 },   { 540,223.2 },   { 540,288 }
         };
-        
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,5.976);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,5.976);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#4000c2");
-        DrawSetStrokeColor(draw_wand,color);
-        DrawSetFillRule(draw_wand,EvenOddRule);
+        DrawSetStrokeColor(picasso,color);
+        DrawSetFillRule(picasso,EvenOddRule);
         (void) PixelSetColor(color,"#ffff00");
-        DrawSetFillColor(draw_wand,color);
-        DrawPolygon(draw_wand,15,points);
+        DrawSetFillColor(picasso,color);
+        DrawPolygon(picasso,15,points);
       }
-      (void) PopDrawingWand(draw_wand);
-      
-      (void) PushDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
+      (void) PushDrawingWand(picasso);
       {
         const PointInfo points[7] =
         {
           { 57.6,640.8 }, { 57.6,784.8 }, { 194.4,799.2 }, { 259.2,777.6 },
           { 151.2,756 }, { 86.4,748.8 }, { 57.6,640.8 }
         };
-        
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,5.976);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,5.976);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#4000c2");
-        DrawSetStrokeColor(draw_wand,color);
-        DrawSetFillRule(draw_wand,EvenOddRule);
+        DrawSetStrokeColor(picasso,color);
+        DrawSetFillRule(picasso,EvenOddRule);
         (void) PixelSetColor(color,"#ffff00");
-        DrawSetFillColor(draw_wand,color);
-        DrawPolygon(draw_wand,7,points);
+        DrawSetFillColor(picasso,color);
+        DrawPolygon(picasso,7,points);
       }
-      (void) PopDrawingWand(draw_wand);
-      
-      (void) PushDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
+      (void) PushDrawingWand(picasso);
       {
         const PointInfo points[193] =
         {
@@ -315,7 +346,7 @@ static void ScribbleImage (Image *image)
           { 428,531.2 },   { 434.6,532.9 }, { 436.7,533.8 }, { 437.8,534.9 },
           { 437.8,536.2 }, { 436.8,537.8 }, { 434.5,539.6 }, { 430.9,541.8 },
           { 419.3,547.6 }, { 401.3,555.2 }, { 342.4,577.9 }, {325.2,584.9 },
-          { 311,591.3 },   { 300,597.3 },   { 291.6,602.8 }, { 285.8,607.8 }, 
+          { 311,591.3 },   { 300,597.3 },   { 291.6,602.8 }, { 285.8,607.8 },
           { 282.3,612.3 }, { 281.4,614.4 }, { 280.9,616.2 }, { 281.2,619.6 },
           { 282.1,621.2 }, { 283.3,622.6 }, { 286.8,624.9 }, { 291.5,626.6 },
           { 297.1,627.8 }, { 303.6,628.3 }, { 310.5,628.3 }, { 317.9,627.6 },
@@ -351,84 +382,83 @@ static void ScribbleImage (Image *image)
           { 27.86,597.4 }, { 27.29,595.2 }, { 26.64,588.7 }, { 26.86,578.8 },
           { 27.86,565.3 }
         };
-        
-        DrawSetStrokeAntialias(draw_wand,MagickTrue);
-        DrawSetStrokeWidth(draw_wand,5.904);
-        DrawSetStrokeLineCap(draw_wand,RoundCap);
-        DrawSetStrokeLineJoin(draw_wand,RoundJoin);
-        (void) DrawSetStrokeDashArray(draw_wand,0,(const double *)NULL);
+
+        DrawSetStrokeAntialias(picasso,MagickTrue);
+        DrawSetStrokeWidth(picasso,5.904);
+        DrawSetStrokeLineCap(picasso,RoundCap);
+        DrawSetStrokeLineJoin(picasso,RoundJoin);
+        (void) DrawSetStrokeDashArray(picasso,0,(const double *)NULL);
         (void) PixelSetColor(color,"#4000c2");
-        DrawSetStrokeColor(draw_wand,color);
-        DrawSetFillRule(draw_wand,EvenOddRule);
+        DrawSetStrokeColor(picasso,color);
+        DrawSetFillRule(picasso,EvenOddRule);
         (void) PixelSetColor(color,"#ffff00");
-        DrawSetFillColor(draw_wand,color);
-        DrawPolygon(draw_wand,193,points);
+        DrawSetFillColor(picasso,color);
+        DrawPolygon(picasso,193,points);
       }
-      (void) PopDrawingWand(draw_wand);
+      (void) PopDrawingWand(picasso);
     }
-    (void) PopDrawingWand(draw_wand);
+    (void) PopDrawingWand(picasso);
   }
-  (void) PopDrawingWand(draw_wand);
-  (void) DrawRender(draw_wand);
+  (void) PopDrawingWand(picasso);
+  (void) MagickDrawImage(canvas,picasso);
   color=DestroyPixelWand(color);
-  draw_wand=DestroyDrawingWand(draw_wand);
+  picasso=DestroyDrawingWand(picasso);
+  return(MagickTrue);
 }
 
-int main ( int argc, char **argv )
+int main(int argc,char **argv)
 {
-  Image *canvas = (Image *)NULL;
-  char outfile[MaxTextExtent];
-  int rows, columns = 0;
-  char size[MaxTextExtent];
-  ImageInfo *image_info;
-  ExceptionInfo *exception;
+  char
+    filename[MaxTextExtent];
 
-  if ( argc != 2 )
+  MagickBooleanType
+    status;
+
+  MagickWand
+    *canvas;
+
+  if (argc != 2)
     {
-      (void) printf ( "Usage: %s filename\n", argv[0] );
-      exit( 1 );
-    }
-
-  (void) CopyMagickString( outfile, argv[1], MaxTextExtent );
-
-  if (LocaleNCompare("drawtest",argv[0],7) == 0)
-    MagickCoreGenesis((char *) NULL,MagickTrue);
-  else
-    MagickCoreGenesis(*argv,MagickTrue);
-
-  /*
-   * Create canvas image
-   */
-  columns=596;
-  rows=842;
-  image_info=CloneImageInfo((ImageInfo*) NULL);
-  exception=AcquireExceptionInfo();
-  (void) FormatMagickString(size, MaxTextExtent, "%dx%d", columns, rows);
-  (void) CloneString(&image_info->size,size);
-  (void) CopyMagickString(image_info->filename,"xc:white",MaxTextExtent);
-  canvas=ReadImage(image_info,exception );
-  if (exception->severity >= ErrorException)
-    CatchException(exception);
-  if ( canvas == (Image *)NULL )
-    {
-      (void) printf ( "Failed to read canvas image %s\n",image_info->filename);
+      (void) printf ("Usage: %s filename\n",argv[0]);
       exit(1);
     }
-
+  (void) CopyMagickString(filename,argv[1],MaxTextExtent);
   /*
-   * Scribble on image
-   */
-  ScribbleImage( canvas );
-
+    Create canvas image.
+  */
+  MagickWandGenesis();
+  canvas=NewMagickWand();
+  status=MagickSetSize(canvas,596,842);
+  if (status == MagickFalse)
+    ThrowWandException(canvas);
+  status=MagickReadImage(canvas,"xc:white");
+  if (status == MagickFalse)
+    ThrowWandException(canvas);
   /*
-   * Save image to file
-   */
-  (void) CopyMagickString(canvas->filename,outfile,MaxTextExtent);
-  (void) WriteImage ( image_info, canvas );
-
-  exception=DestroyExceptionInfo(exception);
-   canvas =DestroyImage( canvas );
-   image_info =DestroyImageInfo( image_info );
-  MagickCoreTerminus();
-  return 0;
+    Scribble on image.
+  */
+  status=ScribbleImage(canvas);
+  if (status == MagickFalse)
+    ThrowWandException(canvas);
+  /*
+    Set pixel depth to 8.
+  */
+  status=MagickSetImageDepth(canvas,8);
+  if (status == MagickFalse)
+    ThrowWandException(canvas);
+  /*
+    Set RLE compression.
+  */
+  status=MagickSetImageCompression(canvas,RLECompression);
+  if (status == MagickFalse)
+    ThrowWandException(canvas);
+  /*
+    Save image to file.
+  */
+  status=MagickWriteImage(canvas,filename);
+  if (status == MagickFalse)
+    ThrowWandException(canvas);
+  canvas=DestroyMagickWand(canvas);
+  MagickWandTerminus();
+  return(0);
 }

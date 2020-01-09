@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
 
   You may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ extern "C" {
 
 typedef struct
 {
-  unsigned long
+  int
     code_mask,
     code_value,
     utf_mask,
@@ -48,25 +48,66 @@ static UTFInfo
     { 0xFE, 0xFC, 0x7ffffff, 0x4000000 },  /* 6 byte sequence */
   };
 
-static inline unsigned long GetNextUTFCode(const char *text,size_t *octets)
+static inline unsigned char *ConvertLatin1ToUTF8(const unsigned char *content)
 {
-  register long
+  register const unsigned char
+    *p;
+
+  register unsigned char
+    *q;
+
+  size_t
+    length;
+
+  unsigned char
+    *utf8;
+
+  unsigned int
+    c;
+
+  length=0;
+  for (p=content; *p != '\0'; p++)
+    length+=(*p & 0x80) != 0 ? 2 : 1;
+  utf8=(unsigned char *) NULL;
+  if (~length >= 1)
+    utf8=(unsigned char *) AcquireQuantumMemory(length+1UL,sizeof(*utf8));
+  if (utf8 == (unsigned char *) NULL)
+    return((unsigned char *) NULL);
+  q=utf8;
+  for (p=content; *p != '\0'; p++)
+  {
+    c=(*p);
+    if ((c & 0x80) == 0)
+      *q++=c;
+    else
+      {
+        *q++=0xc0 | ((c >> 6) & 0x3f);
+        *q++=0x80 | (c & 0x3f);
+      }
+  }
+  *q='\0';
+  return(utf8);
+}
+
+static inline int GetNextUTFCode(const char *text,unsigned int *octets)
+{
+  int
+    code;
+
+  register ssize_t
     i;
 
-  register unsigned long
+  register int
     c,
     unicode;
 
-  unsigned long
-    code;
-
-  *octets=0;
+  *octets=1;
   if (text == (const char *) NULL)
     {
       errno=EINVAL;
-      return(0);
+      return(-1);
     }
-  code=(unsigned long) (*text++) & 0xff;
+  code=(int) (*text++) & 0xff;
   unicode=code;
   for (i=0; i < MaxMultibyteCodes; i++)
   {
@@ -76,41 +117,41 @@ static inline unsigned long GetNextUTFCode(const char *text,size_t *octets)
         if (unicode < utf_info[i].utf_value)
           {
             errno=EILSEQ;
-            return(0);
+            return(-1);
           }
-        *octets=(size_t) (i+1);
+        *octets=(unsigned int) (i+1);
         return(unicode);
       }
-    c=(unsigned long) (*text++ ^ 0x80) & 0xff;
+    c=(int) (*text++ ^ 0x80) & 0xff;
     if ((c & 0xc0) != 0)
       {
         errno=EILSEQ;
-        return(0);
+        return(-1);
       }
     unicode=(unicode << 6) | c;
   }
   errno=EILSEQ;
-  return(0);
+  return(-1);
 }
 
-static unsigned long GetUTFCode(const char *text)
+static inline int GetUTFCode(const char *text)
 {
-  size_t
+  unsigned int
     octets;
 
   return(GetNextUTFCode(text,&octets));
 }
 
-static size_t GetUTFOctets(const char *text)
+static inline unsigned int GetUTFOctets(const char *text)
 {
-  size_t
+  unsigned int
     octets;
 
   (void) GetNextUTFCode(text,&octets);
   return(octets);
 }
 
-static inline MagickBooleanType IsUTFSpace(unsigned long code)
+static inline MagickBooleanType IsUTFSpace(int code)
 {
   if (((code >= 0x0009) && (code <= 0x000d)) || (code == 0x0020) ||
       (code == 0x0085) || (code == 0x00a0) || (code == 0x1680) ||
@@ -121,24 +162,24 @@ static inline MagickBooleanType IsUTFSpace(unsigned long code)
   return(MagickFalse);
 }
 
-static inline MagickBooleanType IsUTFValid(unsigned long code)
+static inline MagickBooleanType IsUTFValid(int code)
 {
-  unsigned long
+  int
     mask;
 
-  mask=(unsigned long) 0x7fffffff;
+  mask=(int) 0x7fffffff;
   if (((code & ~mask) != 0) && ((code < 0xd800) || (code > 0xdfff)) &&
       (code != 0xfffe) && (code != 0xffff))
     return(MagickFalse);
   return(MagickTrue);
 }
 
-static inline MagickBooleanType IsUTFAscii(unsigned long code)
+static inline MagickBooleanType IsUTFAscii(int code)
 {
-  unsigned long
+  int
     mask;
 
-  mask=(unsigned long) 0x7f;
+  mask=(int) 0x7f;
   if ((code & ~mask) != 0)
     return(MagickFalse);
   return(MagickTrue);

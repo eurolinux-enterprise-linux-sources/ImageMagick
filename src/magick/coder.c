@@ -17,7 +17,7 @@
 %                                 May 2001                                    %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -64,141 +64,160 @@
 #define MagickCoderFilename  "coder.xml"
 
 /*
-  Declare coder map.
+  Typedef declarations.
 */
-static const char
-  *CoderMap = (const char *)
-    "<?xml version=\"1.0\"?>"
-    "<codermap>"
-    "  <coder magick=\"8BIM\" name=\"META\" />"
-    "  <coder magick=\"8BIMTEXT\" name=\"META\" />"
-    "  <coder magick=\"8BIMWTEXT\" name=\"META\" />"
-    "  <coder magick=\"A\" name=\"RAW\" />"
-    "  <coder magick=\"AI\" name=\"PDF\" />"
-    "  <coder magick=\"AFM\" name=\"TTF\" />"
-    "  <coder magick=\"APP1JPEG\" name=\"META\" />"
-    "  <coder magick=\"APP1\" name=\"META\" />"
-    "  <coder magick=\"ARW\" name=\"DNG\" />"
-    "  <coder magick=\"BIE\" name=\"JBIG\" />"
-    "  <coder magick=\"BMP2\" name=\"BMP\" />"
-    "  <coder magick=\"BMP3\" name=\"BMP\" />"
-    "  <coder magick=\"B\" name=\"GRAY\" />"
-    "  <coder magick=\"BRF\" name=\"BRAILLE\" />"
-    "  <coder magick=\"CMYKA\" name=\"CMYK\" />"
-    "  <coder magick=\"C\" name=\"GRAY\" />"
-    "  <coder magick=\"CR2\" name=\"DNG\" />"
-    "  <coder magick=\"CRW\" name=\"DNG\" />"
-    "  <coder magick=\"CUR\" name=\"ICON\" />"
-    "  <coder magick=\"DCR\" name=\"DNG\" />"
-    "  <coder magick=\"DCX\" name=\"PCX\" />"
-    "  <coder magick=\"DFONT\" name=\"TTF\" />"
-    "  <coder magick=\"EMF\" name=\"EMF\" />"
-    "  <coder magick=\"EPDF\" name=\"PDF\" />"
-    "  <coder magick=\"EPI\" name=\"PS\" />"
-    "  <coder magick=\"EPS2\" name=\"PS2\" />"
-    "  <coder magick=\"EPS3\" name=\"PS3\" />"
-    "  <coder magick=\"EPSF\" name=\"PS\" />"
-    "  <coder magick=\"EPSI\" name=\"PS\" />"
-    "  <coder magick=\"EPS\" name=\"PS\" />"
-    "  <coder magick=\"EPT2\" name=\"EPT\" />"
-    "  <coder magick=\"EPT3\" name=\"EPT\" />"
-    "  <coder magick=\"EXIF\" name=\"META\" />"
-    "  <coder magick=\"FILE\" name=\"URL\" />"
-    "  <coder magick=\"FRACTAL\" name=\"PLASMA\" />"
-    "  <coder magick=\"FTP\" name=\"URL\" />"
-    "  <coder magick=\"FTS\" name=\"FITS\" />"
-    "  <coder magick=\"G3\" name=\"FAX\" />"
-    "  <coder magick=\"GIF87\" name=\"GIF\" />"
-    "  <coder magick=\"G\" name=\"GRAY\" />"
-    "  <coder magick=\"GRANITE\" name=\"MAGICK\" />"
-    "  <coder magick=\"H\" name=\"MAGICK\" />"
-    "  <coder magick=\"HTM\" name=\"HTML\" />"
-    "  <coder magick=\"HTTP\" name=\"URL\" />"
-    "  <coder magick=\"ICB\" name=\"TGA\" />"
-    "  <coder magick=\"ICC\" name=\"META\" />"
-    "  <coder magick=\"ICM\" name=\"META\" />"
-    "  <coder magick=\"ICO\" name=\"ICON\" />"
-    "  <coder magick=\"IMPLICIT\" name=\"***\" />"
-    "  <coder magick=\"IPTC\" name=\"META\" />"
-    "  <coder magick=\"IPTCTEXT\" name=\"META\" />"
-    "  <coder magick=\"IPTCWTEXT\" name=\"META\" />"
-    "  <coder magick=\"ISOBRL\" name=\"BRAILLE\" />"
-    "  <coder magick=\"JBG\" name=\"JBIG\" />"
-    "  <coder magick=\"JNG\" name=\"PNG\" />"
-    "  <coder magick=\"JPC\" name=\"JP2\" />"
-    "  <coder magick=\"JPG\" name=\"JPEG\" />"
-    "  <coder magick=\"JPX\" name=\"JP2\" />"
-    "  <coder magick=\"K\" name=\"GRAY\" />"
-    "  <coder magick=\"LOGO\" name=\"MAGICK\" />"
-    "  <coder magick=\"M2V\" name=\"MPEG\" />"
-    "  <coder magick=\"M4V\" name=\"MPEG\" />"
-    "  <coder magick=\"M\" name=\"GRAY\" />"
-    "  <coder magick=\"MNG\" name=\"PNG\" />"
-    "  <coder magick=\"MOV\" name=\"MPEG\" />"
-    "  <coder magick=\"MPG\" name=\"MPEG\" />"
-    "  <coder magick=\"MP4\" name=\"MPEG\" />"
-    "  <coder magick=\"MPRI\" name=\"MPR\" />"
-    "  <coder magick=\"MRW\" name=\"DNG\" />"
-    "  <coder magick=\"MSVG\" name=\"SVG\" />"
-    "  <coder magick=\"NEF\" name=\"DNG\" />"
-    "  <coder magick=\"NETSCAPE\" name=\"MAGICK\" />"
-    "  <coder magick=\"O\" name=\"GRAY\" />"
-    "  <coder magick=\"ORF\" name=\"DNG\" />"
-    "  <coder magick=\"OTF\" name=\"TTF\" />"
-    "  <coder magick=\"P7\" name=\"PNM\" />"
-    "  <coder magick=\"PAL\" name=\"UYVY\" />"
-    "  <coder magick=\"PAM\" name=\"PNM\" />"
-    "  <coder magick=\"PBM\" name=\"PNM\" />"
-    "  <coder magick=\"PCDS\" name=\"PCD\" />"
-    "  <coder magick=\"PCT\" name=\"PICT\" />"
-    "  <coder magick=\"PDFA\" name=\"PDF\" />"
-    "  <coder magick=\"PEF\" name=\"DNG\" />"
-    "  <coder magick=\"PFA\" name=\"TTF\" />"
-    "  <coder magick=\"PFB\" name=\"TTF\" />"
-    "  <coder magick=\"PFM\" name=\"PNM\" />"
-    "  <coder magick=\"PGM\" name=\"PNM\" />"
-    "  <coder magick=\"PGX\" name=\"JP2\" />"
-    "  <coder magick=\"PICON\" name=\"XPM\" />"
-    "  <coder magick=\"PJPEG\" name=\"JPEG\" />"
-    "  <coder magick=\"PM\" name=\"XPM\" />"
-    "  <coder magick=\"PNG24\" name=\"PNG\" />"
-    "  <coder magick=\"PNG32\" name=\"PNG\" />"
-    "  <coder magick=\"PNG8\" name=\"PNG\" />"
-    "  <coder magick=\"PPM\" name=\"PNM\" />"
-    "  <coder magick=\"PTIF\" name=\"TIFF\" />"
-    "  <coder magick=\"RADIAL-GRADIENT\" name=\"GRADIENT\" />"
-    "  <coder magick=\"RAF\" name=\"DNG\" />"
-    "  <coder magick=\"RAS\" name=\"SUN\" />"
-    "  <coder magick=\"RGBA\" name=\"RGB\" />"
-    "  <coder magick=\"RGBO\" name=\"RGB\" />"
-    "  <coder magick=\"R\" name=\"GRAY\" />"
-    "  <coder magick=\"ROSE\" name=\"MAGICK\" />"
-    "  <coder magick=\"SHTML\" name=\"HTML\" />"
-    "  <coder magick=\"SVGZ\" name=\"SVG\" />"
-    "  <coder magick=\"TEXT\" name=\"TXT\" />"
-    "  <coder magick=\"TIFF64\" name=\"TIFF\" />"
-    "  <coder magick=\"TIF\" name=\"TIFF\" />"
-    "  <coder magick=\"TTC\" name=\"TTF\" />"
-    "  <coder magick=\"UBRL\" name=\"BRAILLE\" />"
-    "  <coder magick=\"VDA\" name=\"TGA\" />"
-    "  <coder magick=\"VST\" name=\"TGA\" />"
-    "  <coder magick=\"WMFWIN32\" name=\"EMF\" />"
-    "  <coder magick=\"WMV\" name=\"MPEG\" />"
-    "  <coder magick=\"X3F\" name=\"DNG\" />"
-    "  <coder magick=\"XTRNARRAY\" name=\"XTRN\" />"
-    "  <coder magick=\"XTRNBLOB\" name=\"XTRN\" />"
-    "  <coder magick=\"XTRNBSTR\" name=\"XTRN\" />"
-    "  <coder magick=\"XTRNFILE\" name=\"XTRN\" />"
-    "  <coder magick=\"XTRNIMAGE\" name=\"XTRN\" />"
-    "  <coder magick=\"XTRNSTREAM\" name=\"XTRN\" />"
-    "  <coder magick=\"XV\" name=\"VIFF\" />"
-    "  <coder magick=\"Y\" name=\"GRAY\" />"
-    "  <coder magick=\"YCbCrA\" name=\"YCbCr\" />"
-    "</codermap>";
+typedef struct _CoderMapInfo
+{
+  const char
+    *magick,
+    *name;
+} CoderMapInfo;
 
 /*
   Static declarations.
 */
+static const CoderMapInfo
+  CoderMap[] =
+  {
+    { "3FR", "DNG" },
+    { "8BIM", "META" },
+    { "8BIMTEXT", "META" },
+    { "8BIMWTEXT", "META" },
+    { "AFM", "TTF" },
+    { "A", "RAW" },
+    { "AI", "PDF" },
+    { "APP1JPEG", "META" },
+    { "APP1", "META" },
+    { "ARW", "DNG" },
+    { "AVI", "MPEG" },
+    { "BIE", "JBIG" },
+    { "BMP2", "BMP" },
+    { "BMP3", "BMP" },
+    { "B", "RAW" },
+    { "BRF", "BRAILLE" },
+    { "BGRA", "BGR" },
+    { "CMYKA", "CMYK" },
+    { "C", "RAW" },
+    { "CAL", "CALS" },
+    { "CANVAS", "XC" },
+    { "CR2", "DNG" },
+    { "CRW", "DNG" },
+    { "CUR", "ICON" },
+    { "DCR", "DNG" },
+    { "DCX", "PCX" },
+    { "DFONT", "TTF" },
+    { "EPDF", "PDF" },
+    { "EPI", "PS" },
+    { "EPS2", "PS2" },
+    { "EPS3", "PS3" },
+    { "EPSF", "PS" },
+    { "EPSI", "PS" },
+    { "EPS", "PS" },
+    { "EPT2", "EPT" },
+    { "EPT3", "EPT" },
+    { "ERF", "DNG" },
+    { "EXIF", "META" },
+    { "FILE", "URL" },
+    { "FRACTAL", "PLASMA" },
+    { "FTP", "URL" },
+    { "FTS", "FITS" },
+    { "G3", "FAX" },
+    { "GIF87", "GIF" },
+    { "G", "RAW" },
+    { "GRANITE", "MAGICK" },
+    { "GROUP4", "TIFF" },
+    { "K25", "DNG" },
+    { "KDC", "DNG" },
+    { "H", "MAGICK" },
+    { "HTM", "HTML" },
+    { "HTTP", "URL" },
+    { "ICB", "TGA" },
+    { "ICC", "META" },
+    { "ICM", "META" },
+    { "ICO", "ICON" },
+    { "IMPLICIT", "***" },
+    { "IPTC", "META" },
+    { "IPTCTEXT", "META" },
+    { "IPTCWTEXT", "META" },
+    { "ISOBRL", "BRAILLE" },
+    { "JBG", "JBIG" },
+    { "JNG", "PNG" },
+    { "JPC", "JP2" },
+    { "J2C", "JP2" },
+    { "JPG", "JPEG" },
+    { "JPX", "JP2" },
+    { "K", "RAW" },
+    { "LOGO", "MAGICK" },
+    { "M2V", "MPEG" },
+    { "M4V", "MPEG" },
+    { "M", "RAW" },
+    { "MNG", "PNG" },
+    { "MOV", "MPEG" },
+    { "MP4", "MPEG" },
+    { "MPG", "MPEG" },
+    { "MPRI", "MPR" },
+    { "MRW", "DNG" },
+    { "MSVG", "SVG" },
+    { "NEF", "DNG" },
+    { "NETSCAPE", "MAGICK" },
+    { "O", "RAW" },
+    { "ORF", "DNG" },
+    { "OTF", "TTF" },
+    { "P7", "PNM" },
+    { "PAL", "UYVY" },
+    { "PAM", "PNM" },
+    { "PBM", "PNM" },
+    { "PCDS", "PCD" },
+    { "PDFA", "PDF" },
+    { "PEF", "DNG" },
+    { "PEF", "DNG" },
+    { "PFA", "TTF" },
+    { "PFB", "TTF" },
+    { "PFM", "PNM" },
+    { "PGM", "PNM" },
+    { "PGX", "JP2" },
+    { "PICON", "XPM" },
+    { "PJPEG", "JPEG" },
+    { "PM", "XPM" },
+    { "PNG24", "PNG" },
+    { "PNG32", "PNG" },
+    { "PNG8", "PNG" },
+    { "PPM", "PNM" },
+    { "PSB", "PSD" },
+    { "PTIF", "TIFF" },
+    { "RADIAL-GRADIENT", "GRADIENT" },
+    { "RAF", "DNG" },
+    { "RAS", "SUN" },
+    { "RGBA", "RGB" },
+    { "RGBO", "RGB" },
+    { "R", "RAW" },
+    { "ROSE", "MAGICK" },
+    { "SHTML", "HTML" },
+    { "SR2", "DNG" },
+    { "SRF", "DNG" },
+    { "SVGZ", "SVG" },
+    { "TEXT", "TXT" },
+    { "TIFF64", "TIFF" },
+    { "TIF", "TIFF" },
+    { "TTC", "TTF" },
+    { "UBRL", "BRAILLE" },
+    { "VDA", "TGA" },
+    { "VST", "TGA" },
+    { "WIZARD", "MAGICK" },
+    { "WMV", "MPEG" },
+    { "WMFWIN32", "EMF" },
+    { "WMZ", "WMF" },
+    { "X3f", "DNG" },
+    { "XMP", "META" },
+    { "XTRNARRAY", "XTRN" },
+    { "XTRNBLOB", "XTRN" },
+    { "XTRNFILE", "XTRN" },
+    { "XTRNIMAGE", "XTRN" },
+    { "XV", "VIFF" },
+    { "Y", "RAW" },
+    { "YCbCrA", "YCbCr" }
+ };
+
 static SemaphoreInfo
   *coder_semaphore = (SemaphoreInfo *) NULL;
 
@@ -220,26 +239,52 @@ static MagickBooleanType
 %                                                                             %
 %                                                                             %
 %                                                                             %
-+   D e s t r o y C o d e r L i s t                                           %
++   C o d e r C o m p o n e n t G e n e s i s                                 %
 %                                                                             %
 %                                                                             %
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  DestroyCoderList() deallocates memory associated with the font list.
+%  CoderComponentGenesis() instantiates the coder component.
 %
-%  The format of the DestroyCoderList method is:
+%  The format of the CoderComponentGenesis method is:
 %
-%      DestroyCoderList(void)
+%      MagickBooleanType CoderComponentGenesis(void)
 %
 */
-MagickExport void DestroyCoderList(void)
+MagickExport MagickBooleanType CoderComponentGenesis(void)
 {
   AcquireSemaphoreInfo(&coder_semaphore);
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   C o d e r C o m p o n e n t T e r m i n u s                               %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  CoderComponentTerminus() destroys the coder component.
+%
+%  The format of the CoderComponentTerminus method is:
+%
+%      CoderComponentTerminus(void)
+%
+*/
+MagickExport void CoderComponentTerminus(void)
+{
+  if (coder_semaphore == (SemaphoreInfo *) NULL)
+    AcquireSemaphoreInfo(&coder_semaphore);
+  LockSemaphoreInfo(coder_semaphore);
   if (coder_list != (SplayTreeInfo *) NULL)
     coder_list=DestroySplayTree(coder_list);
   instantiate_coder=MagickFalse;
-  RelinquishSemaphoreInfo(coder_semaphore);
+  UnlockSemaphoreInfo(coder_semaphore);
   DestroySemaphoreInfo(&coder_semaphore);
 }
 
@@ -302,7 +347,7 @@ MagickExport const CoderInfo *GetCoderInfo(const char *name,
 %  The format of the GetCoderInfoList function is:
 %
 %      const CoderInfo **GetCoderInfoList(const char *pattern,
-%        unsigned long *number_coders,ExceptionInfo *exception)
+%        size_t *number_coders,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
@@ -328,7 +373,7 @@ static int CoderInfoCompare(const void *x,const void *y)
 }
 
 MagickExport const CoderInfo **GetCoderInfoList(const char *pattern,
-  unsigned long *number_coders,ExceptionInfo *exception)
+  size_t *number_coders,ExceptionInfo *exception)
 {
   const CoderInfo
     **coder_map;
@@ -336,7 +381,7 @@ MagickExport const CoderInfo **GetCoderInfoList(const char *pattern,
   register const CoderInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -344,7 +389,7 @@ MagickExport const CoderInfo **GetCoderInfoList(const char *pattern,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_coders != (unsigned long *) NULL);
+  assert(number_coders != (size_t *) NULL);
   *number_coders=0;
   p=GetCoderInfo("*",exception);
   if (p == (const CoderInfo *) NULL)
@@ -356,7 +401,7 @@ MagickExport const CoderInfo **GetCoderInfoList(const char *pattern,
   /*
     Generate coder list.
   */
-  AcquireSemaphoreInfo(&coder_semaphore);
+  LockSemaphoreInfo(coder_semaphore);
   ResetSplayTreeIterator(coder_list);
   p=(const CoderInfo *) GetNextValueInSplayTree(coder_list);
   for (i=0; p != (const CoderInfo *) NULL; )
@@ -366,10 +411,10 @@ MagickExport const CoderInfo **GetCoderInfoList(const char *pattern,
       coder_map[i++]=p;
     p=(const CoderInfo *) GetNextValueInSplayTree(coder_list);
   }
-  RelinquishSemaphoreInfo(coder_semaphore);
+  UnlockSemaphoreInfo(coder_semaphore);
   qsort((void *) coder_map,(size_t) i,sizeof(*coder_map),CoderInfoCompare);
   coder_map[i]=(CoderInfo *) NULL;
-  *number_coders=(unsigned long) i;
+  *number_coders=(size_t) i;
   return(coder_map);
 }
 
@@ -388,7 +433,7 @@ MagickExport const CoderInfo **GetCoderInfoList(const char *pattern,
 %
 %  The format of the GetCoderList function is:
 %
-%      char **GetCoderList(const char *pattern,unsigned long *number_coders,
+%      char **GetCoderList(const char *pattern,size_t *number_coders,
 %        ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
@@ -413,7 +458,7 @@ static int CoderCompare(const void *x,const void *y)
 }
 
 MagickExport char **GetCoderList(const char *pattern,
-  unsigned long *number_coders,ExceptionInfo *exception)
+  size_t *number_coders,ExceptionInfo *exception)
 {
   char
     **coder_map;
@@ -421,7 +466,7 @@ MagickExport char **GetCoderList(const char *pattern,
   register const CoderInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -429,7 +474,7 @@ MagickExport char **GetCoderList(const char *pattern,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_coders != (unsigned long *) NULL);
+  assert(number_coders != (size_t *) NULL);
   *number_coders=0;
   p=GetCoderInfo("*",exception);
   if (p == (const CoderInfo *) NULL)
@@ -441,7 +486,7 @@ MagickExport char **GetCoderList(const char *pattern,
   /*
     Generate coder list.
   */
-  AcquireSemaphoreInfo(&coder_semaphore);
+  LockSemaphoreInfo(coder_semaphore);
   ResetSplayTreeIterator(coder_list);
   p=(const CoderInfo *) GetNextValueInSplayTree(coder_list);
   for (i=0; p != (const CoderInfo *) NULL; )
@@ -451,10 +496,10 @@ MagickExport char **GetCoderList(const char *pattern,
       coder_map[i++]=ConstantString(p->name);
     p=(const CoderInfo *) GetNextValueInSplayTree(coder_list);
   }
-  RelinquishSemaphoreInfo(coder_semaphore);
+  UnlockSemaphoreInfo(coder_semaphore);
   qsort((void *) coder_map,(size_t) i,sizeof(*coder_map),CoderCompare);
   coder_map[i]=(char *) NULL;
-  *number_coders=(unsigned long) i;
+  *number_coders=(size_t) i;
   return(coder_map);
 }
 
@@ -485,14 +530,16 @@ static MagickBooleanType InitializeCoderList(ExceptionInfo *exception)
   if ((coder_list == (SplayTreeInfo *) NULL) &&
       (instantiate_coder == MagickFalse))
     {
-      AcquireSemaphoreInfo(&coder_semaphore);
+      if (coder_semaphore == (SemaphoreInfo *) NULL)
+        AcquireSemaphoreInfo(&coder_semaphore);
+      LockSemaphoreInfo(coder_semaphore);
       if ((coder_list == (SplayTreeInfo *) NULL) &&
           (instantiate_coder == MagickFalse))
         {
           (void) LoadCoderLists(MagickCoderFilename,exception);
           instantiate_coder=MagickTrue;
         }
-      RelinquishSemaphoreInfo(coder_semaphore);
+      UnlockSemaphoreInfo(coder_semaphore);
     }
   return(coder_list != (SplayTreeInfo *) NULL ? MagickTrue : MagickFalse);
 }
@@ -530,14 +577,14 @@ MagickExport MagickBooleanType ListCoderInfo(FILE *file,
   const CoderInfo
     **coder_info;
 
-  long
-    j;
-
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     number_coders;
+
+  ssize_t
+    j;
 
   if (file == (const FILE *) NULL)
     file=stdout;
@@ -545,7 +592,7 @@ MagickExport MagickBooleanType ListCoderInfo(FILE *file,
   if (coder_info == (const CoderInfo **) NULL)
     return(MagickFalse);
   path=(const char *) NULL;
-  for (i=0; i < (long) number_coders; i++)
+  for (i=0; i < (ssize_t) number_coders; i++)
   {
     if (coder_info[i]->stealth != MagickFalse)
       continue;
@@ -553,18 +600,19 @@ MagickExport MagickBooleanType ListCoderInfo(FILE *file,
         (LocaleCompare(path,coder_info[i]->path) != 0))
       {
         if (coder_info[i]->path != (char *) NULL)
-          (void) fprintf(file,"\nPath: %s\n\n",coder_info[i]->path);
-        (void) fprintf(file,"Magick      Coder\n");
-        (void) fprintf(file,"-------------------------------------------------"
+          (void) FormatLocaleFile(file,"\nPath: %s\n\n",coder_info[i]->path);
+        (void) FormatLocaleFile(file,"Magick      Coder\n");
+        (void) FormatLocaleFile(file,
+          "-------------------------------------------------"
           "------------------------------\n");
       }
     path=coder_info[i]->path;
-    (void) fprintf(file,"%s",coder_info[i]->magick);
-    for (j=(long) strlen(coder_info[i]->magick); j <= 11; j++)
-      (void) fprintf(file," ");
+    (void) FormatLocaleFile(file,"%s",coder_info[i]->magick);
+    for (j=(ssize_t) strlen(coder_info[i]->magick); j <= 11; j++)
+      (void) FormatLocaleFile(file," ");
     if (coder_info[i]->name != (char *) NULL)
-      (void) fprintf(file,"%s",coder_info[i]->name);
-    (void) fprintf(file,"\n");
+      (void) FormatLocaleFile(file,"%s",coder_info[i]->name);
+    (void) FormatLocaleFile(file,"\n");
   }
   coder_info=(const CoderInfo **) RelinquishMagickMemory((void *) coder_info);
   (void) fflush(file);
@@ -588,7 +636,7 @@ MagickExport MagickBooleanType ListCoderInfo(FILE *file,
 %  The format of the LoadCoderList coder is:
 %
 %      MagickBooleanType LoadCoderList(const char *xml,const char *filename,
-%        const unsigned long depth,ExceptionInfo *exception)
+%        const size_t depth,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
@@ -608,17 +656,20 @@ static void *DestroyCoderNode(void *coder_info)
     *p;
 
   p=(CoderInfo *) coder_info;
-  if (p->path != (char *) NULL)
-    p->path=DestroyString(p->path);
-  if (p->name != (char *) NULL)
-    p->name=DestroyString(p->name);
-  if (p->magick != (char *) NULL)
-    p->magick=DestroyString(p->magick);
+  if (p->exempt == MagickFalse)
+    {
+      if (p->path != (char *) NULL)
+        p->path=DestroyString(p->path);
+      if (p->name != (char *) NULL)
+        p->name=DestroyString(p->name);
+      if (p->magick != (char *) NULL)
+        p->magick=DestroyString(p->magick);
+    }
   return(RelinquishMagickMemory(p));
 }
 
 static MagickBooleanType LoadCoderList(const char *xml,const char *filename,
-  const unsigned long depth,ExceptionInfo *exception)
+  const size_t depth,ExceptionInfo *exception)
 {
   char
     keyword[MaxTextExtent],
@@ -733,6 +784,7 @@ static MagickBooleanType LoadCoderList(const char *xml,const char *filename,
           ThrowFatalException(ResourceLimitFatalError,"MemoryAllocationFailed");
         (void) ResetMagickMemory(coder_info,0,sizeof(*coder_info));
         coder_info->path=ConstantString(filename);
+        coder_info->exempt=MagickFalse;
         coder_info->signature=MagickSignature;
         continue;
       }
@@ -822,9 +874,6 @@ static MagickBooleanType LoadCoderList(const char *xml,const char *filename,
 static MagickBooleanType LoadCoderLists(const char *filename,
   ExceptionInfo *exception)
 {
-#if defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
-  return(LoadCoderList(CoderMap,"built-in",0,exception));
-#else
   const StringInfo
     *option;
 
@@ -834,7 +883,55 @@ static MagickBooleanType LoadCoderLists(const char *filename,
   MagickStatusType
     status;
 
+  register ssize_t
+    i;
+
+  /*
+    Load built-in coder map.
+  */
   status=MagickFalse;
+  if (coder_list == (SplayTreeInfo *) NULL)
+    {
+      coder_list=NewSplayTree(CompareSplayTreeString,RelinquishMagickMemory,
+        DestroyCoderNode);
+      if (coder_list == (SplayTreeInfo *) NULL)
+        {
+          ThrowFileException(exception,ResourceLimitError,
+            "MemoryAllocationFailed",filename);
+          return(MagickFalse);
+        }
+    }
+  for (i=0; i < (ssize_t) (sizeof(CoderMap)/sizeof(*CoderMap)); i++)
+  {
+    CoderInfo
+      *coder_info;
+
+    register const CoderMapInfo
+      *p;
+
+    p=CoderMap+i;
+    coder_info=(CoderInfo *) AcquireMagickMemory(sizeof(*coder_info));
+    if (coder_info == (CoderInfo *) NULL)
+      {
+        (void) ThrowMagickException(exception,GetMagickModule(),
+          ResourceLimitError,"MemoryAllocationFailed","`%s'",coder_info->name);
+        continue;
+      }
+    (void) ResetMagickMemory(coder_info,0,sizeof(*coder_info));
+    coder_info->path=(char *) "[built-in]";
+    coder_info->magick=(char *) p->magick;
+    coder_info->name=(char *) p->name;
+    coder_info->exempt=MagickTrue;
+    coder_info->signature=MagickSignature;
+    status=AddValueToSplayTree(coder_list,ConstantString(coder_info->magick),
+      coder_info);
+    if (status == MagickFalse)
+      (void) ThrowMagickException(exception,GetMagickModule(),
+        ResourceLimitError,"MemoryAllocationFailed","`%s'",coder_info->name);
+  }
+  /*
+    Load external coder map.
+  */
   options=GetConfigureOptions(filename,exception);
   option=(const StringInfo *) GetNextValueInLinkedList(options);
   while (option != (const StringInfo *) NULL)
@@ -844,9 +941,5 @@ static MagickBooleanType LoadCoderLists(const char *filename,
     option=(const StringInfo *) GetNextValueInLinkedList(options);
   }
   options=DestroyConfigureOptions(options);
-  if ((coder_list == (SplayTreeInfo *) NULL) || 
-      (GetNumberOfNodesInSplayTree(coder_list) == 0))
-    status|=LoadCoderList(CoderMap,"built-in",0,exception);
   return(status != 0 ? MagickTrue : MagickFalse);
-#endif
 }

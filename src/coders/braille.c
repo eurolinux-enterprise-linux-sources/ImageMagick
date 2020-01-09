@@ -15,7 +15,7 @@
 %                                February 2008                                %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -86,10 +86,10 @@ static MagickBooleanType
 %
 %  The format of the RegisterBRAILLEImage method is:
 %
-%      unsigned long RegisterBRAILLEImage(void)
+%      size_t RegisterBRAILLEImage(void)
 %
 */
-ModuleExport unsigned long RegisterBRAILLEImage(void)
+ModuleExport size_t RegisterBRAILLEImage(void)
 {
   MagickInfo
     *entry;
@@ -175,8 +175,12 @@ static MagickBooleanType WriteBRAILLEImage(const ImageInfo *image_info,
   const char
     *value;
 
-  long
-    y;
+  IndexPacket
+    polarity;
+
+  int
+    unicode = 0,
+    iso_11548_1 = 0;
 
   MagickBooleanType
     status;
@@ -187,16 +191,14 @@ static MagickBooleanType WriteBRAILLEImage(const ImageInfo *image_info,
   register const PixelPacket
     *p;
 
-  IndexPacket
-    polarity;
-
-  register long
+  register ssize_t
     x;
 
-  unsigned long
+  size_t
     cell_height = 4;
-  int
-    unicode = 0, iso_11548_1 = 0;
+
+  ssize_t
+    y;
 
   /*
     Open output image file.
@@ -205,73 +207,77 @@ static MagickBooleanType WriteBRAILLEImage(const ImageInfo *image_info,
   assert(image_info->signature == MagickSignature);
   assert(image != (Image *) NULL);
   assert(image->signature == MagickSignature);
-
   if (LocaleCompare(image_info->magick, "UBRL") == 0)
-    unicode = 1;
+    unicode=1;
   else
     if (LocaleCompare(image_info->magick, "ISOBRL") == 0)
-      iso_11548_1 = 1;
+      iso_11548_1=1;
     else
-      cell_height = 3;
-
+      cell_height=3;
   if (image->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",image->filename);
   status=OpenBlob(image_info,image,WriteBinaryBlobMode,&image->exception);
   if (status == MagickFalse)
     return(status);
-
   if (!iso_11548_1)
     {
-      value=GetImageProperty(image,"Label");
-      if (value != (const char *) NULL) {
-        (void) FormatMagickString(buffer,MaxTextExtent,"Title: %s\n", value);
-        (void) WriteBlobString(image,buffer);
-      }
-      if (image->page.x)
-      {
-        (void) FormatMagickString(buffer,MaxTextExtent,"X: %ld\n", image->page.x);
-        (void) WriteBlobString(image,buffer);
-      }
-      if (image->page.y)
-      {
-        (void) FormatMagickString(buffer,MaxTextExtent,"Y: %ld\n", image->page.y);
-        (void) WriteBlobString(image,buffer);
-      }
-      (void) FormatMagickString(buffer,MaxTextExtent,"Width: %lu\n",
-        image->columns+(image->columns % 2));
+      value=GetImageProperty(image,"label");
+      if (value != (const char *) NULL)
+        {
+          (void) FormatLocaleString(buffer,MaxTextExtent,"Title: %s\n", value);
+          (void) WriteBlobString(image,buffer);
+        }
+      if (image->page.x != 0)
+        {
+          (void) FormatLocaleString(buffer,MaxTextExtent,"X: %.20g\n",(double) 
+            image->page.x);
+          (void) WriteBlobString(image,buffer);
+        }
+      if (image->page.y != 0)
+        {
+          (void) FormatLocaleString(buffer,MaxTextExtent,"Y: %.20g\n",(double) 
+            image->page.y);
+          (void) WriteBlobString(image,buffer);
+        }
+      (void) FormatLocaleString(buffer,MaxTextExtent,"Width: %.20g\n",(double)
+        (image->columns+(image->columns % 2)));
       (void) WriteBlobString(image,buffer);
-      (void) FormatMagickString(buffer,MaxTextExtent,"Height: %lu\n", image->rows);
+      (void) FormatLocaleString(buffer,MaxTextExtent,"Height: %.20g\n",(double)
+        image->rows);
       (void) WriteBlobString(image,buffer);
-
       (void) WriteBlobString(image,"\n");
     }
-
   (void) SetImageType(image,BilevelType);
-  polarity=(IndexPacket) (PixelIntensityToQuantum(&image->colormap[0]) >=
-    (Quantum) (QuantumRange/2));
-  if (image->colors == 2)
-    polarity=(IndexPacket)
-      (PixelIntensityToQuantum(&image->colormap[0]) >=
-       PixelIntensityToQuantum(&image->colormap[1]));
-  for (y=0; y < (long) image->rows; y+=cell_height)
+  polarity = 0;
+  if (image->storage_class == PseudoClass) {
+    polarity=(IndexPacket) (PixelIntensityToQuantum(&image->colormap[0]) >=
+      (Quantum) (QuantumRange/2));
+    if (image->colors == 2)
+      polarity=(IndexPacket) (PixelIntensityToQuantum(&image->colormap[0]) >=
+         PixelIntensityToQuantum(&image->colormap[1]));
+  }
+  for (y=0; y < (ssize_t) image->rows; y+=(ssize_t) cell_height)
   {
     if ((y+cell_height) > image->rows)
-      cell_height = (unsigned long) (image->rows-y);
+      cell_height = (size_t) (image->rows-y);
 
     p=GetVirtualPixels(image,0,y,image->columns,cell_height,&image->exception);
     if (p == (const PixelPacket *) NULL)
       break;
     indexes=GetVirtualIndexQueue(image);
-
-    for (x=0; x < (long) image->columns; x+=2)
+    for (x=0; x < (ssize_t) image->columns; x+=2)
     {
       unsigned char cell = 0;
-      int two_columns = x+1 < (long) image->columns;
+      int two_columns = x+1 < (ssize_t) image->columns;
 
       do
       {
-#define do_cell(dx,dy,bit) \
-        cell |= (indexes[x+dx+dy*image->columns]==polarity)<<bit;
+#define do_cell(dx,dy,bit) do { \
+        if (image->storage_class == PseudoClass) \
+          cell |= (GetPixelIndex(indexes+x+dx+dy*image->columns) == polarity) << bit; \
+        else \
+          cell |= (GetPixelGreen(p+x+dx+dy*image->columns) == 0) << bit; \
+} while (0) 
 
         do_cell(0,0,0);
         if (two_columns)
@@ -326,9 +332,10 @@ static MagickBooleanType WriteBRAILLEImage(const ImageInfo *image_info,
           (void) WriteBlobByte(image,iso_to_brf[cell]);
         }
     }
-    if (!iso_11548_1)
+    if (iso_11548_1 == 0)
       (void) WriteBlobByte(image,'\n');
-    status=SetImageProgress(image,SaveImageTag,y,image->rows);
+    status=SetImageProgress(image,SaveImageTag,(MagickOffsetType) y,
+      image->rows);
     if (status == MagickFalse)
       break;
   }

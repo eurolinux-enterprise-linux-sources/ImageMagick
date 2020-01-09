@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -47,6 +47,7 @@
 #include "magick/exception-private.h"
 #include "magick/magick.h"
 #include "magick/memory_.h"
+#include "magick/module.h"
 #include "magick/monitor.h"
 #include "magick/monitor-private.h"
 #include "magick/profile.h"
@@ -54,7 +55,7 @@
 #include "magick/quantum-private.h"
 #include "magick/static.h"
 #include "magick/string_.h"
-#include "magick/module.h"
+#include "magick/string-private.h"
 
 /*
   Forward declarations.
@@ -82,10 +83,10 @@ static MagickBooleanType
 %
 %  The format of the RegisterTHUMBNAILImage method is:
 %
-%      unsigned long RegisterTHUMBNAILImage(void)
+%      size_t RegisterTHUMBNAILImage(void)
 %
 */
-ModuleExport unsigned long RegisterTHUMBNAILImage(void)
+ModuleExport size_t RegisterTHUMBNAILImage(void)
 {
   MagickInfo
     *entry;
@@ -165,14 +166,14 @@ static MagickBooleanType WriteTHUMBNAILImage(const ImageInfo *image_info,
   MagickBooleanType
     status;
 
-  register long
+  register ssize_t
     i;
-
-  ssize_t
-    offset;
 
   size_t
     length;
+
+  ssize_t
+    offset;
 
   unsigned char
     magick[MaxTextExtent];
@@ -183,13 +184,13 @@ static MagickBooleanType WriteTHUMBNAILImage(const ImageInfo *image_info,
   property=GetImageProperty(image,"exif:JPEGInterchangeFormat");
   if (property == (const char *) NULL)
     ThrowWriterException(CoderError,"ImageDoesNotHaveAThumbnail");
-  offset=(ssize_t) atoi(property);
+  offset=(ssize_t) StringToLong(property);
   property=GetImageProperty(image,"exif:JPEGInterchangeFormatLength");
   if (property == (const char *) NULL)
     ThrowWriterException(CoderError,"ImageDoesNotHaveAThumbnail");
-  length=(size_t) atoi(property);
+  length=(size_t) StringToLong(property);
   (void) ResetMagickMemory(magick,0,sizeof(magick));
-  for (i=0; i < (long) length; i++)
+  for (i=0; i < (ssize_t) length; i++)
   {
     magick[0]=magick[1];
     magick[1]=magick[2];
@@ -206,9 +207,9 @@ static MagickBooleanType WriteTHUMBNAILImage(const ImageInfo *image_info,
   (void) CopyMagickString(thumbnail_image->filename,image->filename,
     MaxTextExtent);
   write_info=CloneImageInfo(image_info);
-  (void) SetImageInfo(write_info,MagickTrue,&image->exception);
+  (void) SetImageInfo(write_info,1,&image->exception);
   if (LocaleCompare(write_info->magick,"THUMBNAIL") == 0)
-    (void) FormatMagickString(thumbnail_image->filename,MaxTextExtent,
+    (void) FormatLocaleString(thumbnail_image->filename,MaxTextExtent,
       "miff:%s",write_info->filename);
   status=WriteImage(write_info,thumbnail_image);
   thumbnail_image=DestroyImage(thumbnail_image);

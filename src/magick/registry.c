@@ -17,7 +17,7 @@
 %                                 March 2000                                  %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -62,7 +62,7 @@ typedef struct _RegistryInfo
   void
     *value;
 
-  unsigned long
+  size_t
     signature;
 } RegistryInfo;
 
@@ -71,6 +71,12 @@ typedef struct _RegistryInfo
 */
 static SplayTreeInfo
   *registry = (SplayTreeInfo *) NULL;
+
+static SemaphoreInfo
+  *registry_semaphore = (SemaphoreInfo *) NULL;
+
+static volatile MagickBooleanType
+  instantiate_registry = MagickFalse;
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -150,32 +156,6 @@ MagickExport MagickBooleanType DeleteImageRegistry(const char *key)
   if (registry == (void *) NULL)
     return(MagickFalse);
   return(DeleteNodeFromSplayTree(registry,key));
-}
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%   D e s t r o y I m a g e R e g i s t r y                                   %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  DestroyImageRegistry() releases memory associated with the image registry.
-%
-%  The format of the DestroyDefines method is:
-%
-%      void DestroyImageRegistry(void)
-%
-*/
-MagickExport void DestroyImageRegistry(void)
-{
-  if (IsEventLogging() != MagickFalse)
-    (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  if (registry != (void *) NULL)
-    registry=DestroySplayTree(registry);
 }
 
 /*
@@ -304,6 +284,62 @@ MagickExport char *GetNextImageRegistry(void)
 %                                                                             %
 %                                                                             %
 %                                                                             %
++   R e g i s t r y C o m p o n e n t G e n e s i s                           %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  RegistryComponentGenesis() instantiates the registry component.
+%
+%  The format of the RegistryComponentGenesis method is:
+%
+%      MagickBooleanType RegistryComponentGenesis(void)
+%
+*/
+MagickExport MagickBooleanType RegistryComponentGenesis(void)
+{
+  AcquireSemaphoreInfo(&registry_semaphore);
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%   R e g i s t r y C o m p o n e n t T e r m i n u s                         %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  RegistryComponentTerminus() destroys the registry component.
+%
+%  The format of the DestroyDefines method is:
+%
+%      void RegistryComponentTerminus(void)
+%
+*/
+MagickExport void RegistryComponentTerminus(void)
+{
+  if (registry_semaphore == (SemaphoreInfo *) NULL)
+    AcquireSemaphoreInfo(&registry_semaphore);
+  LockSemaphoreInfo(registry_semaphore);
+  if (IsEventLogging() != MagickFalse)
+    (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
+  if (registry != (void *) NULL)
+    registry=DestroySplayTree(registry);
+  instantiate_registry=MagickFalse;
+  UnlockSemaphoreInfo(registry_semaphore);
+  DestroySemaphoreInfo(&registry_semaphore);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
 %   R e m o v e I m a g e R e g i s t r y                                     %
 %                                                                             %
 %                                                                             %
@@ -394,7 +430,7 @@ static void *DestroyRegistryNode(void *registry_info)
 {
   register RegistryInfo
     *p;
-       
+
   p=(RegistryInfo *) registry_info;
   switch (p->type)
   {
@@ -414,7 +450,7 @@ static void *DestroyRegistryNode(void *registry_info)
       p->value=(void *) DestroyImageInfo((ImageInfo *) p->value);
       break;
     }
-  } 
+  }
   return(RelinquishMagickMemory(p));
 }
 
@@ -485,9 +521,21 @@ MagickExport MagickBooleanType SetImageRegistry(const RegistryType type,
   registry_info->type=type;
   registry_info->value=clone_value;
   registry_info->signature=MagickSignature;
-  if (registry == (void *) NULL)
-    registry=NewSplayTree(CompareSplayTreeString,RelinquishMagickMemory,
-      DestroyRegistryNode);
+  if ((registry == (SplayTreeInfo *) NULL) &&
+      (instantiate_registry == MagickFalse))
+    {
+      if (registry_semaphore == (SemaphoreInfo *) NULL)
+        AcquireSemaphoreInfo(&registry_semaphore);
+      LockSemaphoreInfo(registry_semaphore);
+      if ((registry == (SplayTreeInfo *) NULL) &&
+          (instantiate_registry == MagickFalse))
+        {
+          registry=NewSplayTree(CompareSplayTreeString,RelinquishMagickMemory,
+            DestroyRegistryNode);
+          instantiate_registry=MagickTrue;
+        }
+      UnlockSemaphoreInfo(registry_semaphore);
+    }
   status=AddValueToSplayTree(registry,ConstantString(key),registry_info);
   return(status);
 }

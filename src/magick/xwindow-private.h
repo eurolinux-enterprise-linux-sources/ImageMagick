@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
   
   You may not use this file except in compliance with the License.
@@ -208,8 +208,10 @@ typedef struct _XAnnotateInfo
 
 typedef struct _XPixelInfo
 {
+  ssize_t
+    colors;
+
   unsigned long
-    colors,
     *pixels;
 
   XColor
@@ -246,7 +248,7 @@ typedef struct _XResourceInfo
   QuantizeInfo
     *quantize_info;
 
-  unsigned long
+  size_t
     colors;
 
   MagickBooleanType
@@ -266,7 +268,7 @@ typedef struct _XResourceInfo
   unsigned int
     border_width;
 
-  unsigned long
+  size_t
     delay;
 
   MagickBooleanType
@@ -322,7 +324,7 @@ typedef struct _XResourceInfo
     use_pixmap,
     use_shared_memory;
 
-  unsigned long
+  size_t
     undo_cache;
 
   char
@@ -384,7 +386,7 @@ typedef struct _XWindowInfo
     *icon_geometry,
     *crop_geometry;
 
-  unsigned long
+  size_t
     data,
     flags;
 
@@ -431,7 +433,7 @@ typedef struct _XWindowInfo
   void
     *segment_info;
 
-  unsigned long
+  long
     mask;
 
   MagickBooleanType
@@ -517,6 +519,7 @@ extern MagickExport int
 
 extern MagickExport MagickBooleanType
   XAnnotateImage(Display *,const XPixelInfo *,XAnnotateInfo *,Image *),
+  XComponentGenesis(void),
   XDrawImage(Display *,const XPixelInfo *,XDrawInfo *,Image *),
   XGetWindowColor(Display *,XWindows *,char *),
   XMagickProgressMonitor(const char *,const MagickOffsetType,
@@ -532,12 +535,13 @@ extern MagickExport void
   XBestPixel(Display *,const Colormap,XColor *,unsigned int,XColor *),
   XCheckRefreshWindows(Display *,XWindows *),
   XClientMessage(Display *,const Window,const Atom,const Atom,const Time),
+  XComponentTerminus(void),
   XConfigureImageColormap(Display *,XResourceInfo *,XWindows *,Image *),
   XConstrainWindowPosition(Display *,XWindowInfo *),
-  XDelay(Display *,const unsigned long),
+  XDelay(Display *,const size_t),
+  XDisplayImageInfo(Display *,const XResourceInfo *,XWindows *,Image *,Image *),
   XDestroyResourceInfo(XResourceInfo *),
   XDestroyWindowColors(Display *,Window),
-  XDisplayImageInfo(Display *,const XResourceInfo *,XWindows *,Image *,Image *),
   XFreeResources(Display *,XVisualInfo *,XStandardColormap *,XPixelInfo *,
     XFontStruct *,XResourceInfo *,XWindowInfo *),
   XFreeStandardColormap(Display *,const XVisualInfo *,XStandardColormap *,
@@ -565,7 +569,7 @@ extern MagickExport void
   XWarning(const ExceptionType,const char *,const char *);
 
 extern MagickExport Window
-  XWindowByID(Display *,const Window,const unsigned long),
+  XWindowByID(Display *,const Window,const size_t),
   XWindowByName(Display *,const Window,const char *),
   XWindowByProperty(Display *,const Window,const Atom);
 

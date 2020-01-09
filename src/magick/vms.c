@@ -17,7 +17,7 @@
 %                                October 1994                                 %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -130,7 +130,7 @@ DIR *opendir(char *name)
   /*
     Initialize descriptor.
   */
-  (void) FormatMagickString(directory->pattern,MaxTextExtent,"%s*.*",name);
+  (void) FormatLocaleString(directory->pattern,MaxTextExtent,"%s*.*",name);
   directory->context=0;
   directory->pat.dsc$a_pointer=directory->pattern;
   directory->pat.dsc$w_length=strlen(directory->pattern);

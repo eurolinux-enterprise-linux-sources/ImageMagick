@@ -1,3 +1,24 @@
+2011-02-12  6.6.7-7 Cristy  <quetzlzacatenango@image...>
+  * Add support for the strip() and stripImage() STL methods.
+
+2011-02-01  6.6.7-2 Cristy  <quetzlzacatenango@image...>
+  * Remove extra '+' in the geometry operator.
+
+2010-06-16  6.6.2-2 Cristy  <quetzlzacatenango@image...>
+  * Patch for compile problem in mapImages of the STL header.
+
+2010-02-21  6.5.9-10 Cristy  <quetzlzacatenango@image...>
+  * Add extent() to extend the image as defined by the geometry, gravity, and
+	  image background color.
+
+2009-11-14  6.5.7-8 Cristy  <quetzlzacatenango@image...>
+  * Add forwardFourierTransform(), inverseFourierTransform(), and
+    inverseFourierTransformImage() methods to implement forward and inverse
+    discrete Fourier transform (DFT / IFT).
+
+2009-09-28  6.5.6-6 Cristy  <quetzlzacatenango@image...>
+  * Add splice() method to splice the background color into the image.
+
 2009-04-01  6.5.1-1 Cristy  <quetzlzacatenango@image...>
   * Add virtualPixelMethod() method for image and options, required for
     distort().
@@ -681,7 +702,7 @@
 
 2001-08-25  Bob Friesenhahn  <bfriesen@simple.dallas.tx.us>
 
-	* lib/Image.cpp (colorMap): Automatically extend colormap if
+	* lib/Image.cpp (colorMap): Automagically extend colormap if
  	specified index is past end of current colormap.  Colormap is
  	limited to a maximum depth of QuantumRange entries.
 

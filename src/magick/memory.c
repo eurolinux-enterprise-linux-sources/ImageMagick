@@ -17,7 +17,7 @@
 %                                 July 1998                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -44,7 +44,7 @@
 %  written by Yoo C. Chung.
 %
 %  By default, ANSI memory methods are called (e.g. malloc).  Use the
-%  custom memory allocator by defining MAGICKCORE_EMBEDDABLE_SUPPORT
+%  custom memory allocator by defining MAGICKCORE_ZERO_CONFIGURATION_SUPPORT
 %  to allocate memory with private anonymous mapping rather than from the
 %  heap.
 %
@@ -137,9 +137,14 @@ typedef struct _MagickMemoryMethods
   Global declarations.
 */
 static MagickMemoryMethods
-  memory_methods = { malloc, realloc, free };
+  memory_methods =
+  {
+    (AcquireMemoryHandler) malloc,
+    (ResizeMemoryHandler) realloc,
+    (DestroyMemoryHandler) free
+  };
 
-#if defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
+#if defined(MAGICKCORE_ZERO_CONFIGURATION_SUPPORT)
 static MemoryInfo
   memory_info;
 
@@ -181,6 +186,14 @@ static MagickBooleanType
 %    o quantum: the number of bytes in each quantum.
 %
 */
+
+static inline size_t MagickMax(const size_t x,const size_t y)
+{
+  if (x > y)
+    return(x);
+  return(y);
+}
+
 MagickExport void *AcquireAlignedMemory(const size_t count,const size_t quantum)
 {
   size_t
@@ -197,14 +210,14 @@ MagickExport void *AcquireAlignedMemory(const size_t count,const size_t quantum)
     void
       *memory;
 
-    if (posix_memalign(&memory,AlignedSize,size) == 0)
+    if (posix_memalign(&memory,AlignedSize,MagickMax(size,AlignedSize)) == 0)
       return(memory);
   }
 #endif
-  return(malloc(size));
+  return(malloc(MagickMax(size,AlignedSize)));
 }
 
-#if defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
+#if defined(MAGICKCORE_ZERO_CONFIGURATION_SUPPORT)
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                             %
@@ -381,15 +394,17 @@ MagickExport void *AcquireMagickMemory(const size_t size)
   register void
     *memory;
 
-#if !defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
+#if !defined(MAGICKCORE_ZERO_CONFIGURATION_SUPPORT)
   memory=memory_methods.acquire_memory_handler(size == 0 ? 1UL : size);
 #else
+  if (memory_semaphore == (SemaphoreInfo *) NULL)
+    AcquireSemaphoreInfo(&memory_semaphore);
   if (free_segments == (DataSegmentInfo *) NULL)
     {
-      AcquireSemaphoreInfo(&memory_semaphore);
+      LockSemaphoreInfo(memory_semaphore);
       if (free_segments == (DataSegmentInfo *) NULL)
         {
-          register long
+          register ssize_t
             i;
 
           assert(2*sizeof(size_t) > (size_t) (~SizeMask));
@@ -406,16 +421,16 @@ MagickExport void *AcquireMagickMemory(const size_t size)
           }
           free_segments=(&memory_info.segment_pool[0]);
         }
-      RelinquishSemaphoreInfo(memory_semaphore);
+      UnlockSemaphoreInfo(memory_semaphore);
     }
-  AcquireSemaphoreInfo(&memory_semaphore);
+  LockSemaphoreInfo(memory_semaphore);
   memory=AcquireBlock(size == 0 ? 1UL : size);
   if (memory == (void *) NULL)
     {
       if (ExpandHeap(size == 0 ? 1UL : size) != MagickFalse)
         memory=AcquireBlock(size == 0 ? 1UL : size);
     }
-  RelinquishSemaphoreInfo(memory_semaphore);
+  UnlockSemaphoreInfo(memory_semaphore);
 #endif
   return(memory);
 }
@@ -505,6 +520,7 @@ MagickExport void *CopyMagickMemory(void *destination,const void *source,
     switch (size)
     {
       default: return(memcpy(destination,source,size));
+      case 8: *q++=(*p++);
       case 7: *q++=(*p++);
       case 6: *q++=(*p++);
       case 5: *q++=(*p++);
@@ -537,13 +553,15 @@ MagickExport void *CopyMagickMemory(void *destination,const void *source,
 */
 MagickExport void DestroyMagickMemory(void)
 {
-#if defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
-  register long
+#if defined(MAGICKCORE_ZERO_CONFIGURATION_SUPPORT)
+  register ssize_t
     i;
 
-  AcquireSemaphoreInfo(&memory_semaphore);
-  RelinquishSemaphoreInfo(memory_semaphore);
-  for (i=0; i < (long) memory_info.number_segments; i++)
+  if (memory_semaphore == (SemaphoreInfo *) NULL)
+    AcquireSemaphoreInfo(&memory_semaphore);
+  LockSemaphoreInfo(memory_semaphore);
+  UnlockSemaphoreInfo(memory_semaphore);
+  for (i=0; i < (ssize_t) memory_info.number_segments; i++)
     if (memory_info.segments[i]->mapped == MagickFalse)
       memory_methods.destroy_memory_handler(
         memory_info.segments[i]->allocation);
@@ -556,7 +574,7 @@ MagickExport void DestroyMagickMemory(void)
 #endif
 }
 
-#if defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
+#if defined(MAGICKCORE_ZERO_CONFIGURATION_SUPPORT)
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                             %
@@ -588,7 +606,7 @@ static MagickBooleanType ExpandHeap(size_t size)
   MagickBooleanType
     mapped;
 
-  register long
+  register ssize_t
     i;
 
   register void
@@ -614,7 +632,7 @@ static MagickBooleanType ExpandHeap(size_t size)
   segment_info->length=blocksize;
   segment_info->allocation=segment;
   segment_info->bound=(char *) segment+blocksize;
-  i=(long) memory_info.number_segments-1;
+  i=(ssize_t) memory_info.number_segments-1;
   for ( ; (i >= 0) && (memory_info.segments[i]->allocation > segment); i--)
     memory_info.segments[i+1]=memory_info.segments[i];
   memory_info.segments[i+1]=segment_info;
@@ -732,12 +750,12 @@ MagickExport void *RelinquishMagickMemory(void *memory)
 {
   if (memory == (void *) NULL)
     return((void *) NULL);
-#if !defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
+#if !defined(MAGICKCORE_ZERO_CONFIGURATION_SUPPORT)
   memory_methods.destroy_memory_handler(memory);
 #else
+  LockSemaphoreInfo(memory_semaphore);
   assert((SizeOfBlock(memory) % (4*sizeof(size_t))) == 0);
   assert((*BlockHeader(NextBlock(memory)) & PreviousBlockBit) != 0);
-  AcquireSemaphoreInfo(&memory_semaphore);
   if ((*BlockHeader(memory) & PreviousBlockBit) == 0)
     {
       void
@@ -768,7 +786,7 @@ MagickExport void *RelinquishMagickMemory(void *memory)
   *BlockFooter(memory,SizeOfBlock(memory))=SizeOfBlock(memory);
   *BlockHeader(NextBlock(memory))&=(~PreviousBlockBit);
   InsertFreeBlock(memory,AllocationPolicy(SizeOfBlock(memory)));
-  RelinquishSemaphoreInfo(memory_semaphore);
+  UnlockSemaphoreInfo(memory_semaphore);
 #endif
   return((void *) NULL);
 }
@@ -833,7 +851,7 @@ MagickExport void *ResetMagickMemory(void *memory,int byte,const size_t size)
 %
 */
 
-#if defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
+#if defined(MAGICKCORE_ZERO_CONFIGURATION_SUPPORT)
 static inline void *ResizeBlock(void *block,size_t size)
 {
   register void
@@ -860,25 +878,25 @@ MagickExport void *ResizeMagickMemory(void *memory,const size_t size)
 
   if (memory == (void *) NULL)
     return(AcquireMagickMemory(size));
-#if !defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
+#if !defined(MAGICKCORE_ZERO_CONFIGURATION_SUPPORT)
   block=memory_methods.resize_memory_handler(memory,size == 0 ? 1UL : size);
   if (block == (void *) NULL)
     memory=RelinquishMagickMemory(memory);
 #else
-  AcquireSemaphoreInfo(&memory_semaphore);
+  LockSemaphoreInfo(memory_semaphore);
   block=ResizeBlock(memory,size == 0 ? 1UL : size);
   if (block == (void *) NULL)
     {
       if (ExpandHeap(size == 0 ? 1UL : size) == MagickFalse)
         {
-          RelinquishSemaphoreInfo(memory_semaphore);
+          UnlockSemaphoreInfo(memory_semaphore);
           memory=RelinquishMagickMemory(memory);
           ThrowFatalException(ResourceLimitFatalError,"MemoryAllocationFailed");
         }
       block=ResizeBlock(memory,size == 0 ? 1UL : size);
       assert(block != (void *) NULL);
     }
-  RelinquishSemaphoreInfo(memory_semaphore);
+  UnlockSemaphoreInfo(memory_semaphore);
   memory=RelinquishMagickMemory(memory);
 #endif
   return(block);

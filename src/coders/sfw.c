@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -122,7 +122,7 @@ static MagickBooleanType IsSFW(const unsigned char *magick,const size_t length)
 static unsigned char *SFWScan(unsigned char *p,const unsigned char *q,
   const unsigned char *target,const int length)
 {
-  register long
+  register ssize_t
     i;
 
   for ( ; p < q; p++)
@@ -221,6 +221,9 @@ static Image *ReadSFWImage(const ImageInfo *image_info,ExceptionInfo *exception)
     *header,
     *data;
 
+  size_t
+    extent;
+
   ssize_t
     count;
 
@@ -294,8 +297,7 @@ static Image *ReadSFWImage(const ImageInfo *image_info,ExceptionInfo *exception)
     Write JFIF file.
   */
   read_info=CloneImageInfo(image_info);
-  read_info->blob=(void *) NULL;
-  read_info->length=0;
+  SetImageInfoBlob(read_info,(void *) NULL,0);
   file=(FILE *) NULL;
   unique_file=AcquireUniqueFileResource(read_info->filename);
   if (unique_file != -1)
@@ -311,9 +313,10 @@ static Image *ReadSFWImage(const ImageInfo *image_info,ExceptionInfo *exception)
       image=DestroyImageList(image);
       return((Image *) NULL);
     }
-  (void) fwrite(header,(size_t) (offset-header+1),1,file);
-  (void) fwrite(HuffmanTable,1,sizeof(HuffmanTable)/sizeof(*HuffmanTable),file);
-  (void) fwrite(offset+1,(size_t) (data-offset),1,file);
+  extent=fwrite(header,(size_t) (offset-header+1),1,file);
+  (void) extent;
+  extent=fwrite(HuffmanTable,1,sizeof(HuffmanTable)/sizeof(*HuffmanTable),file);
+  extent=fwrite(offset+1,(size_t) (data-offset),1,file);
   status=ferror(file) == -1 ? MagickFalse : MagickTrue;
   (void) fclose(file);
   buffer=(unsigned char *) RelinquishMagickMemory(buffer);
@@ -343,11 +346,13 @@ static Image *ReadSFWImage(const ImageInfo *image_info,ExceptionInfo *exception)
     Correct image orientation.
   */
   flipped_image=FlipImage(image,exception);
-  if (flipped_image == (Image *) NULL)
-    return(GetFirstImageInList(image));
-  DuplicateBlob(flipped_image,image);
-  image=DestroyImage(image);
-  return(flipped_image);
+  if (flipped_image != (Image *) NULL)
+    {
+      DuplicateBlob(flipped_image,image);
+      image=DestroyImage(image);
+      image=flipped_image;
+    }
+  return(GetFirstImageInList(image));
 }
 
 /*
@@ -370,10 +375,10 @@ static Image *ReadSFWImage(const ImageInfo *image_info,ExceptionInfo *exception)
 %
 %  The format of the RegisterSFWImage method is:
 %
-%      unsigned long RegisterSFWImage(void)
+%      size_t RegisterSFWImage(void)
 %
 */
-ModuleExport unsigned long RegisterSFWImage(void)
+ModuleExport size_t RegisterSFWImage(void)
 {
   MagickInfo
     *entry;

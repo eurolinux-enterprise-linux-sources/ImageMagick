@@ -78,6 +78,7 @@ MAGICKPP_EXTRA_DIST = \
 	Magick++/AUTHORS \
 	Magick++/ChangeLog \
 	Magick++/INSTALL \
+	Magick++/LICENSE \
 	Magick++/NEWS \
 	Magick++/README \
 	Magick++/bin/Magick++-config.1 \
@@ -93,7 +94,7 @@ MAGICKPP_EXTRA_DIST = \
 	Magick++/tests/test_image_anim.miff
 
 MAGICKPP_CLEANFILES = \
-	Magick++/demo/*_out.* \
+	Magick++/demo/*_out* \
 	Magick++/demo/ir.out \
 	Magick++/tests/colorHistogram.txt \
 	Magick++/tests/testmagick_anim_out.miff \
@@ -159,7 +160,7 @@ MAGICKPP_INCHEADERS_OPT = \
 	Magick++/lib/Magick++/STL.h \
 	Magick++/lib/Magick++/TypeMetric.h
 
-Magick___lib_libMagick___la_LDFLAGS = \
+Magick___lib_libMagick___la_LDFLAGS = -no-undefined \
 	-version-info $(MAGICK_LIBRARY_CURRENT):$(MAGICK_LIBRARY_REVISION):$(MAGICK_LIBRARY_AGE)
 Magick___lib_libMagick___la_LIBADD = $(MAGICKCORE_LIBS) $(MAGICKWAND_LIBS)
 

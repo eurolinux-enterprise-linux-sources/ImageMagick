@@ -17,7 +17,7 @@
 %                               November 2001                                 %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -52,6 +52,7 @@
 #include "magick/list.h"
 #include "magick/magick.h"
 #include "magick/memory_.h"
+#include "magick/pixel.h"
 #include "magick/quantize.h"
 #include "magick/quantum-private.h"
 #include "magick/static.h"
@@ -107,7 +108,7 @@ typedef enum
 
 typedef struct
 {
-  unsigned long
+  size_t
     width,
     height,
     image_type,
@@ -131,7 +132,7 @@ typedef struct
   unsigned int
     active;
 
-  unsigned long
+  size_t
     width,
     height,
     type,
@@ -148,7 +149,7 @@ typedef struct
     offset_x,
     offset_y;
 
-  unsigned long
+  size_t
     mode,
     tattoo;
 
@@ -231,7 +232,7 @@ typedef enum
   ImageMagick compositing operators
 */
 static CompositeOperator GIMPBlendModeToCompositeOperator(
-  unsigned long blendMode)
+  size_t blendMode)
 {
   switch ( blendMode )
   {
@@ -272,7 +273,7 @@ static CompositeOperator GIMPBlendModeToCompositeOperator(
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %  ReadBlobStringWithLongSize reads characters from a blob or file
-%  starting with a long length byte and then characters to that length
+%  starting with a ssize_t length byte and then characters to that length
 %
 %  The format of the ReadBlobStringWithLongSize method is:
 %
@@ -301,10 +302,10 @@ static char *ReadBlobStringWithLongSize(Image *image,char *string,size_t max)
   MagickOffsetType
     offset;
 
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     length;
 
   assert(image != (Image *) NULL);
@@ -313,7 +314,7 @@ static char *ReadBlobStringWithLongSize(Image *image,char *string,size_t max)
   if (image->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",image->filename);
   length=ReadBlobMSBLong(image);
-  for (i=0; i < (long) MagickMin(length,max-1); i++)
+  for (i=0; i < (ssize_t) MagickMin(length,max-1); i++)
   {
     c=ReadBlobByte(image);
     if (c == EOF)
@@ -334,10 +335,10 @@ static MagickBooleanType load_tile(Image *image,Image *tile_image,
   ExceptionInfo
     *exception;
 
-  long
+  ssize_t
     y;
 
-  register long
+  register ssize_t
     x;
 
   register PixelPacket
@@ -364,19 +365,20 @@ static MagickBooleanType load_tile(Image *image,Image *tile_image,
     ThrowBinaryException(CorruptImageError,"NotEnoughPixelData",
       image->filename);
   exception=(&image->exception);
-  for (y=0; y < (long) tile_image->rows; y++)
+  for (y=0; y < (ssize_t) tile_image->rows; y++)
   {
     q=QueueAuthenticPixels(tile_image,0,y,tile_image->columns,1,exception);
     if (q == (PixelPacket *) NULL)
       break;
     if (inDocInfo->image_type == GIMP_GRAY)
       {
-        for (x=0; x < (long) tile_image->columns; x++)
+        for (x=0; x < (ssize_t) tile_image->columns; x++)
         {
-          q->red=ScaleCharToQuantum(*graydata);
-          q->green=q->red;
-          q->blue=q->red;
-          q->opacity=ScaleCharToQuantum(255-inLayerInfo->opacity);
+          SetPixelRed(q,ScaleCharToQuantum(*graydata));
+          SetPixelGreen(q,GetPixelRed(q));
+          SetPixelBlue(q,GetPixelRed(q));
+          SetPixelAlpha(q,ScaleCharToQuantum((unsigned char)
+            inLayerInfo->opacity));
           graydata++;
           q++;
         }
@@ -384,13 +386,13 @@ static MagickBooleanType load_tile(Image *image,Image *tile_image,
     else
       if (inDocInfo->image_type == GIMP_RGB)
         {
-          for (x=0; x < (long) tile_image->columns; x++)
+          for (x=0; x < (ssize_t) tile_image->columns; x++)
           {
-            q->red=ScaleCharToQuantum(xcfdata->red);
-            q->green=ScaleCharToQuantum(xcfdata->green);
-            q->blue=ScaleCharToQuantum(xcfdata->blue);
-            q->opacity=(Quantum) (xcfdata->opacity == 0U ? TransparentOpacity :
-              ScaleCharToQuantum(255-inLayerInfo->opacity));
+            SetPixelRed(q,ScaleCharToQuantum(xcfdata->red));
+            SetPixelGreen(q,ScaleCharToQuantum(xcfdata->green));
+            SetPixelBlue(q,ScaleCharToQuantum(xcfdata->blue));
+            SetPixelAlpha(q,xcfdata->opacity == 0U ?  OpaqueOpacity :
+              ScaleCharToQuantum((unsigned char) inLayerInfo->opacity));
             xcfdata++;
             q++;
           }
@@ -408,22 +410,20 @@ static MagickBooleanType load_tile_rle(Image *image,Image *tile_image,
   ExceptionInfo
     *exception;
 
-  long
-    i,
-    j;
-
   MagickOffsetType
     size;
 
   register PixelPacket
     *q;
 
-  ssize_t
-    bytes_per_pixel,
-    count;
-
   size_t
     length;
+
+  ssize_t
+    bytes_per_pixel,
+    count,
+    i,
+    j;
 
   unsigned char
     data,
@@ -441,9 +441,10 @@ static MagickBooleanType load_tile_rle(Image *image,Image *tile_image,
   count=ReadBlob(image, (size_t) data_length, xcfdata);
   xcfdatalimit = xcfodata+count-1;
   exception=(&image->exception);
-  for (i=0; i < (long) bytes_per_pixel; i++)
+  for (i=0; i < (ssize_t) bytes_per_pixel; i++)
   {
-    q=GetAuthenticPixels(tile_image,0,0,tile_image->columns,tile_image->rows,exception);
+    q=GetAuthenticPixels(tile_image,0,0,tile_image->columns,tile_image->rows,
+      exception);
     size=(MagickOffsetType) tile_image->rows*tile_image->columns;
     while (size > 0)
     {
@@ -473,35 +474,37 @@ static MagickBooleanType load_tile_rle(Image *image,Image *tile_image,
               {
                 case 0:
                 {
-                  q->red=ScaleCharToQuantum(data);
+                  SetPixelRed(q,ScaleCharToQuantum(data));
                   if (inDocInfo->image_type == GIMP_GRAY)
                     {
-                      q->green=ScaleCharToQuantum(data);
-                      q->blue=ScaleCharToQuantum(data);
-                      q->opacity=ScaleCharToQuantum(255-inLayerInfo->opacity);
+                      SetPixelGreen(q,ScaleCharToQuantum(data));
+                      SetPixelBlue(q,ScaleCharToQuantum(data));
+                      SetPixelAlpha(q,ScaleCharToQuantum(
+                        (unsigned char) inLayerInfo->opacity));
                     }
                   else
                     {
-                      q->green= q->red;
-                      q->blue= q->red;
-                      q->opacity=ScaleCharToQuantum(255-inLayerInfo->opacity);
+                      SetPixelGreen(q,GetPixelRed(q));
+                      SetPixelBlue(q,GetPixelRed(q));
+                      SetPixelAlpha(q,ScaleCharToQuantum(
+                        (unsigned char) inLayerInfo->opacity));
                     }
                   break;
                 }
                 case 1:
                 {
-                  q->green=ScaleCharToQuantum(data);
+                  SetPixelGreen(q,ScaleCharToQuantum(data));
                   break;
                 }
                 case 2:
                 {
-                  q->blue=ScaleCharToQuantum(data);
+                  SetPixelBlue(q,ScaleCharToQuantum(data));
                   break;
                 }
                 case 3:
                 {
-                  q->opacity=(Quantum) (data == 0 ? TransparentOpacity :
-                    ScaleCharToQuantum(255-inLayerInfo->opacity));
+                  SetPixelAlpha(q,data == 0 ? OpaqueOpacity :
+                    ScaleCharToQuantum((unsigned char) inLayerInfo->opacity));
                   break;
                 }
               }
@@ -524,42 +527,44 @@ static MagickBooleanType load_tile_rle(Image *image,Image *tile_image,
             if (xcfdata > xcfdatalimit)
               goto bogus_rle;
             pixel=(*xcfdata++);
-            for (j= 0; j < (long) length; j++)
+            for (j= 0; j < (ssize_t) length; j++)
             {
               data=pixel;
               switch (i)
               {
                 case 0:
                 {
-                  q->red=ScaleCharToQuantum(data);
+                  SetPixelRed(q,ScaleCharToQuantum(data));
                   if (inDocInfo->image_type == GIMP_GRAY)
                     {
-                      q->green=ScaleCharToQuantum(data);
-                      q->blue=ScaleCharToQuantum(data);
-                      q->opacity=ScaleCharToQuantum(255-inLayerInfo->opacity);
+                      SetPixelGreen(q,ScaleCharToQuantum(data));
+                      SetPixelBlue(q,ScaleCharToQuantum(data));
+                      SetPixelAlpha(q,ScaleCharToQuantum(
+                        (unsigned char) inLayerInfo->opacity));
                     }
                   else
                     {
-                      q->green=q->red;
-                      q->blue=q->red;
-                      q->opacity=ScaleCharToQuantum(255-inLayerInfo->opacity);
+                      SetPixelGreen(q,GetPixelRed(q));
+                      SetPixelBlue(q,GetPixelRed(q));
+                      SetPixelAlpha(q,ScaleCharToQuantum(
+                        (unsigned char) inLayerInfo->opacity));
                     }
                   break;
                 }
                 case 1:
                 {
-                  q->green=ScaleCharToQuantum(data);
+                  SetPixelGreen(q,ScaleCharToQuantum(data));
                   break;
                 }
                 case 2:
                 {
-                  q->blue=ScaleCharToQuantum(data);
+                  SetPixelBlue(q,ScaleCharToQuantum(data));
                   break;
                 }
                 case 3:
                 {
-                  q->opacity=(Quantum) (data == 0 ? TransparentOpacity :
-                    ScaleCharToQuantum(255-inLayerInfo->opacity));
+                  SetPixelAlpha(q,data == 0 ? OpaqueOpacity :
+                    ScaleCharToQuantum((unsigned char) inLayerInfo->opacity));
                   break;
                 }
               }
@@ -600,10 +605,10 @@ static MagickBooleanType load_level(Image *image,XCFDocInfo *inDocInfo,
     offset,
     offset2;
 
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     width,
     height,
     ntiles,
@@ -629,7 +634,7 @@ static MagickBooleanType load_level(Image *image,XCFDocInfo *inDocInfo,
   ntile_rows=(height+TILE_HEIGHT-1)/TILE_HEIGHT;
   ntile_cols=(width+TILE_WIDTH-1)/TILE_WIDTH;
   ntiles=ntile_rows*ntile_cols;
-  for (i = 0; i < (long) ntiles; i++)
+  for (i = 0; i < (ssize_t) ntiles; i++)
   {
     status=MagickFalse;
     if (offset == 0)
@@ -651,10 +656,10 @@ static MagickBooleanType load_level(Image *image,XCFDocInfo *inDocInfo,
       /* allocate the image for the tile
         NOTE: the last tile in a row or column may not be a full tile!
       */
-      tile_image_width=(unsigned long) (destLeft == (int) ntile_cols-1 ?
+      tile_image_width=(size_t) (destLeft == (int) ntile_cols-1 ?
         (int) width % TILE_WIDTH : TILE_WIDTH);
       if (tile_image_width == 0) tile_image_width=TILE_WIDTH;
-      tile_image_height = (unsigned long) (destTop == (int) ntile_rows-1 ?
+      tile_image_height = (size_t) (destTop == (int) ntile_rows-1 ?
         (int) height % TILE_HEIGHT : TILE_HEIGHT);
       if (tile_image_height == 0) tile_image_height=TILE_HEIGHT;
       tile_image=CloneImage(inLayerInfo->image,tile_image_width,
@@ -714,14 +719,17 @@ static MagickBooleanType load_hierarchy(Image *image,XCFDocInfo *inDocInfo,
     offset,
     junk;
 
-  unsigned long
+  size_t
     width,
     height,
     bytes_per_pixel;
 
   width=ReadBlobMSBLong(image);
+  (void) width;
   height=ReadBlobMSBLong(image);
+  (void) height;
   bytes_per_pixel=inDocInfo->bytes_per_pixel=ReadBlobMSBLong(image);
+  (void) bytes_per_pixel;
 
   /* load in the levels...we make sure that the number of levels
    *  calculated when the TileManager was created is the same
@@ -758,16 +766,13 @@ static MagickBooleanType load_hierarchy(Image *image,XCFDocInfo *inDocInfo,
 static MagickBooleanType ReadOneLayer(Image* image,XCFDocInfo* inDocInfo,
   XCFLayerInfo *outLayer )
 {
-  long
-    i;
-
   MagickOffsetType
     offset;
 
   unsigned int
     foundPropEnd = 0;
 
-  unsigned long
+  size_t
     hierarchy_offset,
     layer_mask_offset;
 
@@ -788,7 +793,7 @@ static MagickBooleanType ReadOneLayer(Image* image,XCFDocInfo* inDocInfo,
   foundPropEnd = 0;
   while ( (foundPropEnd == MagickFalse) && (EOFBlob(image) == MagickFalse) ) {
   PropType    prop_type = (PropType) ReadBlobMSBLong(image);
-  unsigned long  prop_size = ReadBlobMSBLong(image);
+  size_t  prop_size = ReadBlobMSBLong(image);
     switch (prop_type)
     {
     case PROP_END:
@@ -822,8 +827,8 @@ static MagickBooleanType ReadOneLayer(Image* image,XCFDocInfo* inDocInfo,
       outLayer->show_mask = ReadBlobMSBLong(image);
       break;
     case PROP_OFFSETS:
-      outLayer->offset_x = (long) ReadBlobMSBLong(image);
-      outLayer->offset_y = (long) ReadBlobMSBLong(image);
+      outLayer->offset_x = (int) ReadBlobMSBLong(image);
+      outLayer->offset_y = (int) ReadBlobMSBLong(image);
       break;
     case PROP_MODE:
       outLayer->mode = ReadBlobMSBLong(image);
@@ -833,11 +838,12 @@ static MagickBooleanType ReadOneLayer(Image* image,XCFDocInfo* inDocInfo,
       break;
      case PROP_PARASITES:
      {
-        for (i=0; i < (long) prop_size; i++ )
-          (void) ReadBlobByte(image);
+       if (DiscardBlobBytes(image,prop_size) == MagickFalse)
+         ThrowFileException(&image->exception,CorruptImageError,
+           "UnexpectedEndOfFile",image->filename);
 
         /*
-       long base = info->cp;
+       ssize_t base = info->cp;
        GimpParasite *p;
        while (info->cp - base < prop_size)
        {
@@ -866,7 +872,7 @@ static MagickBooleanType ReadOneLayer(Image* image,XCFDocInfo* inDocInfo,
         if (!amount)
           ThrowBinaryException(CorruptImageError,"CorruptImage",
             image->filename);
-        prop_size -= (unsigned long) MagickMin(16, (size_t) amount);
+        prop_size -= (size_t) MagickMin(16, (size_t) amount);
         }
       }
       break;
@@ -980,17 +986,15 @@ static Image *ReadXCFImage(const ImageInfo *image_info,ExceptionInfo *exception)
   MagickOffsetType
     offset;
 
-  register long
+  register ssize_t
     i;
 
   size_t
+    image_type,
     length;
 
   ssize_t
     count;
-
-  unsigned long
-    image_type;
 
   XCFDocInfo
     doc_info;
@@ -1048,7 +1052,7 @@ static Image *ReadXCFImage(const ImageInfo *image_info,ExceptionInfo *exception)
   while ((foundPropEnd == MagickFalse) && (EOFBlob(image) == MagickFalse))
   {
     PropType prop_type = (PropType) ReadBlobMSBLong(image);
-    unsigned long prop_size = ReadBlobMSBLong(image);
+    size_t prop_size = ReadBlobMSBLong(image);
 
     switch (prop_type)
     {
@@ -1060,9 +1064,10 @@ static Image *ReadXCFImage(const ImageInfo *image_info,ExceptionInfo *exception)
         /* Cannot rely on prop_size here--the value is set incorrectly
            by some Gimp versions.
         */
-        unsigned long num_colours = ReadBlobMSBLong(image);
-        for (i=0; i < (long) (3L*num_colours); i++ )
-          (void) ReadBlobByte(image);
+        size_t num_colours = ReadBlobMSBLong(image);
+        if (DiscardBlobBytes(image,3*num_colours) == MagickFalse)
+          ThrowFileException(&image->exception,CorruptImageError,
+            "UnexpectedEndOfFile",image->filename);
     /*
       if (info->file_version == 0)
       {
@@ -1108,10 +1113,9 @@ static Image *ReadXCFImage(const ImageInfo *image_info,ExceptionInfo *exception)
       case PROP_GUIDES:
       {
          /* just skip it - we don't care about guides */
-        for (i=0; i < (long) prop_size; i++ )
-          if (ReadBlobByte(image) == EOF)
-            ThrowFileException(exception,CorruptImageError,
-              "UnexpectedEndOfFile",image->filename);
+        if (DiscardBlobBytes(image,prop_size) == MagickFalse)
+          ThrowFileException(&image->exception,CorruptImageError,
+            "UnexpectedEndOfFile",image->filename);
       }
       break;
 
@@ -1142,20 +1146,18 @@ static Image *ReadXCFImage(const ImageInfo *image_info,ExceptionInfo *exception)
     case PROP_TATTOO:
       {
         /* we need to read it, even if we ignore it */
-        /*unsigned long  tattoo_state = */ (void) ReadBlobMSBLong(image);
+        /*size_t  tattoo_state = */ (void) ReadBlobMSBLong(image);
       }
       break;
 
     case PROP_PARASITES:
       {
         /* BOGUS: we may need these for IPTC stuff */
-        for (i=0; i < (long) prop_size; i++ )
-          if (ReadBlobByte(image) == EOF)
-            ThrowFileException(exception,CorruptImageError,
-              "UnexpectedEndOfFile",image->filename);
-
+        if (DiscardBlobBytes(image,prop_size) == MagickFalse)
+          ThrowFileException(&image->exception,CorruptImageError,
+            "UnexpectedEndOfFile",image->filename);
         /*
-      glong         base = info->cp;
+      gssize_t         base = info->cp;
       GimpParasite *p;
 
       while (info->cp - base < prop_size)
@@ -1173,17 +1175,16 @@ static Image *ReadXCFImage(const ImageInfo *image_info,ExceptionInfo *exception)
     case PROP_UNIT:
       {
         /* BOGUS: ignore for now... */
-      /*unsigned long unit =  */ (void) ReadBlobMSBLong(image);
+      /*size_t unit =  */ (void) ReadBlobMSBLong(image);
       }
       break;
 
     case PROP_PATHS:
       {
       /* BOGUS: just skip it for now */
-        for (i=0; i< (long) prop_size; i++ )
-          if (ReadBlobByte(image) == EOF)
-            ThrowFileException(exception,CorruptImageError,
-              "UnexpectedEndOfFile",image->filename);
+        if (DiscardBlobBytes(image,prop_size) == MagickFalse)
+          ThrowFileException(&image->exception,CorruptImageError,
+            "UnexpectedEndOfFile",image->filename);
 
         /*
       PathList *paths = xcf_load_bzpaths (gimage, info);
@@ -1197,7 +1198,7 @@ static Image *ReadXCFImage(const ImageInfo *image_info,ExceptionInfo *exception)
         char  unit_string[1000];
         /*BOGUS: ignored for now */
         /*float  factor = (float) */ (void) ReadBlobMSBLong(image);
-        /* unsigned long digits =  */ (void) ReadBlobMSBLong(image);
+        /* size_t digits =  */ (void) ReadBlobMSBLong(image);
         for (i=0; i<5; i++)
          (void) ReadBlobStringWithLongSize(image, unit_string,
            sizeof(unit_string));
@@ -1207,16 +1208,16 @@ static Image *ReadXCFImage(const ImageInfo *image_info,ExceptionInfo *exception)
       default:
       {
         int buf[16];
-        long amount;
+        ssize_t amount;
 
       /* read over it... */
       while ((prop_size > 0) && (EOFBlob(image) == MagickFalse))
       {
-        amount=(long) MagickMin(16, prop_size);
-        amount=(long) ReadBlob(image,(size_t) amount,(unsigned char *) &buf);
+        amount=(ssize_t) MagickMin(16, prop_size);
+        amount=(ssize_t) ReadBlob(image,(size_t) amount,(unsigned char *) &buf);
         if (!amount)
           ThrowReaderException(CorruptImageError,"CorruptImage");
-        prop_size -= (unsigned long) MagickMin(16,(size_t) amount);
+        prop_size -= (size_t) MagickMin(16,(size_t) amount);
       }
     }
     break;
@@ -1247,7 +1248,7 @@ static Image *ReadXCFImage(const ImageInfo *image_info,ExceptionInfo *exception)
       */
       do
       {
-        long offset = (long) ReadBlobMSBLong(image);
+        ssize_t offset = (int) ReadBlobMSBLong(image);
         if (offset == 0)
           foundAllLayers=MagickTrue;
         else
@@ -1445,10 +1446,10 @@ static Image *ReadXCFImage(const ImageInfo *image_info,ExceptionInfo *exception)
 %
 %  The format of the RegisterXCFImage method is:
 %
-%      unsigned long RegisterXCFImage(void)
+%      size_t RegisterXCFImage(void)
 %
 */
-ModuleExport unsigned long RegisterXCFImage(void)
+ModuleExport size_t RegisterXCFImage(void)
 {
   MagickInfo
     *entry;

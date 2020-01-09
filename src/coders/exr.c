@@ -17,7 +17,7 @@
 %                                 April 2007                                  %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -151,17 +151,17 @@ static Image *ReadEXRImage(const ImageInfo *image_info,ExceptionInfo *exception)
     min_x,
     min_y;
 
-  long
-    y;
+  MagickBooleanType
+    status;
 
-  register long
+  register ssize_t
     x;
 
   register PixelPacket
     *q;
 
-  MagickBooleanType
-    status;
+  ssize_t
+    y;
 
   /*
     Open image.
@@ -214,7 +214,7 @@ static Image *ReadEXRImage(const ImageInfo *image_info,ExceptionInfo *exception)
       (void) ImfCloseInputFile(file);
       ThrowReaderException(ResourceLimitError,"MemoryAllocationFailed");
     }
-  for (y=0; y < (long) image->rows; y++)
+  for (y=0; y < (ssize_t) image->rows; y++)
   {
     q=QueueAuthenticPixels(image,0,y,image->columns,1,exception);
     if (q == (PixelPacket *) NULL)
@@ -222,16 +222,16 @@ static Image *ReadEXRImage(const ImageInfo *image_info,ExceptionInfo *exception)
     ImfInputSetFrameBuffer(file,scanline-min_x-image->columns*(min_y+y),1,
       image->columns);
     ImfInputReadPixels(file,min_y+y,min_y+y);
-    for (x=0; x < (long) image->columns; x++)
+    for (x=0; x < (ssize_t) image->columns; x++)
     {
-      q->red=RoundToQuantum((MagickRealType) QuantumRange*ImfHalfToFloat(
-        scanline[x].r));
-      q->green=RoundToQuantum((MagickRealType) QuantumRange*ImfHalfToFloat(
-        scanline[x].g));
-      q->blue=RoundToQuantum((MagickRealType) QuantumRange*ImfHalfToFloat(
-        scanline[x].b));
-      q->opacity=RoundToQuantum((MagickRealType) QuantumRange-QuantumRange*
-        ImfHalfToFloat(scanline[x].a));
+      SetPixelRed(q,ClampToQuantum((MagickRealType) QuantumRange*
+        ImfHalfToFloat(scanline[x].r)));
+      SetPixelGreen(q,ClampToQuantum((MagickRealType) QuantumRange*
+        ImfHalfToFloat(scanline[x].g)));
+      SetPixelBlue(q,ClampToQuantum((MagickRealType) QuantumRange*
+        ImfHalfToFloat(scanline[x].b)));
+      SetPixelAlpha(q,ClampToQuantum((MagickRealType) QuantumRange*
+        ImfHalfToFloat(scanline[x].a)));
       q++;
     }
     if (SyncAuthenticPixels(image,exception) == MagickFalse)
@@ -267,10 +267,10 @@ static Image *ReadEXRImage(const ImageInfo *image_info,ExceptionInfo *exception)
 %
 %  The format of the RegisterEXRImage method is:
 %
-%      unsigned long RegisterEXRImage(void)
+%      size_t RegisterEXRImage(void)
 %
 */
-ModuleExport unsigned long RegisterEXRImage(void)
+ModuleExport size_t RegisterEXRImage(void)
 {
   MagickInfo
     *entry;
@@ -356,8 +356,8 @@ static MagickBooleanType WriteEXRImage(const ImageInfo *image_info,Image *image)
   ImfRgba
     *scanline;
 
-  long
-    y;
+  int
+    compression;
 
   MagickBooleanType
     status;
@@ -365,8 +365,11 @@ static MagickBooleanType WriteEXRImage(const ImageInfo *image_info,Image *image)
   register const PixelPacket
     *p;
 
-  register long
+  register ssize_t
     x;
+
+  ssize_t
+    y;
 
   /*
     Open output image file.
@@ -387,8 +390,24 @@ static MagickBooleanType WriteEXRImage(const ImageInfo *image_info,Image *image)
     image->rows-1);
   ImfHeaderSetDisplayWindow(hdr_info,0,0,(int) image->columns-1,(int)
     image->rows-1);
-  ImfHeaderSetCompression(hdr_info,write_info->compression == NoCompression ?
-    IMF_NO_COMPRESSION : IMF_PIZ_COMPRESSION);
+  compression=IMF_NO_COMPRESSION;
+  if (write_info->compression == ZipSCompression)
+    compression=IMF_ZIPS_COMPRESSION;
+  if (write_info->compression == ZipCompression)
+    compression=IMF_ZIP_COMPRESSION;
+  if (write_info->compression == PizCompression)
+    compression=IMF_PIZ_COMPRESSION;
+  if (write_info->compression == Pxr24Compression)
+    compression=IMF_PXR24_COMPRESSION;
+#if defined(B44Compression)
+  if (write_info->compression == B44Compression)
+    compression=IMF_B44_COMPRESSION;
+#endif
+#if defined(B44ACompression)
+  if (write_info->compression == B44ACompression)
+    compression=IMF_B44A_COMPRESSION;
+#endif
+  ImfHeaderSetCompression(hdr_info,compression);
   ImfHeaderSetLineOrder(hdr_info,IMF_INCREASING_Y);
   file=ImfOpenOutputFile(write_info->filename,hdr_info,IMF_WRITE_RGBA);
   ImfDeleteHeader(hdr_info);
@@ -405,23 +424,24 @@ static MagickBooleanType WriteEXRImage(const ImageInfo *image_info,Image *image)
       (void) ImfCloseOutputFile(file);
       ThrowWriterException(ResourceLimitError,"MemoryAllocationFailed");
     }
-  for (y=0; y < (long) image->rows; y++)
+  for (y=0; y < (ssize_t) image->rows; y++)
   {
     p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
     if (p == (const PixelPacket *) NULL)
       break;
-    for (x=0; x < (long) image->columns; x++)
+    for (x=0; x < (ssize_t) image->columns; x++)
     {
-      ImfFloatToHalf(QuantumScale*p->red,&half_quantum);
+      ImfFloatToHalf(QuantumScale*GetPixelRed(p),&half_quantum);
       scanline[x].r=half_quantum;
-      ImfFloatToHalf(QuantumScale*p->green,&half_quantum);
+      ImfFloatToHalf(QuantumScale*GetPixelGreen(p),&half_quantum);
       scanline[x].g=half_quantum;
-      ImfFloatToHalf(QuantumScale*p->blue,&half_quantum);
+      ImfFloatToHalf(QuantumScale*GetPixelBlue(p),&half_quantum);
       scanline[x].b=half_quantum;
       if (image->matte == MagickFalse)
         ImfFloatToHalf(1.0,&half_quantum);
       else
-        ImfFloatToHalf(1.0-QuantumScale*p->opacity,&half_quantum);
+        ImfFloatToHalf(1.0-QuantumScale*GetPixelOpacity(p),
+          &half_quantum);
       scanline[x].a=half_quantum;
       p++;
     }

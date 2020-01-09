@@ -17,7 +17,7 @@
 %                               August 2003                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -45,6 +45,7 @@
 #include "magick/exception.h"
 #include "magick/exception-private.h"
 #include "magick/list.h"
+#include "magick/locale_.h"
 #include "magick/log.h"
 #include "magick/memory_.h"
 #include "magick/property.h"
@@ -118,15 +119,16 @@ MagickExport char *AcquireString(const char *source)
   length=0;
   if (source != (char *) NULL)
     length+=strlen(source);
-  destination=(char *) NULL;
-  if (~length >= MaxTextExtent)
-    destination=(char *) AcquireQuantumMemory(length+MaxTextExtent,
-      sizeof(*destination));
+  if (~length < MaxTextExtent)
+    ThrowFatalException(ResourceLimitFatalError,"UnableToAcquireString");
+  destination=(char *) AcquireQuantumMemory(length+MaxTextExtent,
+    sizeof(*destination));
   if (destination == (char *) NULL)
     ThrowFatalException(ResourceLimitFatalError,"UnableToAcquireString");
   *destination='\0';
   if (source != (char *) NULL)
-    (void) CopyMagickString(destination,source,(length+1)*sizeof(*destination));
+    (void) memcpy(destination,source,length*sizeof(*destination));
+  destination[length]='\0';
   return(destination);
 }
 
@@ -166,7 +168,7 @@ MagickExport StringInfo *AcquireStringInfo(const size_t length)
   if (string_info->length != 0)
     {
       string_info->datum=(unsigned char *) NULL;
-      if (~string_info->length >= MaxTextExtent)
+      if (~string_info->length >= (MaxTextExtent-1))
         string_info->datum=(unsigned char *) AcquireQuantumMemory(
           string_info->length+MaxTextExtent,sizeof(*string_info->datum));
       if (string_info->datum == (unsigned char *) NULL)
@@ -177,6 +179,50 @@ MagickExport StringInfo *AcquireStringInfo(const size_t length)
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%   B l o b T o S t r i n g I n f o                                           %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  BlobToStringInfo() returns the contents of a blob as a string.
+%
+%  The format of the BlobToStringInfo method is:
+%
+%      StringInfo *BlobToStringInfo(const void *blob,const size_t length)
+%
+%  A description of each parameter follows:
+%
+%    o blob: the blob.
+%
+%    o length: the length of the blob.
+%
+*/
+MagickExport StringInfo *BlobToStringInfo(const void *blob,const size_t length)
+{
+  StringInfo
+    *string_info;
+
+  string_info=AcquireStringInfo(0);
+  string_info->length=length;
+  if (~string_info->length >= (MaxTextExtent-1))
+    string_info->datum=(unsigned char *) AcquireQuantumMemory(
+      string_info->length+MaxTextExtent,sizeof(*string_info->datum));
+  if (string_info->datum == (unsigned char *) NULL)
+    {
+      string_info=DestroyStringInfo(string_info);
+      return((StringInfo *) NULL);
+    }
+  if (blob != (const void *) NULL)
+    (void) memcpy(string_info->datum,blob,length);
+  return(string_info);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                                                                             %
 %                                                                             %
 %                                                                             %
@@ -222,10 +268,12 @@ MagickExport char *CloneString(char **destination,const char *source)
   if (~length < MaxTextExtent)
     ThrowFatalException(ResourceLimitFatalError,"UnableToAcquireString");
   *destination=(char *) ResizeQuantumMemory(*destination,length+MaxTextExtent,
-    sizeof(*destination));
+    sizeof(**destination));
   if (*destination == (char *) NULL)
     ThrowFatalException(ResourceLimitFatalError,"UnableToAcquireString");
-  (void) CopyMagickString(*destination,source,(length+1)*sizeof(*destination));
+  if (length != 0)
+    (void) memcpy(*destination,source,length*sizeof(**destination));
+  (*destination)[length]='\0';
   return(*destination);
 }
 
@@ -261,8 +309,7 @@ MagickExport StringInfo *CloneStringInfo(const StringInfo *string_info)
   assert(string_info->signature == MagickSignature);
   clone_info=AcquireStringInfo(string_info->length);
   if (string_info->length != 0)
-    (void) CopyMagickMemory(clone_info->datum,string_info->datum,
-      string_info->length+1);
+    (void) memcpy(clone_info->datum,string_info->datum,string_info->length+1);
   return(clone_info);
 }
 
@@ -419,6 +466,7 @@ MagickExport MagickBooleanType ConcatenateString(char **destination,
   const char *source)
 {
   size_t
+    destination_length,
     length,
     source_length;
 
@@ -430,19 +478,21 @@ MagickExport MagickBooleanType ConcatenateString(char **destination,
       *destination=AcquireString(source);
       return(MagickTrue);
     }
-  length=strlen(*destination);
+  destination_length=strlen(*destination);
   source_length=strlen(source);
+  length=destination_length;
   if (~length < source_length)
     ThrowFatalException(ResourceLimitFatalError,"UnableToConcatenateString");
   length+=source_length;
   if (~length < MaxTextExtent)
     ThrowFatalException(ResourceLimitFatalError,"UnableToConcatenateString");
   *destination=(char *) ResizeQuantumMemory(*destination,length+MaxTextExtent,
-    sizeof(*destination));
+    sizeof(**destination));
   if (*destination == (char *) NULL)
     ThrowFatalException(ResourceLimitFatalError,"UnableToConcatenateString");
-  (void) ConcatenateMagickString(*destination,source,(length+1)*
-    sizeof(*destination));
+  if (source_length != 0)
+    (void) memcpy((*destination)+destination_length,source,source_length);
+  (*destination)[length]='\0';
   return(MagickTrue);
 }
 
@@ -486,8 +536,7 @@ MagickExport void ConcatenateStringInfo(StringInfo *string_info,
   if (~length < source->length)
     ThrowFatalException(ResourceLimitFatalError,"UnableToConcatenateString");
   SetStringInfoLength(string_info,length+source->length);
-  (void) CopyMagickMemory(string_info->datum+length,source->datum,
-    source->length);
+  (void) memcpy(string_info->datum+length,source->datum,source->length);
 }
 
 /*
@@ -538,7 +587,7 @@ MagickExport StringInfo *ConfigureFileToStringInfo(const char *filename)
   file=open(filename,O_RDONLY | O_BINARY);
   if (file == -1)
     return((StringInfo *) NULL);
-  offset=(MagickOffsetType) MagickSeek(file,0,SEEK_END);
+  offset=(MagickOffsetType) lseek(file,0,SEEK_END);
   if ((offset < 0) || (offset != (MagickOffsetType) ((ssize_t) offset)))
     {
       file=close(file)-1;
@@ -546,7 +595,7 @@ MagickExport StringInfo *ConfigureFileToStringInfo(const char *filename)
     }
   length=(size_t) offset;
   string=(char *) NULL;
-  if (~length > MaxTextExtent)
+  if (~length >= (MaxTextExtent-1))
     string=(char *) AcquireQuantumMemory(length+MaxTextExtent,sizeof(*string));
   if (string == (char *) NULL)
     {
@@ -556,7 +605,7 @@ MagickExport StringInfo *ConfigureFileToStringInfo(const char *filename)
   map=MapBlob(file,ReadMode,0,length);
   if (map != (void *) NULL)
     {
-      (void) CopyMagickMemory(string,map,length);
+      (void) memcpy(string,map,length);
       (void) UnmapBlob(map,length);
     }
   else
@@ -567,7 +616,7 @@ MagickExport StringInfo *ConfigureFileToStringInfo(const char *filename)
       ssize_t
         count;
 
-      (void) MagickSeek(file,0,SEEK_SET);
+      (void) lseek(file,0,SEEK_SET);
       for (i=0; i < length; i+=count)
       {
         count=read(file,string+i,(size_t) MagickMin(length-i,(size_t)
@@ -637,7 +686,8 @@ MagickExport char *ConstantString(const char *source)
     ThrowFatalException(ResourceLimitFatalError,"UnableToAcquireString");
   *destination='\0';
   if (source != (char *) NULL)
-    (void) CopyMagickString(destination,source,(length+1)*sizeof(*destination));
+    (void) memcpy(destination,source,length*sizeof(*destination));
+  destination[length]='\0';
   return(destination);
 }
 
@@ -803,7 +853,7 @@ MagickExport StringInfo *DestroyStringInfo(StringInfo *string_info)
 */
 MagickExport char **DestroyStringList(char **list)
 {
-  register long
+  register ssize_t
     i;
 
   assert(list != (char **) NULL);
@@ -867,7 +917,7 @@ MagickExport char *EscapeString(const char *source,const char escape)
         length++;
       }
   destination=(char *) NULL;
-  if (~length >= MaxTextExtent)
+  if (~length >= (MaxTextExtent-1))
     destination=(char *) AcquireQuantumMemory(length+MaxTextExtent,
       sizeof(*destination));
   if (destination == (char *) NULL)
@@ -985,111 +1035,71 @@ MagickExport StringInfo *FileToStringInfo(const char *filename,
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %  FormatMagickSize() converts a size to a human readable format, for example,
-%  14kb, 234mb, 2.7gb, or 3.0tb.  Scaling is done by repetitively dividing by
-%  1024.
+%  14k, 234m, 2.7g, or 3.0t.  Scaling is done by repetitively dividing by
+%  1000.
 %
 %  The format of the FormatMagickSize method is:
 %
-%      long FormatMagickSize(const MagickSizeType size,char *format)
+%      ssize_t FormatMagickSize(const MagickSizeType size,char *format)
 %
 %  A description of each parameter follows:
 %
 %    o size:  convert this size to a human readable format.
 %
+%    o bi:  use power of two rather than power of ten.
+%
 %    o format:  human readable format.
 %
 */
-MagickExport long FormatMagickSize(const MagickSizeType size,char *format)
+MagickExport ssize_t FormatMagickSize(const MagickSizeType size,
+  const MagickBooleanType bi,char *format)
 {
+  const char
+    **units;
+
   double
+    bytes,
     length;
 
-  long
-    count;
-
-  register long
+  register ssize_t
     i,
     j;
 
-  static const char
-    *units[] = { "b", "kb", "mb", "gb", "tb", "pb", "eb", (char *) NULL };
+  ssize_t
+    count;
 
+  static const char
+    *bi_units[] =
+    {
+      "", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi", "Yi", (char *) NULL
+    },
+    *traditional_units[] =
+    {
+      "", "K", "M", "G", "T", "P", "E", "Z", "Y", (char *) NULL
+    };
+
+  bytes=1000.0;
+  units=traditional_units;
+  if (bi != MagickFalse)
+    {
+      bytes=1024.0;
+      units=bi_units;
+    }
 #if defined(_MSC_VER) && (_MSC_VER == 1200)
   length=(double) ((MagickOffsetType) size);
 #else
   length=(double) size;
 #endif
-  for (i=0; (length >= 1024.0) && (units[i+1] != (const char *) NULL); i++)
-    length/=1024.0;
-  for (j=2; j < 10; j++)
+  for (i=0; (length >= bytes) && (units[i+1] != (const char *) NULL); i++)
+    length/=bytes;
+  for (j=2; j < 12; j++)
   {
-    count=FormatMagickString(format,MaxTextExtent,"%.*g%s",(int) (i+j),length,
+    count=FormatLocaleString(format,MaxTextExtent,"%.*g%sB",(int) (i+j),length,
       units[i]);
     if (strchr(format,'+') == (char *) NULL)
       break;
   }
   return(count);
-}
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%  F o r m a t M a g i c k S t r i n g                                        %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  FormatMagickString() prints formatted output of a variable argument list.
-%
-%  The format of the FormatMagickString method is:
-%
-%      long FormatMagickString(char *string,const size_t length,
-%        const char *format,...)
-%
-%  A description of each parameter follows.
-%
-%   o string:  FormatMagickString() returns the formatted string in this
-%     character buffer.
-%
-%   o length: the maximum length of the string.
-%
-%   o format:  A string describing the format to use to write the remaining
-%     arguments.
-%
-*/
-
-MagickExport long FormatMagickStringList(char *string,const size_t length,
-  const char *format,va_list operands)
-{
-  int
-    n;
-
-#if defined(MAGICKCORE_HAVE_VSNPRINTF)
-  n=vsnprintf(string,length,format,operands);
-#else
-  n=vsprintf(string,format,operands);
-#endif
-  if (n < 0)
-    string[length-1]='\0';
-  return((long) n);
-}
-
-MagickExport long FormatMagickString(char *string,const size_t length,
-  const char *format,...)
-{
-  long
-    n;
-
-  va_list
-    operands;
-
-  va_start(operands,format);
-  n=(long) FormatMagickStringList(string,length,format,operands);
-  va_end(operands);
-  return(n);
 }
 
 /*
@@ -1108,7 +1118,7 @@ MagickExport long FormatMagickString(char *string,const size_t length,
 %
 %  The format of the FormatMagickTime method is:
 %
-%      long FormatMagickTime(const time_t time,const size_t length,
+%      ssize_t FormatMagickTime(const time_t time,const size_t length,
 %        char *timestamp)
 %
 %  A description of each parameter follows.
@@ -1121,10 +1131,10 @@ MagickExport long FormatMagickString(char *string,const size_t length,
 %   o timestamp:  Return the Internet date/time here.
 %
 */
-MagickExport long FormatMagickTime(const time_t time,const size_t length,
+MagickExport ssize_t FormatMagickTime(const time_t time,const size_t length,
   char *timestamp)
 {
-  long
+  ssize_t
     count;
 
   struct tm
@@ -1141,7 +1151,7 @@ MagickExport long FormatMagickTime(const time_t time,const size_t length,
   (void) localtime_r(&time,&local_time);
 #else
   {
-    struct tm 
+    struct tm
       *my_time;
 
     my_time=localtime(&time);
@@ -1153,7 +1163,7 @@ MagickExport long FormatMagickTime(const time_t time,const size_t length,
   (void) gmtime_r(&time,&gm_time);
 #else
   {
-    struct tm 
+    struct tm
       *my_time;
 
     my_time=gmtime(&time);
@@ -1165,7 +1175,7 @@ MagickExport long FormatMagickTime(const time_t time,const size_t length,
     local_time.tm_hour-gm_time.tm_hour+24*((local_time.tm_year-
     gm_time.tm_year) != 0 ? (local_time.tm_year-gm_time.tm_year) :
     (local_time.tm_yday-gm_time.tm_yday)));
-  count=FormatMagickString(timestamp,length,
+  count=FormatLocaleString(timestamp,length,
     "%04d-%02d-%02dT%02d:%02d:%02d%+03ld:00",local_time.tm_year+1900,
     local_time.tm_mon+1,local_time.tm_mday,local_time.tm_hour,
     local_time.tm_min,local_time.tm_sec,(long) timezone);
@@ -1309,11 +1319,12 @@ MagickExport const char *GetStringInfoPath(const StringInfo *string_info)
 %  LocaleCompare returns an integer greater than, equal to, or less than 0,
 %  if the string pointed to by p is greater than, equal to, or less than the
 %  string pointed to by q respectively.  The sign of a non-zero return value
-%  is determined by the sign of the difference between the values of the first< %  pair of bytes that differ in the strings being compared.
+%  is determined by the sign of the difference between the values of the first
+%  pair of bytes that differ in the strings being compared.
 %
 %  The format of the LocaleCompare method is:
 %
-%      long LocaleCompare(const char *p,const char *q)
+%      int LocaleCompare(const char *p,const char *q)
 %
 %  A description of each parameter follows:
 %
@@ -1322,7 +1333,7 @@ MagickExport const char *GetStringInfoPath(const StringInfo *string_info)
 %    o q: A pointer to a character string to compare to p.
 %
 */
-MagickExport long LocaleCompare(const char *p,const char *q)
+MagickExport int LocaleCompare(const char *p,const char *q)
 {
   if ((p == (char *) NULL) && (q == (char *) NULL))
     return(0);
@@ -1331,23 +1342,23 @@ MagickExport long LocaleCompare(const char *p,const char *q)
   if (q == (char *) NULL)
     return(1);
 #if defined(MAGICKCORE_HAVE_STRCASECMP)
-  return((long) strcasecmp(p,q));
+  return(strcasecmp(p,q));
 #else
   {
-    register unsigned char
+    register int
       c,
       d;
 
     for ( ; ; )
     {
-      c=(unsigned char) *p;
-      d=(unsigned char) *q;
-      if ((c == '\0') || (AsciiMap[c] != AsciiMap[d]))
+      c=(int) *((unsigned char *) p);
+      d=(int) *((unsigned char *) q);
+      if ((c == 0) || (AsciiMap[c] != AsciiMap[d]))
         break;
       p++;
       q++;
     }
-    return((long) AsciiMap[c]-AsciiMap[d]);
+    return(AsciiMap[c]-(int) AsciiMap[d]);
   }
 #endif
 }
@@ -1409,7 +1420,7 @@ MagickExport void LocaleLower(char *string)
 %
 %  The format of the LocaleNCompare method is:
 %
-%      long LocaleNCompare(const char *p,const char *q,const size_t n)
+%      int LocaleNCompare(const char *p,const char *q,const size_t n)
 %
 %  A description of each parameter follows:
 %
@@ -1417,39 +1428,38 @@ MagickExport void LocaleLower(char *string)
 %
 %    o q: A pointer to a character string to compare to p.
 %
-%    o length: the number of characters to compare in strings p & q.
+%    o length: the number of characters to compare in strings p and q.
 %
 */
-MagickExport long LocaleNCompare(const char *p,const char *q,
-  const size_t length)
+MagickExport int LocaleNCompare(const char *p,const char *q,const size_t length)
 {
   if (p == (char *) NULL)
     return(-1);
   if (q == (char *) NULL)
     return(1);
 #if defined(MAGICKCORE_HAVE_STRNCASECMP)
-  return((long) strncasecmp(p,q,length));
+  return(strncasecmp(p,q,length));
 #else
   {
-    register size_t
-      n;
-
-    register unsigned char
+    register int
       c,
       d;
 
-    for (n=length; n != 0; n--)
+    register size_t
+      i;
+
+    for (i=length; i != 0; i--)
     {
-      c=(unsigned char) *p;
-      d=(unsigned char) *q;
+      c=(int) *((unsigned char *) p);
+      d=(int) *((unsigned char *) q);
       if (AsciiMap[c] != AsciiMap[d])
-        return(AsciiMap[c]-AsciiMap[d]);
-      if (c == '\0')
-        return(0L);
+        return(AsciiMap[c]-(int) AsciiMap[d]);
+      if (c == 0)
+        return(0);
       p++;
       q++;
     }
-    return(0L);
+    return(0);
   }
 #endif
 }
@@ -1548,10 +1558,10 @@ MagickExport void PrintStringInfo(FILE *file,const char *id,
   p=(char *) string_info->datum;
   for (i=0; i < string_info->length; i+=0x14)
   {
-    (void) fprintf(file,"0x%08lx: ",(unsigned long) (0x14*i));
+    (void) FormatLocaleFile(file,"0x%08lx: ",(unsigned long) (0x14*i));
     for (j=1; j <= MagickMin(string_info->length-i,0x14); j++)
     {
-      (void) fprintf(file,"%02lx",(unsigned long) (*(p+j)) & 0xff);
+      (void) FormatLocaleFile(file,"%02lx",(unsigned long) (*(p+j)) & 0xff);
       if ((j % 0x04) == 0)
         (void) fputc(' ',file);
     }
@@ -1640,8 +1650,8 @@ MagickExport void SetStringInfo(StringInfo *string_info,
   if (string_info->length == 0)
     return;
   (void) ResetMagickMemory(string_info->datum,0,string_info->length);
-  (void) CopyMagickMemory(string_info->datum,source->datum,MagickMin(
-    string_info->length,source->length));
+  (void) memcpy(string_info->datum,source->datum,MagickMin(string_info->length,
+    source->length));
 }
 
 /*
@@ -1677,7 +1687,7 @@ MagickExport void SetStringInfoDatum(StringInfo *string_info,
   assert(string_info != (StringInfo *) NULL);
   assert(string_info->signature == MagickSignature);
   if (string_info->length != 0)
-    (void) CopyMagickMemory(string_info->datum,source,string_info->length);
+    (void) memcpy(string_info->datum,source,string_info->length);
 }
 
 /*
@@ -1791,7 +1801,7 @@ MagickExport StringInfo *SplitStringInfo(StringInfo *string_info,
     return((StringInfo *) NULL);
   split_info=AcquireStringInfo(offset);
   SetStringInfo(split_info,string_info);
-  (void) CopyMagickMemory(string_info->datum,string_info->datum+offset,
+  (void) memmove(string_info->datum,string_info->datum+offset,
     string_info->length-offset+MaxTextExtent);
   SetStringInfoLength(string_info,string_info->length-offset);
   return(split_info);
@@ -1829,11 +1839,12 @@ MagickExport char *StringInfoToString(const StringInfo *string_info)
 
   string=(char *) NULL;
   length=string_info->length;
-  if (~length >= MaxTextExtent)
+  if (~length >= (MaxTextExtent-1))
     string=(char *) AcquireQuantumMemory(length+MaxTextExtent,sizeof(*string));
-  if (string != (char *) NULL)
-    (void) CopyMagickString(string,(char *) string_info->datum,
-      (length+1)*sizeof(*string));
+  if (string == (char *) NULL)
+    return((char *) NULL);
+  (void) memcpy(string,(char *) string_info->datum,length*sizeof(*string));
+  string[length]='\0';
   return(string);
 }
 
@@ -1874,7 +1885,7 @@ MagickExport char **StringToArgv(const char *text,int *argc)
     *p,
     *q;
 
-  register long
+  register ssize_t
     i;
 
   *argc=0;
@@ -1887,6 +1898,8 @@ MagickExport char **StringToArgv(const char *text,int *argc)
   {
     while (isspace((int) ((unsigned char) *p)) != 0)
       p++;
+    if (*p == '\0')
+      break;
     (*argc)++;
     if (*p == '"')
       for (p++; (*p != '"') && (*p != '\0'); p++) ;
@@ -1904,7 +1917,7 @@ MagickExport char **StringToArgv(const char *text,int *argc)
   */
   argv[0]=AcquireString("magick");
   p=text;
-  for (i=1; i < (long) *argc; i++)
+  for (i=1; i < (ssize_t) *argc; i++)
   {
     while (isspace((int) ((unsigned char) *p)) != 0)
       p++;
@@ -1917,8 +1930,8 @@ MagickExport char **StringToArgv(const char *text,int *argc)
     else
       if (*q == '\'')
         {
+          p++;
           for (q++; (*q != '\'') && (*q != '\0'); q++) ;
-          q++;
         }
       else
         while ((isspace((int) ((unsigned char) *q)) == 0) && (*q != '\0'))
@@ -1933,64 +1946,14 @@ MagickExport char **StringToArgv(const char *text,int *argc)
         ThrowFatalException(ResourceLimitFatalError,
           "UnableToConvertStringToARGV");
       }
-    (void) CopyMagickString(argv[i],p,(size_t) (q-p+1));
+    (void) memcpy(argv[i],p,(size_t) (q-p));
+    argv[i][q-p]='\0';
     p=q;
     while ((isspace((int) ((unsigned char) *p)) == 0) && (*p != '\0'))
       p++;
   }
   argv[i]=(char *) NULL;
   return(argv);
-}
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%  S t r i n g T o D o u b l e                                                %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  StringToDouble() converts a text string to a double.  If the string contains
-%  a percent sign (e.g. 50%) that percentage of the interval is returned.
-%
-%  The format of the StringToDouble method is:
-%
-%      double StringToDouble(const char *string,const double interval)
-%
-%  A description of each parameter follows:
-%
-%    o string:  Specifies the string representing a value.
-%
-%    o interval:  Specifies the interval; used for obtaining a percentage.
-%
-*/
-MagickExport double StringToDouble(const char *string,const double interval)
-{
-  char
-    *q;
-
-  double
-    value;
-
-  assert(string != (char *) NULL);
-  value=strtod(string,&q);
-  switch (tolower((int) ((unsigned char) *q)))
-  {
-    case '%': value*=pow(1024.0,0)*interval/100.0; break;
-    case 'k': value*=pow(1024.0,1); break;
-    case 'm': value*=pow(1024.0,2); break;
-    case 'g': value*=pow(1024.0,3); break;
-    case 't': value*=pow(1024.0,4); break;
-    case 'p': value*=pow(1024.0,5); break;
-    case 'e': value*=pow(1024.0,6); break;
-    case 'z': value*=pow(1024.0,7); break;
-    case 'y': value*=pow(1024.0,8); break;
-    default:  break;
-  }
-  return(value);
 }
 
 /*
@@ -2023,7 +1986,7 @@ MagickExport char *StringInfoToHexString(const StringInfo *string_info)
   register const unsigned char
     *p;
 
-  register long
+  register ssize_t
     i;
 
   register unsigned char
@@ -2059,7 +2022,7 @@ MagickExport char *StringInfoToHexString(const StringInfo *string_info)
   hex_digits[15]='f';
   p=string_info->datum;
   q=(unsigned char *) string;
-  for (i=0; i < (long) string_info->length; i++)
+  for (i=0; i < (ssize_t) string_info->length; i++)
   {
     *q++=hex_digits[(*p >> 4) & 0x0f];
     *q++=hex_digits[*p & 0x0f];
@@ -2153,9 +2116,6 @@ MagickExport char *StringToken(const char *delimiters,char **string)
 %
 %  A description of each parameter follows:
 %
-%    o list:  Method StringToList returns the string list unless an error
-%      occurs, otherwise NULL.
-%
 %    o text:  Specifies the string to segment into a list.
 %
 */
@@ -2167,10 +2127,10 @@ MagickExport char **StringToList(const char *text)
   register const char
     *p;
 
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     lines;
 
   if (text == (char *) NULL)
@@ -2196,16 +2156,17 @@ MagickExport char **StringToList(const char *text)
       if (textlist == (char **) NULL)
         ThrowFatalException(ResourceLimitFatalError,"UnableToConvertText");
       p=text;
-      for (i=0; i < (long) lines; i++)
+      for (i=0; i < (ssize_t) lines; i++)
       {
         for (q=p; *q != '\0'; q++)
           if ((*q == '\r') || (*q == '\n'))
             break;
         textlist[i]=(char *) AcquireQuantumMemory((size_t) (q-p)+MaxTextExtent,
-          sizeof(*textlist));
+          sizeof(**textlist));
         if (textlist[i] == (char *) NULL)
           ThrowFatalException(ResourceLimitFatalError,"UnableToConvertText");
-        (void) CopyMagickString(textlist[i],p,(size_t) (q-p+1));
+        (void) memcpy(textlist[i],p,(size_t) (q-p));
+        textlist[i][q-p]='\0';
         if (*q == '\r')
           q++;
         p=q+1;
@@ -2219,29 +2180,30 @@ MagickExport char **StringToList(const char *text)
       register char
         *q;
 
-      register long
+      register ssize_t
         j;
 
       /*
         Convert string to a HEX list.
       */
-      lines=(unsigned long) (strlen(text)/0x14)+1;
+      lines=(size_t) (strlen(text)/0x14)+1;
       textlist=(char **) AcquireQuantumMemory((size_t) lines+1UL,
         sizeof(*textlist));
       if (textlist == (char **) NULL)
         ThrowFatalException(ResourceLimitFatalError,"UnableToConvertText");
       p=text;
-      for (i=0; i < (long) lines; i++)
+      for (i=0; i < (ssize_t) lines; i++)
       {
         textlist[i]=(char *) AcquireQuantumMemory(2UL*MaxTextExtent,
-          sizeof(*textlist));
+          sizeof(**textlist));
         if (textlist[i] == (char *) NULL)
           ThrowFatalException(ResourceLimitFatalError,"UnableToConvertText");
-        (void) FormatMagickString(textlist[i],MaxTextExtent,"0x%08lx: ",0x14*i);
+        (void) FormatLocaleString(textlist[i],MaxTextExtent,"0x%08lx: ",
+          (long) (0x14*i));
         q=textlist[i]+strlen(textlist[i]);
-        for (j=1; j <= (long) MagickMin(strlen(p),0x14); j++)
+        for (j=1; j <= (ssize_t) MagickMin(strlen(p),0x14); j++)
         {
-          (void) FormatMagickString(hex_string,MaxTextExtent,"%02x",*(p+j));
+          (void) FormatLocaleString(hex_string,MaxTextExtent,"%02x",*(p+j));
           (void) CopyMagickString(q,hex_string,MaxTextExtent);
           q+=2;
           if ((j % 0x04) == 0)
@@ -2255,7 +2217,7 @@ MagickExport char **StringToList(const char *text)
             *q++=' ';
         }
         *q++=' ';
-        for (j=1; j <= (long) MagickMin(strlen(p),0x14); j++)
+        for (j=1; j <= (ssize_t) MagickMin(strlen(p),0x14); j++)
         {
           if (isprint((int) ((unsigned char) *p)) != 0)
             *q++=(*p);
@@ -2281,7 +2243,7 @@ MagickExport char **StringToList(const char *text)
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  StringToStringInfo() returns the contents of a file as a string.
+%  StringToStringInfo() converts a string to a StringInfo type.
 %
 %  The format of the StringToStringInfo method is:
 %
@@ -2299,7 +2261,7 @@ MagickExport StringInfo *StringToStringInfo(const char *string)
 
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   assert(string != (const char *) NULL);
-  string_info=AcquireStringInfo(strlen(string)+1);
+  string_info=AcquireStringInfo(strlen(string));
   SetStringInfoDatum(string_info,(const unsigned char *) string);
   return(string_info);
 }
@@ -2351,7 +2313,7 @@ MagickExport void StripString(char *message)
   if (q > p)
     if ((*q == '\'') || (*q == '"'))
       q--;
-  (void) CopyMagickMemory(message,p,(size_t) (q-p+1));
+  (void) memmove(message,p,(size_t) (q-p+1));
   message[q-p+1]='\0';
   for (p=message; *p != '\0'; p++)
     if (*p == '\n')
@@ -2369,123 +2331,79 @@ MagickExport void StripString(char *message)
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  SubstituteString() performs string substitution on a buffer, replacing the
-%  buffer with the substituted version. Buffer must be allocate from the heap.
+%  SubstituteString() performs string substitution on a string, replacing the
+%  string with the substituted version. Buffer must be allocated from the heap.
+%  If the string is matched and status, MagickTrue is returned otherwise
+%  MagickFalse.
 %
 %  The format of the SubstituteString method is:
 %
-%      MagickBooleanType SubstituteString(char **buffer,const char *search,
+%      MagickBooleanType SubstituteString(char **string,const char *search,
 %        const char *replace)
 %
 %  A description of each parameter follows:
 %
-%    o buffer: the buffer to perform replacements on. Replaced with new
+%    o string: the string to perform replacements on;  replaced with new
 %      allocation if a replacement is made.
 %
-%    o search: String to search for.
+%    o search: search for this string.
 %
-%    o replace: Replacement string.
+%    o replace: replace any matches with this string.
 %
 */
-MagickExport MagickBooleanType SubstituteString(char **buffer,
+MagickExport MagickBooleanType SubstituteString(char **string,
   const char *search,const char *replace)
 {
-  char
-    *result;
+  MagickBooleanType
+    status;
 
-  const char
-    *match,
-    *source;
-
-  MagickOffsetType
-    destination_offset;
+  register char
+    *p;
 
   size_t
-    copy_length,
-    length,
-    replace_length,
-    result_length,
-    search_length;
+    extent,
+    replace_extent,
+    search_extent;
 
-  (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  assert(buffer != (char **) NULL);
-  assert(*buffer != (char *) NULL);
-  assert(search != (const char *) NULL);
-  assert(replace != (const char *) NULL);
-  if (strcmp(search,replace) == 0)
-    return(MagickTrue);
-  source=(*buffer);
-  match=strstr(source,search);
-  if (match == (char *) NULL)
-    return(MagickFalse);
-  result=(char *) NULL;
-  length=strlen(source);
-  if (~length >= MaxTextExtent)
-    result=(char *) AcquireQuantumMemory(length+MaxTextExtent,sizeof(*result));
-  if (result == (char *) NULL)
-    ThrowFatalException(ResourceLimitFatalError,"UnableToAcquireString");
-  *result='\0';
-  result_length=0;
-  destination_offset=0;
-  replace_length=strlen(replace);
-  for (search_length=strlen(search); match != (char *) NULL; )
+  ssize_t
+    offset;
+
+  status=MagickFalse;
+  search_extent=0,
+  replace_extent=0;
+  for (p=strchr(*string,*search); p != (char *) NULL; p=strchr(p+1,*search))
   {
+    if (search_extent == 0)
+      search_extent=strlen(search);
+    if (strncmp(p,search,search_extent) != 0)
+      continue;
     /*
-      Copy portion before match.
+      We found a match.
     */
-    copy_length=(size_t) (match-source);
-    if (copy_length != 0)
+    status=MagickTrue;
+    if (replace_extent == 0)
+      replace_extent=strlen(replace);
+    if (replace_extent > search_extent)
       {
-        result_length+=copy_length;
-        if ((result_length+MaxTextExtent) >= length)
-          {
-            length+=copy_length;
-            result=(char *) ResizeQuantumMemory(result,length+MaxTextExtent,
-              sizeof(*result));
-            if (result == (char *) NULL)
-              ThrowFatalException(ResourceLimitFatalError,
-                "UnableToAcquireString");
-          }
-        (void) CopyMagickString(result+destination_offset,source,copy_length+1);
-        destination_offset+=copy_length;
-      }
-    /*
-      Copy replacement.
-    */
-    result_length+=replace_length;
-    if ((result_length+MaxTextExtent) >= length)
-      {
-        length+=replace_length;
-        result=(char *) ResizeQuantumMemory(result,length+MaxTextExtent,
-          sizeof(*result));
-        if (result == (char *) NULL)
+        /*
+          Make room for the replacement string.
+        */
+        offset=(ssize_t) (p-(*string));
+        extent=strlen(*string)+replace_extent-search_extent+1;
+        *string=(char *) ResizeQuantumMemory(*string,extent+MaxTextExtent,
+          sizeof(*p));
+        if (*string == (char *) NULL)
           ThrowFatalException(ResourceLimitFatalError,"UnableToAcquireString");
+        p=(*string)+offset;
       }
-    (void) ConcatenateMagickString(result+destination_offset,replace,length);
-    destination_offset+=replace_length;
     /*
-      Find next match.
+      Replace string.
     */
-    source=match;
-    source+=search_length;
-    match=strstr(source,search);
+    if (search_extent != replace_extent)
+      (void) CopyMagickMemory(p+replace_extent,p+search_extent,
+        strlen(p+search_extent)+1);
+    (void) CopyMagickMemory(p,replace,replace_extent);
+    p+=replace_extent-1;
   }
-  /*
-    Copy remaining string.
-  */
-  copy_length=strlen(source);
-  result_length+=copy_length;
-  if ((result_length+MaxTextExtent) >= length)
-    {
-      length+=copy_length;
-      result=(char *) ResizeQuantumMemory(result,length+MaxTextExtent,
-        sizeof(*result));
-      if (result == (char *) NULL)
-        ThrowFatalException(ResourceLimitFatalError,"UnableToAcquireString");
-    }
-  (void) ConcatenateMagickString(result+destination_offset,source,(size_t)
-    (length+MaxTextExtent-destination_offset));
-  (void) RelinquishMagickMemory(*buffer);
-  *buffer=result;
-  return(MagickTrue);
+  return(status);
 }

@@ -1,42 +1,42 @@
 /*
- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
- %                                                                             %
- %                                                                             %
- %                                                                             %
- %                     IIIIIIIIII    PPPPPPPP      LL                          %
- %                         II        PP      PP    LL                          %
- %                         II        PP       PP   LL                          %
- %                         II        PP      PP    LL                          %
- %                         II        PPPPPPPP      LL                          %
- %                         II        PP            LL                          %
- %                         II        PP            LL                          %
- %                     IIIIIIIIII    PP            LLLLLLLL                    %
- %                                                                             %
- %                                                                             %
- %                                                                             %
- %                   Read/Write Scanalytics IPLab Image Format                 %
- %                                  Sean Burke                                 %
- %                                  2008.05.07                                 %
- %                                     v 0.9                                   %
- %                                                                             %
- %  Copyright 1999-2007 ImageMagick Studio LLC, a non-profit organization      %
- %  dedicated to making software imaging solutions freely available.           %
- %                                                                             %
- %  You may not use this file except in compliance with the License.  You may  %
- %  obtain a copy of the License at                                            %
- %                                                                             %
- %    http://www.imagemagick.org/script/license.php                            %
- %                                                                             %
- %  Unless required by applicable law or agreed to in writing, software        %
- %  distributed under the License is distributed on an "AS IS" BASIS,          %
- %  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.   %
- %  See the License for the specific language governing permissions and        %
- %  limitations under the License.                                             %
- %                                                                             %
- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
- %
- %
- */
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%                     IIIIIIIIII    PPPPPPPP      LL                          %
+%                         II        PP      PP    LL                          %
+%                         II        PP       PP   LL                          %
+%                         II        PP      PP    LL                          %
+%                         II        PPPPPPPP      LL                          %
+%                         II        PP            LL                          %
+%                         II        PP            LL                          %
+%                     IIIIIIIIII    PP            LLLLLLLL                    %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%                   Read/Write Scanalytics IPLab Image Format                 %
+%                                  Sean Burke                                 %
+%                                  2008.05.07                                 %
+%                                     v 0.9                                   %
+%                                                                             %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
+%  dedicated to making software imaging solutions freely available.           %
+%                                                                             %
+%  You may not use this file except in compliance with the License.  You may  %
+%  obtain a copy of the License at                                            %
+%                                                                             %
+%    http://www.imagemagick.org/script/license.php                            %
+%                                                                             %
+%  Unless required by applicable law or agreed to in writing, software        %
+%  distributed under the License is distributed on an "AS IS" BASIS,          %
+%  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.   %
+%  See the License for the specific language governing permissions and        %
+%  limitations under the License.                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%
+*/
 
 /*
  Include declarations.
@@ -46,6 +46,7 @@
 #include "magick/blob-private.h"
 #include "magick/cache.h"
 #include "magick/colorspace.h"
+#include "magick/colorspace-private.h"
 #include "magick/exception.h"
 #include "magick/exception-private.h"
 #include "magick/image.h"
@@ -68,16 +69,16 @@ Tyedef declarations
 
 typedef struct _IPLInfo
 {
-  unsigned long
-  tag,
-  size,
-  time,
-  z,
-  width,
-  height,
-  colors,
-  depth,
-  byteType;
+  unsigned int
+    tag,
+    size,
+    time,
+    z,
+    width,
+    height,
+    colors,
+    depth,
+    byteType;
 } IPLInfo;
 
 static MagickBooleanType
@@ -161,11 +162,11 @@ static MagickBooleanType IsIPL(const unsigned char *magick,const size_t length)
  */
 
 void SetHeaderFromIPL(Image *image, IPLInfo *ipl){
-	image->columns = ipl->width;
-	image->rows = ipl->height;
-	image->depth = ipl->depth;
-	image->x_resolution = 1;
-	image->y_resolution = 1;
+  image->columns = ipl->width;
+  image->rows = ipl->height;
+  image->depth = ipl->depth;
+  image->x_resolution = 1;
+  image->y_resolution = 1;
 }
 
 
@@ -181,8 +182,8 @@ static Image *ReadIPLImage(const ImageInfo *image_info,ExceptionInfo *exception)
   register PixelPacket *q;
   unsigned char magick[12], *pixels;
   ssize_t count;
-  long y;
-  unsigned long t_count=0;
+  ssize_t y;
+  size_t t_count=0;
   size_t length;
   IPLInfo
     ipl_info;
@@ -221,6 +222,7 @@ static Image *ReadIPLImage(const ImageInfo *image_info,ExceptionInfo *exception)
    If we get back "iiii", we have LSB,"mmmm", MSB
    */
   count=ReadBlob(image,4,magick); 
+  (void) count;
   if((LocaleNCompare((char *) magick,"iiii",4) == 0))  
     image->endian=LSBEndian;
   else{
@@ -314,7 +316,8 @@ static Image *ReadIPLImage(const ImageInfo *image_info,ExceptionInfo *exception)
       if (image->scene >= (image_info->scene+image_info->number_scenes-1))
         break;
 /*
-   printf("Length: %lu, Memory size: %lu\n", length,(unsigned long)(image->depth));
+   printf("Length: %.20g, Memory size: %.20g\n", (double) length,(double)
+     image->depth);
 */
      quantum_info=AcquireQuantumInfo(image_info,image);
      if (quantum_info == (QuantumInfo *) NULL)
@@ -325,8 +328,8 @@ static Image *ReadIPLImage(const ImageInfo *image_info,ExceptionInfo *exception)
      pixels=GetQuantumPixels(quantum_info); 
      if(image->columns != ipl_info.width){
 /*
- 		printf("Columns not set correctly!  Wanted: %lu, got: %lu\n",
- 			ipl_info.width, image->columns);
+     printf("Columns not set correctly!  Wanted: %.20g, got: %.20g\n",
+       (double) ipl_info.width, (double) image->columns);
 */
      }
 
@@ -335,44 +338,44 @@ static Image *ReadIPLImage(const ImageInfo *image_info,ExceptionInfo *exception)
      */
     
   if(ipl_info.colors == 1){
-      for(y = 0; y < (long) image->rows; y++){
+      for(y = 0; y < (ssize_t) image->rows; y++){
         (void) ReadBlob(image, length*image->depth/8, pixels);
         q=QueueAuthenticPixels(image,0,y,image->columns,1,exception);
         if (q == (PixelPacket *) NULL)
                 break;
-      	(void) ImportQuantumPixels(image,(CacheView *) NULL,quantum_info,
+        (void) ImportQuantumPixels(image,(CacheView *) NULL,quantum_info,
           GrayQuantum,pixels,exception);
         if (SyncAuthenticPixels(image,exception) == MagickFalse)
           break;
-  	}
+    }
   }
   else{
-      for(y = 0; y < (long) image->rows; y++){
+      for(y = 0; y < (ssize_t) image->rows; y++){
         (void) ReadBlob(image, length*image->depth/8, pixels);
         q=QueueAuthenticPixels(image,0,y,image->columns,1,exception);
         if (q == (PixelPacket *) NULL)
                 break;
-      	(void) ImportQuantumPixels(image,(CacheView *) NULL,quantum_info,
-          RedQuantum,pixels,exception);	
+        (void) ImportQuantumPixels(image,(CacheView *) NULL,quantum_info,
+          RedQuantum,pixels,exception);  
         if (SyncAuthenticPixels(image,exception) == MagickFalse)
           break;
       }
-      for(y = 0; y < (long) image->rows; y++){
+      for(y = 0; y < (ssize_t) image->rows; y++){
         (void) ReadBlob(image, length*image->depth/8, pixels);
         q=QueueAuthenticPixels(image,0,y,image->columns,1,exception);
         if (q == (PixelPacket *) NULL)
-                break;
-      	(void) ImportQuantumPixels(image,(CacheView *) NULL,quantum_info,
+          break;
+        (void) ImportQuantumPixels(image,(CacheView *) NULL,quantum_info,
           GreenQuantum,pixels,exception);
         if (SyncAuthenticPixels(image,exception) == MagickFalse)
           break;
       }
-      for(y = 0; y < (long) image->rows; y++){
+      for(y = 0; y < (ssize_t) image->rows; y++){
         (void) ReadBlob(image, length*image->depth/8, pixels);
         q=QueueAuthenticPixels(image,0,y,image->columns,1,exception);
         if (q == (PixelPacket *) NULL)
-                break;
-      	(void) ImportQuantumPixels(image,(CacheView *) NULL,quantum_info,
+          break;
+        (void) ImportQuantumPixels(image,(CacheView *) NULL,quantum_info,
           BlueQuantum,pixels,exception);
         if (SyncAuthenticPixels(image,exception) == MagickFalse)
           break;
@@ -426,7 +429,7 @@ static Image *ReadIPLImage(const ImageInfo *image_info,ExceptionInfo *exception)
  %
  %
  */
-ModuleExport unsigned long RegisterIPLImage(void)
+ModuleExport size_t RegisterIPLImage(void)
 {
   MagickInfo
     *entry;
@@ -497,6 +500,9 @@ static MagickBooleanType WriteIPLImage(const ImageInfo *image_info,Image *image)
   ExceptionInfo
     *exception;
 
+  IPLInfo
+    ipl_info;
+
   MagickBooleanType
     status;
   
@@ -506,18 +512,15 @@ static MagickBooleanType WriteIPLImage(const ImageInfo *image_info,Image *image)
   register const PixelPacket
     *p;
 
-  unsigned char
-  *pixels;
- 
-  long
-    y;
-  
-  IPLInfo
-    ipl_info;
-
   QuantumInfo
     *quantum_info;
 
+  ssize_t
+    y;
+  
+  unsigned char
+    *pixels;
+ 
    /*
     Open output image file.
   */
@@ -565,20 +568,20 @@ static MagickBooleanType WriteIPLImage(const ImageInfo *image_info,Image *image)
     break;
     
   }
-  ipl_info.z = GetImageListLength(image);
+  ipl_info.z = (unsigned int) GetImageListLength(image);
   /* There is no current method for detecting whether we have T or Z stacks */
   ipl_info.time = 1;
-  ipl_info.width = image->columns;
-  ipl_info.height = image->rows;
+  ipl_info.width = (unsigned int) image->columns;
+  ipl_info.height = (unsigned int) image->rows;
   
-  if (image->colorspace != RGBColorspace)
+  if (IsRGBColorspace(image->colorspace) == MagickFalse)
     (void) TransformImageColorspace(image,RGBColorspace);
   
-  if(image->colorspace == RGBColorspace) { ipl_info.colors = 3; }
+  if(IsRGBColorspace(image->colorspace) == MagickTrue) { ipl_info.colors = 3; }
   else{ ipl_info.colors = 1; }
   
-  ipl_info.size = 28 + 
-    ((image->depth)/8)*ipl_info.height*ipl_info.width*ipl_info.colors*ipl_info.z;
+  ipl_info.size = (unsigned int) (28 + 
+    ((image->depth)/8)*ipl_info.height*ipl_info.width*ipl_info.colors*ipl_info.z);
   
   /* Ok!  Calculations are done.  Lets write this puppy down! */
   
@@ -618,7 +621,7 @@ static MagickBooleanType WriteIPLImage(const ImageInfo *image_info,Image *image)
       pixels=GetQuantumPixels(quantum_info);
   if(ipl_info.colors == 1){
   /* Red frame */
-  for(y = 0; y < (long) ipl_info.height; y++){
+  for(y = 0; y < (ssize_t) ipl_info.height; y++){
     p=GetAuthenticPixels(image,0,y,image->columns,1,exception);
     if (p == (PixelPacket *) NULL)
       break;
@@ -630,7 +633,7 @@ static MagickBooleanType WriteIPLImage(const ImageInfo *image_info,Image *image)
 }
   if(ipl_info.colors == 3){
   /* Red frame */
-  for(y = 0; y < (long) ipl_info.height; y++){
+  for(y = 0; y < (ssize_t) ipl_info.height; y++){
     p=GetAuthenticPixels(image,0,y,image->columns,1,exception);
     if (p == (PixelPacket *) NULL)
       break;
@@ -640,7 +643,7 @@ static MagickBooleanType WriteIPLImage(const ImageInfo *image_info,Image *image)
   }
 
     /* Green frame */
-    for(y = 0; y < (long) ipl_info.height; y++){
+    for(y = 0; y < (ssize_t) ipl_info.height; y++){
       p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
       if (p == (PixelPacket *) NULL)
         break;
@@ -649,7 +652,7 @@ static MagickBooleanType WriteIPLImage(const ImageInfo *image_info,Image *image)
         (void) WriteBlob(image, image->columns*image->depth/8, pixels);
     }
     /* Blue frame */
-    for(y = 0; y < (long) ipl_info.height; y++){
+    for(y = 0; y < (ssize_t) ipl_info.height; y++){
       p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
       if (p == (PixelPacket *) NULL)
         break;
@@ -658,7 +661,8 @@ static MagickBooleanType WriteIPLImage(const ImageInfo *image_info,Image *image)
       (void) WriteBlob(image, image->columns*image->depth/8, pixels);
       if (image->previous == (Image *) NULL)
         {
-          status=SetImageProgress(image,SaveImageTag,y,image->rows);
+          status=SetImageProgress(image,SaveImageTag,(MagickOffsetType) y,
+                image->rows);
           if (status == MagickFalse)
             break;
         }
@@ -680,5 +684,3 @@ static MagickBooleanType WriteIPLImage(const ImageInfo *image_info,Image *image)
 CloseBlob(image);
 return(MagickTrue);
 }
-
-

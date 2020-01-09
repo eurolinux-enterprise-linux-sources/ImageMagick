@@ -18,7 +18,7 @@
 %                                 June 2000                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -46,6 +46,7 @@
 #include "magick/exception-private.h"
 #include "magick/memory_.h"
 #include "magick/semaphore.h"
+#include "magick/semaphore-private.h"
 #include "magick/string_.h"
 #include "magick/thread_.h"
 #include "magick/thread-private.h"
@@ -61,26 +62,12 @@ struct SemaphoreInfo
   MagickThreadType
     id;
 
-  long
+  ssize_t
     reference_count;
 
-  unsigned long
+  size_t
     signature;
 };
-
-/*
-  Static declaractions.
-*/
-#if defined(MAGICKCORE_HAVE_PTHREAD)
-static pthread_mutex_t
-  semaphore_mutex = PTHREAD_MUTEX_INITIALIZER;
-#elif defined(MAGICKORE_HAVE_WINTHREADS)
-static LONG
-  semaphore_mutex = 0;
-#else
-static long
-  semaphore_mutex = 0;
-#endif
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -107,24 +94,13 @@ static long
 MagickExport void AcquireSemaphoreInfo(SemaphoreInfo **semaphore_info)
 {
   assert(semaphore_info != (SemaphoreInfo **) NULL);
-#if defined(MAGICKCORE_HAVE_PTHREAD)
-  if (pthread_mutex_lock(&semaphore_mutex) != 0)
-    (void) fprintf(stderr,"pthread_mutex_lock failed %s\n",
-      GetExceptionMessage(errno));
-#elif defined(MAGICKORE_HAVE_WINTHREADS)
-  while (InterlockedCompareExchange(&semaphore_mutex,1L,0L) != 0)
-    Sleep(10);
-#endif
   if (*semaphore_info == (SemaphoreInfo *) NULL)
-    *semaphore_info=AllocateSemaphoreInfo();
-#if defined(MAGICKCORE_HAVE_PTHREAD)
-  if (pthread_mutex_unlock(&semaphore_mutex) != 0)
-    (void) fprintf(stderr,"pthread_mutex_unlock failed %s\n",
-      GetExceptionMessage(errno));
-#elif defined(MAGICKORE_HAVE_WINTHREADS)
-  InterlockedExchange(&semaphore_mutex,0L);
-#endif
-  (void) LockSemaphoreInfo(*semaphore_info);
+    {
+      LockMagickMutex();
+      if (*semaphore_info == (SemaphoreInfo *) NULL)
+        *semaphore_info=AllocateSemaphoreInfo();
+      UnlockMagickMutex();
+    }
 }
 
 /*
@@ -153,15 +129,14 @@ MagickExport SemaphoreInfo *AllocateSemaphoreInfo(void)
   /*
     Allocate semaphore.
   */
-  semaphore_info=(SemaphoreInfo *) AcquireAlignedMemory(1,
-    sizeof(SemaphoreInfo));
+  semaphore_info=(SemaphoreInfo *) malloc(sizeof(SemaphoreInfo));
   if (semaphore_info == (SemaphoreInfo *) NULL)
     ThrowFatalException(ResourceLimitFatalError,"MemoryAllocationFailed");
   (void) ResetMagickMemory(semaphore_info,0,sizeof(SemaphoreInfo));
   /*
     Initialize the semaphore.
   */
-#if defined(MAGICKCORE_HAVE_PTHREAD)
+#if defined(MAGICKCORE_THREAD_SUPPORT)
   {
     int
       status;
@@ -172,55 +147,43 @@ MagickExport SemaphoreInfo *AllocateSemaphoreInfo(void)
     status=pthread_mutexattr_init(&mutex_info);
     if (status != 0)
       {
-        semaphore_info=(SemaphoreInfo *) RelinquishAlignedMemory(
-          semaphore_info);
+        errno=status;
         ThrowFatalException(ResourceLimitFatalError,
           "UnableToInitializeSemaphore");
       }
     status=pthread_mutex_init(&semaphore_info->mutex,&mutex_info);
-    (void) pthread_mutexattr_destroy(&mutex_info);
     if (status != 0)
       {
-        semaphore_info=(SemaphoreInfo *) RelinquishAlignedMemory(
-          semaphore_info);
+        errno=status;
+        ThrowFatalException(ResourceLimitFatalError,
+          "UnableToInitializeSemaphore");
+      }
+    status=pthread_mutexattr_destroy(&mutex_info);
+    if (status != 0)
+      {
+        errno=status;
         ThrowFatalException(ResourceLimitFatalError,
           "UnableToInitializeSemaphore");
       }
   }
-#elif defined(MAGICKORE_HAVE_WINTHREADS)
-  InitializeCriticalSection(&semaphore_info->mutex);
+#elif defined(MAGICKCORE_HAVE_WINTHREADS)
+  {
+    int
+      status;
+
+    status=InitializeCriticalSectionAndSpinCount(&semaphore_info->mutex,0x0400);
+    if (status == 0)
+      {
+        errno=status;
+        ThrowFatalException(ResourceLimitFatalError,
+          "UnableToInitializeSemaphore");
+       }
+  }
 #endif
   semaphore_info->id=GetMagickThreadId();
   semaphore_info->reference_count=0;
   semaphore_info->signature=MagickSignature;
   return(semaphore_info);
-}
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%   D e s t r o y S e m a p h o r e                                           %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  DestroySemaphore() destroys the semaphore environment.
-%
-%  The format of the DestroySemaphore method is:
-%
-%      DestroySemaphore(void)
-%
-*/
-MagickExport void DestroySemaphore(void)
-{
-#if defined(MAGICKCORE_HAVE_PTHREAD)
-  if (pthread_mutex_destroy(&semaphore_mutex) != 0)
-    (void) fprintf(stderr,"pthread_mutex_destroy failed %s\n",
-      GetExceptionMessage(errno));
-#endif
 }
 
 /*
@@ -250,46 +213,26 @@ MagickExport void DestroySemaphoreInfo(SemaphoreInfo **semaphore_info)
   assert(semaphore_info != (SemaphoreInfo **) NULL);
   assert((*semaphore_info) != (SemaphoreInfo *) NULL);
   assert((*semaphore_info)->signature == MagickSignature);
-#if defined(MAGICKCORE_HAVE_PTHREAD)
-  (void) pthread_mutex_lock(&semaphore_mutex);
-#elif defined(MAGICKORE_HAVE_WINTHREADS)
-  while (InterlockedCompareExchange(&semaphore_mutex,1L,0L) != 0)
-    Sleep(10);
-#endif
-#if defined(MAGICKCORE_HAVE_PTHREAD)
-  (void) pthread_mutex_destroy(&(*semaphore_info)->mutex);
-#elif defined(MAGICKORE_HAVE_WINTHREADS)
+  LockMagickMutex();
+#if defined(MAGICKCORE_THREAD_SUPPORT)
+  {
+    int
+      status;
+
+    status=pthread_mutex_destroy(&(*semaphore_info)->mutex);
+    if (status != 0)
+      {
+        errno=status;
+        ThrowFatalException(ResourceLimitFatalError,"UnableToDestroySemaphore");
+      }
+  }
+#elif defined(MAGICKCORE_HAVE_WINTHREADS)
   DeleteCriticalSection(&(*semaphore_info)->mutex);
 #endif
   (*semaphore_info)->signature=(~MagickSignature);
-  *semaphore_info=(SemaphoreInfo *) RelinquishAlignedMemory(*semaphore_info);
-#if defined(MAGICKCORE_HAVE_PTHREAD)
-  (void) pthread_mutex_unlock(&semaphore_mutex);
-#elif defined(MAGICKORE_HAVE_WINTHREADS)
-  InterlockedExchange(&semaphore_mutex,0L);
-#endif
-}
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%   I n i t i a l i z e S e m a p h o r e                                     %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  InitializeSemaphore() initializes the semaphore environment.
-%
-%  The format of the InitializeSemaphore method is:
-%
-%      InitializeSemaphore(void)
-%
-*/
-MagickExport void InitializeSemaphore(void)
-{
+  free(*semaphore_info);
+  *semaphore_info=(SemaphoreInfo *) NULL;
+  UnlockMagickMutex();
 }
 
 /*
@@ -307,54 +250,42 @@ MagickExport void InitializeSemaphore(void)
 %
 %  The format of the LockSemaphoreInfo method is:
 %
-%      MagickBooleanType LockSemaphoreInfo(SemaphoreInfo *semaphore_info)
+%      void LockSemaphoreInfo(SemaphoreInfo *semaphore_info)
 %
 %  A description of each parameter follows:
 %
 %    o semaphore_info: Specifies a pointer to an SemaphoreInfo structure.
 %
 */
-MagickExport MagickBooleanType LockSemaphoreInfo(SemaphoreInfo *semaphore_info)
+MagickExport void LockSemaphoreInfo(SemaphoreInfo *semaphore_info)
 {
   assert(semaphore_info != (SemaphoreInfo *) NULL);
   assert(semaphore_info->signature == MagickSignature);
-#if defined(MAGICKCORE_HAVE_PTHREAD)
+#if defined(MAGICKCORE_THREAD_SUPPORT)
   {
     int
       status;
 
     status=pthread_mutex_lock(&semaphore_info->mutex);
     if (status != 0)
-      return(MagickFalse);
-#if defined(MAGICKCORE_DEBUG)
-    {
-      if ((semaphore_info->reference_count > 0) &&
-          (IsMagickThreadEqual(semaphore_info->id) != MagickFalse))
-        {
-          (void) fprintf(stderr,"Warning: unexpected recursive lock!\n");
-          (void) fflush(stderr);
-        }
-    }
-#endif
+      {
+        errno=status;
+        ThrowFatalException(ResourceLimitFatalError,"UnableToLockSemaphore");
+      }
   }
-#elif defined(MAGICKORE_HAVE_WINTHREADS)
-  {
-    EnterCriticalSection(&semaphore_info->mutex);
-#if defined(MAGICKCORE_DEBUG)
-    {
-      if ((semaphore_info->reference_count > 0) &&
-          (IsMagickThreadEqual(semaphore_info->id) != MagickFalse))
-        {
-          (void) fprintf(stderr,"Warning: unexpected recursive lock!\n");
-          (void) fflush(stderr);
-        }
-    }
+#elif defined(MAGICKCORE_HAVE_WINTHREADS)
+  EnterCriticalSection(&semaphore_info->mutex);
 #endif
-  }
+#if defined(MAGICKCORE_DEBUG)
+  if ((semaphore_info->reference_count > 0) &&
+      (IsMagickThreadEqual(semaphore_info->id) != MagickFalse))
+    {
+      (void) FormatLocaleFile(stderr,"Warning: unexpected recursive lock!\n");
+      (void) fflush(stderr);
+    }
 #endif
   semaphore_info->id=GetMagickThreadId();
   semaphore_info->reference_count++;
-  return(MagickTrue);
 }
 
 /*
@@ -383,7 +314,54 @@ MagickExport void RelinquishSemaphoreInfo(SemaphoreInfo *semaphore_info)
 {
   assert(semaphore_info != (SemaphoreInfo *) NULL);
   assert(semaphore_info->signature == MagickSignature);
-  (void) UnlockSemaphoreInfo(semaphore_info);
+  UnlockSemaphoreInfo(semaphore_info);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%   S e m a p h o r e C o m p o n e n t G e n e s i s                         %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  SemaphoreComponentGenesis() instantiates the semaphore environment.
+%
+%  The format of the SemaphoreComponentGenesis method is:
+%
+%      MagickBooleanType SemaphoreComponentGenesis(void)
+%
+*/
+MagickExport MagickBooleanType SemaphoreComponentGenesis(void)
+{
+  LockMagickMutex();
+  UnlockMagickMutex();
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%   S e m a p h o r e C o m p o n e n t T e r m i n u s                       %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  SemaphoreComponentTerminus() destroys the semaphore component.
+%
+%  The format of the SemaphoreComponentTerminus method is:
+%
+%      SemaphoreComponentTerminus(void)
+%
+*/
+MagickExport void SemaphoreComponentTerminus(void)
+{
 }
 
 /*
@@ -401,15 +379,14 @@ MagickExport void RelinquishSemaphoreInfo(SemaphoreInfo *semaphore_info)
 %
 %  The format of the UnlockSemaphoreInfo method is:
 %
-%      MagickBooleanType UnlockSemaphoreInfo(SemaphoreInfo *semaphore_info)
+%      void UnlockSemaphoreInfo(SemaphoreInfo *semaphore_info)
 %
 %  A description of each parameter follows:
 %
 %    o semaphore_info: Specifies a pointer to an SemaphoreInfo structure.
 %
 */
-MagickExport MagickBooleanType UnlockSemaphoreInfo(
-  SemaphoreInfo *semaphore_info)
+MagickExport void UnlockSemaphoreInfo(SemaphoreInfo *semaphore_info)
 {
   assert(semaphore_info != (SemaphoreInfo *) NULL);
   assert(semaphore_info->signature == MagickSignature);
@@ -417,13 +394,14 @@ MagickExport MagickBooleanType UnlockSemaphoreInfo(
   assert(IsMagickThreadEqual(semaphore_info->id) != MagickFalse);
   if (semaphore_info->reference_count == 0)
     {
-      (void) fprintf(stderr,"Warning: semaphore lock already unlocked!\n");
+      (void) FormatLocaleFile(stderr,
+        "Warning: semaphore lock already unlocked!\n");
       (void) fflush(stderr);
-      return(MagickFalse);
+      return;
     }
   semaphore_info->reference_count--;
 #endif
-#if defined(MAGICKCORE_HAVE_PTHREAD)
+#if defined(MAGICKCORE_THREAD_SUPPORT)
   {
     int
       status;
@@ -431,12 +409,11 @@ MagickExport MagickBooleanType UnlockSemaphoreInfo(
     status=pthread_mutex_unlock(&semaphore_info->mutex);
     if (status != 0)
       {
-        semaphore_info->reference_count++;
-        return(MagickFalse);
+        errno=status;
+        ThrowFatalException(ResourceLimitFatalError,"UnableToUnlockSemaphore");
       }
   }
-#elif defined(MAGICKORE_HAVE_WINTHREADS)
+#elif defined(MAGICKCORE_HAVE_WINTHREADS)
   LeaveCriticalSection(&semaphore_info->mutex);
 #endif
-  return(MagickTrue);
 }

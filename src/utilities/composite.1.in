@@ -52,6 +52,8 @@ Image Settings:
   \-seed value          seed a new sequence of pseudo-random numbers
   \-size geometry       width and height of image
   \-support factor      resize support: > 1.0 is blurry, < 1.0 is sharp
+  \-synchronize         synchronize image to storage device
+  \-taint               declare the image as modified
   \-transparent-color color
                        transparent color
   \-treedepth value     color tree depth
@@ -71,7 +73,7 @@ Image Operators:
   \-geometry geometry   location of the composite image
   \-identify            identify the format and characteristics of the image
   \-monochrome          transform image to black and white
-  \-negate              replace every pixel with its complementary color 
+  \-negate              replace each pixel with its complementary color 
   \-profile filename    add ICM or IPTC information profile to image
   \-quantize colorspace reduce colors in this colorspace
   \-repage geometry     size and location of an image canvas (operator)
@@ -101,4 +103,4 @@ ImageMagick(1)
 
 .SH COPYRIGHT
 
-\fBCopyright (C) 1999-2009 ImageMagick Studio LLC. Additional copyrights and licenses apply to this software, see file://@DOCUMENTATION_PATH@/www/license.html or http://www.imagemagick.org/script/license.php\fP
+\fBCopyright (C) 1999-2011 ImageMagick Studio LLC. Additional copyrights and licenses apply to this software, see file://@DOCUMENTATION_PATH@/www/license.html or http://www.imagemagick.org/script/license.php\fP

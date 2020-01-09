@@ -16,7 +16,7 @@
 %                              December 1992                                  %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -61,7 +61,7 @@
   Typedef declarations.
 */
 struct _SignatureInfo
-{   
+{
   unsigned int
     digestsize,
     blocksize;
@@ -81,10 +81,10 @@ struct _SignatureInfo
   MagickBooleanType
     lsb_first;
 
-  long
+  ssize_t
     timestamp;
 
-  unsigned long
+  size_t
     signature;
 };
 
@@ -135,7 +135,7 @@ MagickExport SignatureInfo *AcquireSignatureInfo(void)
   lsb_first=1;
   signature_info->lsb_first=(int) (*(char *) &lsb_first) == 1 ? MagickTrue :
     MagickFalse;
-  signature_info->timestamp=(long) time(0);
+  signature_info->timestamp=(ssize_t) time(0);
   signature_info->signature=MagickSignature;
   InitializeSignature(signature_info);
   return(signature_info);
@@ -205,7 +205,7 @@ MagickExport SignatureInfo *DestroySignatureInfo(SignatureInfo *signature_info)
 */
 MagickExport void FinalizeSignature(SignatureInfo *signature_info)
 {
-  register long
+  register ssize_t
     i;
 
   register unsigned char
@@ -375,7 +375,7 @@ MagickExport unsigned int GetSignatureDigestsize(
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  IntializeSignature() intializes the Signature accumulator.
+%  InitializeSignature() initializes the Signature accumulator.
 %
 %  The format of the DestroySignatureInfo method is:
 %
@@ -467,14 +467,14 @@ MagickExport void SetSignatureDigest(SignatureInfo *signature_info,
 */
 MagickExport MagickBooleanType SignatureImage(Image *image)
 {
+  CacheView
+    *image_view;
+
   char
     *hex_signature;
 
   ExceptionInfo
     *exception;
-
-  long
-    y;
 
   QuantumInfo
     *quantum_info;
@@ -491,14 +491,14 @@ MagickExport MagickBooleanType SignatureImage(Image *image)
   size_t
     length;
 
+  ssize_t
+    y;
+
   StringInfo
     *signature;
 
   unsigned char
     *pixels;
-
-  CacheView
-    *image_view;
 
   /*
     Compute image digital signature.
@@ -525,7 +525,7 @@ MagickExport MagickBooleanType SignatureImage(Image *image)
   pixels=GetQuantumPixels(quantum_info);
   exception=(&image->exception);
   image_view=AcquireCacheView(image);
-  for (y=0; y < (long) image->rows; y++)
+  for (y=0; y < (ssize_t) image->rows; y++)
   {
     p=GetCacheViewVirtualPixels(image_view,0,y,image->columns,1,exception);
     if (p == (const PixelPacket *) NULL)
@@ -601,14 +601,14 @@ static void TransformSignature(SignatureInfo *signature_info)
 #define Suma0(x)  (RotateRight(x,2) ^ RotateRight(x,13) ^ RotateRight(x,22))
 #define Suma1(x)  (RotateRight(x,6) ^ RotateRight(x,11) ^ RotateRight(x,25))
 
-  long
-    j;
-
-  register long
+  register ssize_t
     i;
 
   register unsigned char
     *p;
+
+  ssize_t
+    j;
 
   static unsigned int
     K[64] =

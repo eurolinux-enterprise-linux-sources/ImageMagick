@@ -442,8 +442,8 @@ int main( int /*argc*/, char ** argv)
       cout << "  threshold random ..." << endl;
       example = model;
       example.label( "Random\nThreshold" );
-      example.randomThreshold( Geometry((unsigned int) (0.3*QuantumRange),
-        (unsigned int) (0.85*QuantumRange)) );
+      example.randomThreshold( Geometry((size_t) (0.3*QuantumRange),
+        (size_t) (0.85*QuantumRange)) );
       images.push_back( example );
     
       cout << "  unsharp mask ..." << endl;
@@ -498,10 +498,12 @@ int main( int /*argc*/, char ** argv)
       montage_image.composite( logo, placement, OverCompositeOp );
     }
 
+    for_each( montage.begin(), montage.end(), depthImage(8) );
+    for_each( montage.begin(), montage.end(), matteImage( false ) );
+    for_each( montage.begin(), montage.end(), compressTypeImage( RLECompression) );
+
     cout << "Writing image \"demo_out.miff\" ..." << endl;
-    montage_image.matte( false );
-    montage_image.compressType( RLECompression );
-    writeImages(montage.begin(),montage.end(),"demo_out.miff");
+    writeImages(montage.begin(),montage.end(),"demo_out_%d.miff");
 
     // Uncomment following lines to display image to screen
     //    cout <<  "Display image..." << endl;

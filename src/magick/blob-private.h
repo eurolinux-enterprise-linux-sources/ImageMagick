@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
   
   You may not use this file except in compliance with the License.
@@ -26,6 +26,10 @@ extern "C" {
 #include "magick/stream.h"
 
 #define MagickMinBlobExtent  32767L
+#if defined(MAGICKCORE_HAVE_FSEEKO)
+# define fseek  fseeko
+# define ftell  ftello
+#endif
 
 typedef enum
 {
@@ -75,6 +79,7 @@ extern MagickExport int
 
 extern MagickExport  MagickBooleanType
   CloseBlob(Image *),
+  DiscardBlobBytes(Image *,const MagickSizeType),
   OpenBlob(const ImageInfo *,Image *,const BlobMode,ExceptionInfo *),
   SetBlobExtent(Image *,const MagickSizeType),
   UnmapBlob(void *,const size_t);
@@ -84,7 +89,8 @@ extern MagickExport MagickOffsetType
   TellBlob(const Image *);
 
 extern MagickExport MagickSizeType
-  ReadBlobLongLong(Image *);
+  ReadBlobLongLong(Image *),
+  ReadBlobMSBLongLong(Image *);
 
 extern MagickExport ssize_t
   ReadBlob(Image *,const size_t,unsigned char *),
@@ -96,6 +102,7 @@ extern MagickExport ssize_t
   WriteBlobLSBLong(Image *,const unsigned int),
   WriteBlobLSBShort(Image *,const unsigned short),
   WriteBlobMSBLong(Image *,const unsigned int),
+  WriteBlobMSBLongLong(Image *,const MagickSizeType),
   WriteBlobMSBShort(Image *,const unsigned short),
   WriteBlobString(Image *,const char *);
 

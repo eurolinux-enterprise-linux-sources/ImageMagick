@@ -17,7 +17,7 @@
 %                                 March 2000                                  %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -95,6 +95,7 @@ MagickExport MagickBooleanType InvokeStaticImageFilter(const char *tag,
   rights=ReadPolicyRights;
   if (IsRightsAuthorized(FilterPolicyDomain,rights,tag) == MagickFalse)
     {
+      errno=EPERM;
       (void) ThrowMagickException(exception,GetMagickModule(),PolicyError,
         "NotAuthorized","`%s'",tag);
       return(MagickFalse);
@@ -106,7 +107,7 @@ MagickExport MagickBooleanType InvokeStaticImageFilter(const char *tag,
   (void) exception;
 #else
   {
-    extern unsigned long
+    extern size_t
       analyzeImage(Image **,const int,char **,ExceptionInfo *);
 
     ImageFilterHandler
@@ -114,10 +115,13 @@ MagickExport MagickBooleanType InvokeStaticImageFilter(const char *tag,
 
     image_filter=(ImageFilterHandler *) NULL;
     if (LocaleCompare("analyze",tag) == 0)
-      image_filter=analyzeImage;
-    if (image_filter != (ImageFilterHandler *) NULL)
+      image_filter=(ImageFilterHandler *) analyzeImage;
+    if (image_filter == (ImageFilterHandler *) NULL)
+      (void) ThrowMagickException(exception,GetMagickModule(),ModuleError,
+        "UnableToLoadModule","`%s'",tag);
+    else
       {
-        unsigned long
+        size_t
           signature;
 
         if ((*image)->debug != MagickFalse)
@@ -130,7 +134,8 @@ MagickExport MagickBooleanType InvokeStaticImageFilter(const char *tag,
         if (signature != MagickImageFilterSignature)
           {
             (void) ThrowMagickException(exception,GetMagickModule(),ModuleError,
-              "ImageFilterSignatureMismatch","`%s': %8lx != %8lx",tag,signature,
+              "ImageFilterSignatureMismatch","`%s': %8lx != %8lx",tag,
+              (unsigned long) signature,(unsigned long)
               MagickImageFilterSignature);
             return(MagickFalse);
           }
@@ -163,10 +168,11 @@ MagickExport MagickBooleanType InvokeStaticImageFilter(const char *tag,
 MagickExport void RegisterStaticModules(void)
 {
 #if !defined(MAGICKCORE_BUILD_MODULES)
+  (void) RegisterAAIImage();
   (void) RegisterARTImage();
-  (void) RegisterAVIImage();
   (void) RegisterAVSImage();
   (void) RegisterBMPImage();
+  (void) RegisterCALSImage();
   (void) RegisterCAPTIONImage();
   (void) RegisterCINImage();
   (void) RegisterCIPImage();
@@ -178,12 +184,15 @@ MagickExport void RegisterStaticModules(void)
   (void) RegisterCUTImage();
   (void) RegisterDCMImage();
   (void) RegisterDDSImage();
+  (void) RegisterDEBUGImage();
   (void) RegisterDIBImage();
 #if defined(MAGICKCORE_DJVU_DELEGATE)
   (void) RegisterDJVUImage();
 #endif
   (void) RegisterDNGImage();
+#if defined(MAGICKCORE_DPS_DELEGATE)
   (void) RegisterDPSImage();
+#endif
   (void) RegisterDPXImage();
 #if defined(MAGICKCORE_WINGDI32_DELEGATE)
   (void) RegisterEMFImage();
@@ -202,6 +211,8 @@ MagickExport void RegisterStaticModules(void)
   (void) RegisterGIFImage();
   (void) RegisterGRAYImage();
   (void) RegisterGRADIENTImage();
+  (void) RegisterHALDImage();
+  (void) RegisterHDRImage();
   (void) RegisterHISTOGRAMImage();
   (void) RegisterHRZImage();
   (void) RegisterHTMLImage();
@@ -219,6 +230,7 @@ MagickExport void RegisterStaticModules(void)
   (void) RegisterJP2Image();
 #endif
   (void) RegisterLABELImage();
+  (void) RegisterMACImage();
   (void) RegisterMAGICKImage();
   (void) RegisterMAPImage();
   (void) RegisterMATImage();
@@ -241,6 +253,7 @@ MagickExport void RegisterStaticModules(void)
   (void) RegisterPCXImage();
   (void) RegisterPDBImage();
   (void) RegisterPDFImage();
+  (void) RegisterPESImage();
   (void) RegisterPICTImage();
   (void) RegisterPIXImage();
   (void) RegisterPLASMAImage();
@@ -281,6 +294,9 @@ MagickExport void RegisterStaticModules(void)
   (void) RegisterVIDImage();
   (void) RegisterVIFFImage();
   (void) RegisterWBMPImage();
+#if defined(MAGICKCORE_WEBP_DELEGATE)
+  (void) RegisterWEBPImage();
+#endif
 #if defined(MAGICKCORE_WMF_DELEGATE) || defined(MAGICKCORE_WMFLITE_DELEGATE)
   (void) RegisterWMFImage();
 #endif
@@ -326,11 +342,12 @@ MagickExport void RegisterStaticModules(void)
 MagickExport void UnregisterStaticModules(void)
 {
 #if !defined(MAGICKCORE_BUILD_MODULES)
+  UnregisterAAIImage();
   UnregisterARTImage();
-  UnregisterAVIImage();
   UnregisterAVSImage();
   UnregisterBMPImage();
   UnregisterBRAILLEImage();
+  UnregisterCALSImage();
   UnregisterCAPTIONImage();
   UnregisterCINImage();
   UnregisterCIPImage();
@@ -342,12 +359,15 @@ MagickExport void UnregisterStaticModules(void)
   UnregisterCUTImage();
   UnregisterDCMImage();
   UnregisterDDSImage();
+  UnregisterDEBUGImage();
   UnregisterDIBImage();
 #if defined(MAGICKCORE_DJVU_DELEGATE)
   UnregisterDJVUImage();
 #endif
   UnregisterDNGImage();
+#if defined(MAGICKCORE_DPS_DELEGATE)
   UnregisterDPSImage();
+#endif
   UnregisterDPXImage();
 #if defined(MAGICKCORE_WINGDI32_DELEGATE)
   UnregisterEMFImage();
@@ -366,6 +386,8 @@ MagickExport void UnregisterStaticModules(void)
   UnregisterGIFImage();
   UnregisterGRAYImage();
   UnregisterGRADIENTImage();
+  UnregisterHALDImage();
+  UnregisterHDRImage();
   UnregisterHISTOGRAMImage();
   UnregisterHRZImage();
   UnregisterHTMLImage();
@@ -383,6 +405,7 @@ MagickExport void UnregisterStaticModules(void)
   UnregisterJP2Image();
 #endif
   UnregisterLABELImage();
+  UnregisterMACImage();
   UnregisterMAGICKImage();
   UnregisterMAPImage();
   UnregisterMATImage();
@@ -405,6 +428,7 @@ MagickExport void UnregisterStaticModules(void)
   UnregisterPCXImage();
   UnregisterPDBImage();
   UnregisterPDFImage();
+  UnregisterPESImage();
   UnregisterPICTImage();
   UnregisterPIXImage();
   UnregisterPLASMAImage();
@@ -445,6 +469,9 @@ MagickExport void UnregisterStaticModules(void)
   UnregisterVIDImage();
   UnregisterVIFFImage();
   UnregisterWBMPImage();
+#if defined(MAGICKCORE_WEBP_DELEGATE)
+  UnregisterWEBPImage();
+#endif
 #if defined(MAGICKCORE_WMF_DELEGATE) || defined(MAGICKCORE_WMFLITE_DELEGATE)
   UnregisterWMFImage();
 #endif

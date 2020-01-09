@@ -1,4 +1,4 @@
-# Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+# Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
 # dedicated to making software imaging solutions freely available.
 #
 # You may not use this file except in compliance with the License.
@@ -27,12 +27,13 @@ TESTS_TESTS = \
 	tests/validate-compare.sh \
 	tests/validate-composite.sh \
 	tests/validate-convert.sh \
-	tests/validate-formats-on-disk.sh \
-	tests/validate-formats-in-memory.sh \
 	tests/validate-identify.sh \
 	tests/validate-import.sh \
 	tests/validate-montage.sh \
-	tests/validate-stream.sh
+	tests/validate-pipe.sh \
+	tests/validate-stream.sh \
+	tests/validate-formats-in-memory.sh \
+	tests/validate-formats-on-disk.sh
 
 TESTS_EXTRA_DIST = \
 	tests/common.sh \

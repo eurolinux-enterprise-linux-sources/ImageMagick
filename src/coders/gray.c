@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -44,6 +44,7 @@
 #include "magick/blob-private.h"
 #include "magick/cache.h"
 #include "magick/colorspace.h"
+#include "magick/colorspace-private.h"
 #include "magick/constitute.h"
 #include "magick/exception.h"
 #include "magick/exception-private.h"
@@ -81,7 +82,7 @@ static MagickBooleanType
 %
 %  ReadGRAYImage() reads an image of raw grayscale samples and returns
 %  it.  It allocates the memory necessary for the new Image structure and
-%   returns a pointer to the new image.
+%  returns a pointer to the new image.
 %
 %  The format of the ReadGRAYImage method is:
 %
@@ -102,9 +103,6 @@ static Image *ReadGRAYImage(const ImageInfo *image_info,
     *canvas_image,
     *image;
 
-  long
-    y;
-
   MagickBooleanType
     status;
 
@@ -117,14 +115,12 @@ static Image *ReadGRAYImage(const ImageInfo *image_info,
   QuantumType
     quantum_type;
 
-  register long
-    i;
-
-  ssize_t
-    count;
-
   size_t
     length;
+
+  ssize_t
+    count,
+    y;
 
   unsigned char
     *pixels;
@@ -148,13 +144,9 @@ static Image *ReadGRAYImage(const ImageInfo *image_info,
       image=DestroyImageList(image);
       return((Image *) NULL);
     }
-  for (i=0; i < image->offset; i++)
-    if (ReadBlobByte(image) == EOF)
-      {
-        ThrowFileException(exception,CorruptImageError,"UnexpectedEndOfFile",
-          image->filename);
-        break;
-      }
+  if (DiscardBlobBytes(image,(size_t) image->offset) == MagickFalse)
+    ThrowFileException(exception,CorruptImageError,"UnexpectedEndOfFile",
+      image->filename);
   /*
     Create virtual canvas to support cropping (i.e. image.gray[100x100+10+20]).
   */
@@ -174,7 +166,7 @@ static Image *ReadGRAYImage(const ImageInfo *image_info,
       */
       image->scene++;
       length=GetQuantumExtent(canvas_image,quantum_info,quantum_type);
-      for (y=0; y < (long) image->rows; y++)
+      for (y=0; y < (ssize_t) image->rows; y++)
       {
         count=ReadBlob(image,length,pixels);
         if (count != (ssize_t) length)
@@ -196,20 +188,24 @@ static Image *ReadGRAYImage(const ImageInfo *image_info,
       {
         length=GetQuantumExtent(canvas_image,quantum_info,quantum_type);
         count=ReadBlob(image,length,pixels);
-        if (count != (ssize_t) length)
-          break;
       }
-    for (y=0; y < (long) image->extract_info.height; y++)
+    for (y=0; y < (ssize_t) image->extract_info.height; y++)
     {
       register const PixelPacket
-        *__restrict p;
+        *restrict p;
 
-      register long
+      register ssize_t
         x;
 
       register PixelPacket
-        *__restrict q;
+        *restrict q;
 
+      if (count != (ssize_t) length)
+        {
+          ThrowFileException(exception,CorruptImageError,
+            "UnexpectedEndOfFile",image->filename);
+          break;
+        }
       q=GetAuthenticPixels(canvas_image,0,0,canvas_image->columns,1,exception);
       if (q == (PixelPacket *) NULL)
         break;
@@ -217,9 +213,8 @@ static Image *ReadGRAYImage(const ImageInfo *image_info,
         quantum_type,pixels,exception);
       if (SyncAuthenticPixels(canvas_image,exception) == MagickFalse)
         break;
-      count=ReadBlob(image,length,pixels);
       if (((y-image->extract_info.y) >= 0) && 
-          ((y-image->extract_info.y) < (long) image->rows))
+          ((y-image->extract_info.y) < (ssize_t) image->rows))
         {
           p=GetVirtualPixels(canvas_image,canvas_image->extract_info.x,0,
             image->columns,1,exception);
@@ -227,11 +222,11 @@ static Image *ReadGRAYImage(const ImageInfo *image_info,
             1,exception);
           if ((p == (const PixelPacket *) NULL) || (q == (PixelPacket *) NULL))
             break;
-          for (x=0; x < (long) image->columns; x++)
+          for (x=0; x < (ssize_t) image->columns; x++)
           {
-            q->red=p->red;
-            q->green=p->green;
-            q->blue=p->blue;
+            SetPixelRed(q,GetPixelRed(p));
+            SetPixelGreen(q,GetPixelGreen(p));
+            SetPixelBlue(q,GetPixelBlue(p));
             p++;
             q++;
           }
@@ -240,10 +235,12 @@ static Image *ReadGRAYImage(const ImageInfo *image_info,
         }
       if (image->previous == (Image *) NULL)
         {
-          status=SetImageProgress(image,LoadImageTag,y,image->rows);
+          status=SetImageProgress(image,LoadImageTag,(MagickOffsetType) y,
+            image->rows);
           if (status == MagickFalse)
             break;
         }
+      count=ReadBlob(image,length,pixels);
     }
     SetQuantumImageType(image,quantum_type);
     /*
@@ -272,7 +269,7 @@ static Image *ReadGRAYImage(const ImageInfo *image_info,
     scene++;
   } while (count == (ssize_t) length);
   quantum_info=DestroyQuantumInfo(quantum_info);
-  InheritException(exception,&canvas_image->exception);
+  InheritException(&image->exception,&canvas_image->exception);
   canvas_image=DestroyImage(canvas_image);
   (void) CloseBlob(image);
   return(GetFirstImageInList(image));
@@ -298,10 +295,10 @@ static Image *ReadGRAYImage(const ImageInfo *image_info,
 %
 %  The format of the RegisterGRAYImage method is:
 %
-%      unsigned long RegisterGRAYImage(void)
+%      size_t RegisterGRAYImage(void)
 %
 */
-ModuleExport unsigned long RegisterGRAYImage(void)
+ModuleExport size_t RegisterGRAYImage(void)
 {
   MagickInfo
     *entry;
@@ -311,7 +308,6 @@ ModuleExport unsigned long RegisterGRAYImage(void)
   entry->encoder=(EncodeImageHandler *) WriteGRAYImage;
   entry->raw=MagickTrue;
   entry->endian_support=MagickTrue;
-  entry->format_type=ExplicitFormatType;
   entry->description=ConstantString("Raw gray samples");
   entry->module=ConstantString("GRAY");
   (void) RegisterMagickInfo(entry);
@@ -371,9 +367,6 @@ ModuleExport void UnregisterGRAYImage(void)
 static MagickBooleanType WriteGRAYImage(const ImageInfo *image_info,
   Image *image)
 {
-  long
-    y;
-
   MagickBooleanType
     status;
 
@@ -386,11 +379,12 @@ static MagickBooleanType WriteGRAYImage(const ImageInfo *image_info,
   QuantumType
     quantum_type;
 
-  ssize_t
-    count;
-
   size_t
     length;
+
+  ssize_t
+    count,
+    y;
 
   unsigned char
     *pixels;
@@ -413,17 +407,17 @@ static MagickBooleanType WriteGRAYImage(const ImageInfo *image_info,
     /*
       Write grayscale pixels.
     */
-    if (image->colorspace != RGBColorspace)
+    if (IsRGBColorspace(image->colorspace) == MagickFalse)
       (void) TransformImageColorspace(image,RGBColorspace);
     quantum_type=GrayQuantum;
     quantum_info=AcquireQuantumInfo(image_info,image);
     if (quantum_info == (QuantumInfo *) NULL)
       ThrowWriterException(ResourceLimitError,"MemoryAllocationFailed");
     pixels=GetQuantumPixels(quantum_info);
-    for (y=0; y < (long) image->rows; y++)
+    for (y=0; y < (ssize_t) image->rows; y++)
     {
       register const PixelPacket
-        *__restrict p;
+        *restrict p;
 
       p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
       if (p == (const PixelPacket *) NULL)
@@ -435,7 +429,8 @@ static MagickBooleanType WriteGRAYImage(const ImageInfo *image_info,
         break;
       if (image->previous == (Image *) NULL)
         {
-          status=SetImageProgress(image,SaveImageTag,y,image->rows);
+          status=SetImageProgress(image,SaveImageTag,(MagickOffsetType) y,
+            image->rows);
           if (status == MagickFalse)
             break;
         }

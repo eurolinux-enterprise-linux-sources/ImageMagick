@@ -15,7 +15,7 @@
 %                                 July 2000                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -70,7 +70,7 @@ struct _MimeInfo
     *description,
     *pattern;
 
-  long
+  ssize_t
     priority;
 
   MagickOffsetType
@@ -82,7 +82,7 @@ struct _MimeInfo
   DataType
     data_type;
 
-  long
+  ssize_t
     mask,
     value;
 
@@ -98,7 +98,7 @@ struct _MimeInfo
   MagickBooleanType
     stealth;
 
-  unsigned long
+  size_t
     signature;
 };
 
@@ -125,55 +125,6 @@ static volatile MagickBooleanType
 */
 static MagickBooleanType
   InitializeMimeList(ExceptionInfo *);
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-+   D e s t r o y M i m e L i s t                                             %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  DestroyMimeList() deallocates memory associated with the mime list.
-%
-%  The format of the DestroyMimeList method is:
-%
-%      DestroyMimeList(void)
-%
-*/
-
-static void *DestroyMimeElement(void *mime_info)
-{
-  register MimeInfo
-    *p;
-
-  p=(MimeInfo *) mime_info;
-  if (p->magic != (unsigned char *) NULL)
-    p->magic=(unsigned char *) RelinquishMagickMemory(p->magic);
-  if (p->pattern != (char *) NULL)
-    p->pattern=DestroyString(p->pattern);
-  if (p->description != (char *) NULL)
-    p->description=DestroyString(p->description);
-  if (p->type != (char *) NULL)
-    p->type=DestroyString(p->type);
-  if (p->path != (char *) NULL)
-    p->path=DestroyString(p->path);
-  p=(MimeInfo *) RelinquishMagickMemory(p);
-  return((void *) NULL);
-}
-
-MagickExport void DestroyMimeList(void)
-{
-  AcquireSemaphoreInfo(&mime_semaphore);
-  if (mime_list != (LinkedListInfo *) NULL)
-    mime_list=DestroyLinkedList(mime_list,DestroyMimeElement);
-  instantiate_mime=MagickFalse;
-  RelinquishSemaphoreInfo(mime_semaphore);
-  DestroySemaphoreInfo(&mime_semaphore);
-}
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -217,20 +168,20 @@ MagickExport const MimeInfo *GetMimeInfo(const char *filename,
   EndianType
     endian;
 
-  long
-    value;
-
   register const MimeInfo
     *p;
 
   register const unsigned char
     *q;
 
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     lsb_first;
+
+  ssize_t
+    value;
 
   assert(exception != (ExceptionInfo *) NULL);
   if ((mime_list == (LinkedListInfo *) NULL) ||
@@ -249,7 +200,7 @@ MagickExport const MimeInfo *GetMimeInfo(const char *filename,
   */
   mime_info=(const MimeInfo *) NULL;
   lsb_first=1;
-  AcquireSemaphoreInfo(&mime_semaphore);
+  LockSemaphoreInfo(mime_semaphore);
   ResetLinkedListIterator(mime_list);
   p=(const MimeInfo *) GetNextValueInLinkedList(mime_list);
   while (p != (const MimeInfo *) NULL)
@@ -275,7 +226,7 @@ MagickExport const MimeInfo *GetMimeInfo(const char *filename,
         if ((size_t) (p->offset+4) > length)
           break;
         q=magic+p->offset;
-        value=(*q++);
+        value=(ssize_t) (*q++);
         if (p->mask == 0)
           {
             if (p->value == value)
@@ -298,12 +249,12 @@ MagickExport const MimeInfo *GetMimeInfo(const char *filename,
           endian=(*(char *) &lsb_first) == 1 ? LSBEndian : MSBEndian;
         if (endian == LSBEndian)
           {
-            value=(*q++);
+            value=(ssize_t) (*q++);
             value|=(*q++) << 8;
           }
         else
           {
-            value=(*q++) << 8;
+            value=(ssize_t) (*q++) << 8;
             value|=(*q++);
           }
         if (p->mask == 0)
@@ -328,14 +279,14 @@ MagickExport const MimeInfo *GetMimeInfo(const char *filename,
           endian=(*(char *) &lsb_first) == 1 ? LSBEndian : MSBEndian;
         if (endian == LSBEndian)
           {
-            value=(*q++);
+            value=(ssize_t) (*q++);
             value|=(*q++) << 8;
             value|=(*q++) << 16;
             value|=(*q++) << 24;
           }
         else
           {
-            value=(*q++) << 24;
+            value=(ssize_t) (*q++) << 24;
             value|=(*q++) << 16;
             value|=(*q++) << 8;
             value|=(*q++);
@@ -355,7 +306,7 @@ MagickExport const MimeInfo *GetMimeInfo(const char *filename,
       case StringData:
       default:
       {
-        for (i=0; i <= (long) p->extent; i++)
+        for (i=0; i <= (ssize_t) p->extent; i++)
         {
           if ((size_t) (p->offset+i+p->length) > length)
             break;
@@ -373,7 +324,7 @@ MagickExport const MimeInfo *GetMimeInfo(const char *filename,
   if (p != (const MimeInfo *) NULL)
     (void) InsertValueInLinkedList(mime_list,0,
       RemoveElementByValueFromLinkedList(mime_list,p));
-  RelinquishSemaphoreInfo(mime_semaphore);
+  UnlockSemaphoreInfo(mime_semaphore);
   return(mime_info);
 }
 
@@ -394,7 +345,7 @@ MagickExport const MimeInfo *GetMimeInfo(const char *filename,
 %  The magic of the GetMimeInfoList function is:
 %
 %      const MimeInfo **GetMimeInfoList(const char *pattern,
-%        unsigned long *number_aliases,ExceptionInfo *exception)
+%        size_t *number_aliases,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
@@ -429,7 +380,7 @@ static int MimeInfoCompare(const void *x,const void *y)
 #endif
 
 MagickExport const MimeInfo **GetMimeInfoList(const char *pattern,
-  unsigned long *number_aliases,ExceptionInfo *exception)
+  size_t *number_aliases,ExceptionInfo *exception)
 {
   const MimeInfo
     **aliases;
@@ -437,7 +388,7 @@ MagickExport const MimeInfo **GetMimeInfoList(const char *pattern,
   register const MimeInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -445,7 +396,7 @@ MagickExport const MimeInfo **GetMimeInfoList(const char *pattern,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_aliases != (unsigned long *) NULL);
+  assert(number_aliases != (size_t *) NULL);
   *number_aliases=0;
   p=GetMimeInfo((char *) NULL,(unsigned char *) "*",0,exception);
   if (p == (const MimeInfo *) NULL)
@@ -457,7 +408,7 @@ MagickExport const MimeInfo **GetMimeInfoList(const char *pattern,
   /*
     Generate mime list.
   */
-  AcquireSemaphoreInfo(&mime_semaphore);
+  LockSemaphoreInfo(mime_semaphore);
   ResetLinkedListIterator(mime_list);
   p=(const MimeInfo *) GetNextValueInLinkedList(mime_list);
   for (i=0; p != (const MimeInfo *) NULL; )
@@ -467,10 +418,10 @@ MagickExport const MimeInfo **GetMimeInfoList(const char *pattern,
       aliases[i++]=p;
     p=(const MimeInfo *) GetNextValueInLinkedList(mime_list);
   }
-  RelinquishSemaphoreInfo(mime_semaphore);
+  UnlockSemaphoreInfo(mime_semaphore);
   qsort((void *) aliases,(size_t) i,sizeof(*aliases),MimeInfoCompare);
   aliases[i]=(MimeInfo *) NULL;
-  *number_aliases=(unsigned long) i;
+  *number_aliases=(size_t) i;
   return(aliases);
 }
 
@@ -490,7 +441,7 @@ MagickExport const MimeInfo **GetMimeInfoList(const char *pattern,
 %
 %  The format of the GetMimeList function is:
 %
-%      char **GetMimeList(const char *pattern,unsigned long *number_aliases,
+%      char **GetMimeList(const char *pattern,size_t *number_aliases,
 %        ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
@@ -524,7 +475,7 @@ static int MimeCompare(const void *x,const void *y)
 #endif
 
 MagickExport char **GetMimeList(const char *pattern,
-  unsigned long *number_aliases,ExceptionInfo *exception)
+  size_t *number_aliases,ExceptionInfo *exception)
 {
   char
     **aliases;
@@ -532,7 +483,7 @@ MagickExport char **GetMimeList(const char *pattern,
   register const MimeInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -540,7 +491,7 @@ MagickExport char **GetMimeList(const char *pattern,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_aliases != (unsigned long *) NULL);
+  assert(number_aliases != (size_t *) NULL);
   *number_aliases=0;
   p=GetMimeInfo((char *) NULL,(unsigned char *) "*",0,exception);
   if (p == (const MimeInfo *) NULL)
@@ -549,7 +500,7 @@ MagickExport char **GetMimeList(const char *pattern,
     GetNumberOfElementsInLinkedList(mime_list)+1UL,sizeof(*aliases));
   if (aliases == (char **) NULL)
     return((char **) NULL);
-  AcquireSemaphoreInfo(&mime_semaphore);
+  LockSemaphoreInfo(mime_semaphore);
   ResetLinkedListIterator(mime_list);
   p=(const MimeInfo *) GetNextValueInLinkedList(mime_list);
   for (i=0; p != (const MimeInfo *) NULL; )
@@ -559,10 +510,10 @@ MagickExport char **GetMimeList(const char *pattern,
       aliases[i++]=ConstantString(p->type);
     p=(const MimeInfo *) GetNextValueInLinkedList(mime_list);
   }
-  RelinquishSemaphoreInfo(mime_semaphore);
+  UnlockSemaphoreInfo(mime_semaphore);
   qsort((void *) aliases,(size_t) i,sizeof(*aliases),MimeCompare);
   aliases[i]=(char *) NULL;
-  *number_aliases=(unsigned long) i;
+  *number_aliases=(size_t) i;
   return(aliases);
 }
 
@@ -653,14 +604,16 @@ static MagickBooleanType InitializeMimeList(ExceptionInfo *exception)
   if ((mime_list == (LinkedListInfo *) NULL) &&
       (instantiate_mime == MagickFalse))
     {
-      AcquireSemaphoreInfo(&mime_semaphore);
+      if (mime_semaphore == (SemaphoreInfo *) NULL)
+        AcquireSemaphoreInfo(&mime_semaphore);
+      LockSemaphoreInfo(mime_semaphore);
       if ((mime_list == (LinkedListInfo *) NULL) &&
           (instantiate_mime == MagickFalse))
         {
           (void) LoadMimeLists(MimeFilename,exception);
           instantiate_mime=MagickTrue;
         }
-      RelinquishSemaphoreInfo(mime_semaphore);
+      UnlockSemaphoreInfo(mime_semaphore);
     }
   return(mime_list != (LinkedListInfo *) NULL ? MagickTrue : MagickFalse);
 }
@@ -697,14 +650,14 @@ MagickExport MagickBooleanType ListMimeInfo(FILE *file,ExceptionInfo *exception)
   const MimeInfo
     **mime_info;
 
-  long
-    j;
-
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     number_aliases;
+
+  ssize_t
+    j;
 
   if (file == (const FILE *) NULL)
     file=stdout;
@@ -713,7 +666,7 @@ MagickExport MagickBooleanType ListMimeInfo(FILE *file,ExceptionInfo *exception)
     return(MagickFalse);
   j=0;
   path=(const char *) NULL;
-  for (i=0; i < (long) number_aliases; i++)
+  for (i=0; i < (ssize_t) number_aliases; i++)
   {
     if (mime_info[i]->stealth != MagickFalse)
       continue;
@@ -721,27 +674,28 @@ MagickExport MagickBooleanType ListMimeInfo(FILE *file,ExceptionInfo *exception)
         (strcasecmp(path,mime_info[i]->path) != 0))
       {
         if (mime_info[i]->path != (char *) NULL)
-          (void) fprintf(file,"\nPath: %s\n\n",mime_info[i]->path);
-        (void) fprintf(file,"Type                   Description\n");
-        (void) fprintf(file,"-------------------------------------------------"
+          (void) FormatLocaleFile(file,"\nPath: %s\n\n",mime_info[i]->path);
+        (void) FormatLocaleFile(file,"Type                   Description\n");
+        (void) FormatLocaleFile(file,
+          "-------------------------------------------------"
           "------------------------------\n");
       }
     path=mime_info[i]->path;
-    (void) fprintf(file,"%s",mime_info[i]->type);
+    (void) FormatLocaleFile(file,"%s",mime_info[i]->type);
     if (strlen(mime_info[i]->type) <= 25)
       {
-        for (j=(long) strlen(mime_info[i]->type); j <= 27; j++)
-          (void) fprintf(file," ");
+        for (j=(ssize_t) strlen(mime_info[i]->type); j <= 27; j++)
+          (void) FormatLocaleFile(file," ");
       }
     else
       {
-        (void) fprintf(file,"\n");
+        (void) FormatLocaleFile(file,"\n");
         for (j=0; j <= 27; j++)
-          (void) fprintf(file," ");
+          (void) FormatLocaleFile(file," ");
       }
     if (mime_info[i]->description != (char *) NULL)
-      (void) fprintf(file,"%s",mime_info[i]->description);
-    (void) fprintf(file,"\n");
+      (void) FormatLocaleFile(file,"%s",mime_info[i]->description);
+    (void) FormatLocaleFile(file,"\n");
   }
   (void) fflush(file);
   mime_info=(const MimeInfo **) RelinquishMagickMemory((void *) mime_info);
@@ -765,7 +719,7 @@ MagickExport MagickBooleanType ListMimeInfo(FILE *file,ExceptionInfo *exception)
 %  The format of the LoadMimeList method is:
 %
 %      MagickBooleanType LoadMimeList(const char *xml,const char *filename,
-%        const unsigned long depth,ExceptionInfo *exception)
+%        const size_t depth,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
@@ -779,7 +733,7 @@ MagickExport MagickBooleanType ListMimeInfo(FILE *file,ExceptionInfo *exception)
 %
 */
 static MagickBooleanType LoadMimeList(const char *xml,const char *filename,
-  const unsigned long depth,ExceptionInfo *exception)
+  const size_t depth,ExceptionInfo *exception)
 {
   const char
     *attribute;
@@ -869,14 +823,14 @@ static MagickBooleanType LoadMimeList(const char *xml,const char *filename,
     mime_info->signature=MagickSignature;
     attribute=GetXMLTreeAttribute(mime,"data-type");
     if (attribute != (const char *) NULL)
-      mime_info->data_type=(DataType) ParseMagickOption(MagickDataTypeOptions,
+      mime_info->data_type=(DataType) ParseCommandOption(MagickDataTypeOptions,
         MagickTrue,attribute);
     attribute=GetXMLTreeAttribute(mime,"description");
     if (attribute != (const char *) NULL)
       mime_info->description=ConstantString(attribute);
     attribute=GetXMLTreeAttribute(mime,"endian");
     if (attribute != (const char *) NULL)
-      mime_info->endian=(EndianType) ParseMagickOption(MagickEndianOptions,
+      mime_info->endian=(EndianType) ParseCommandOption(MagickEndianOptions,
         MagickTrue,attribute);
     attribute=GetXMLTreeAttribute(mime,"magic");
     if (attribute != (const char *) NULL)
@@ -933,11 +887,12 @@ static MagickBooleanType LoadMimeList(const char *xml,const char *filename,
         }
         token=DestroyString(token);
         if (mime_info->data_type != StringData)
-          mime_info->value=strtol((char *) mime_info->magic,(char **) NULL,0);
+          mime_info->value=(ssize_t) strtoul((char *) mime_info->magic,
+            (char **) NULL,0);
       }
     attribute=GetXMLTreeAttribute(mime,"mask");
     if (attribute != (const char *) NULL)
-      mime_info->mask=strtol(attribute,(char **) NULL,0);
+      mime_info->mask=(ssize_t) strtoul(attribute,(char **) NULL,0);
     attribute=GetXMLTreeAttribute(mime,"offset");
     if (attribute != (const char *) NULL)
       {
@@ -953,7 +908,7 @@ static MagickBooleanType LoadMimeList(const char *xml,const char *filename,
       mime_info->pattern=ConstantString(attribute);
     attribute=GetXMLTreeAttribute(mime,"priority");
     if (attribute != (const char *) NULL)
-      mime_info->priority=strtol(attribute,(char **) NULL,0);
+      mime_info->priority=(ssize_t) strtol(attribute,(char **) NULL,0);
     attribute=GetXMLTreeAttribute(mime,"stealth");
     if (attribute != (const char *) NULL)
       mime_info->stealth=IsMagickTrue(attribute);
@@ -999,7 +954,7 @@ static MagickBooleanType LoadMimeList(const char *xml,const char *filename,
 MagickExport MagickBooleanType LoadMimeLists(const char *filename,
   ExceptionInfo *exception)
 {
-#if defined(MAGICKCORE_EMBEDDABLE_SUPPORT)
+#if defined(MAGICKCORE_ZERO_CONFIGURATION_SUPPORT)
   return(LoadMimeList(MimeMap,"built-in",0,exception));
 #else
   const StringInfo
@@ -1021,7 +976,7 @@ MagickExport MagickBooleanType LoadMimeLists(const char *filename,
     option=(const StringInfo *) GetNextValueInLinkedList(options);
   }
   options=DestroyConfigureOptions(options);
-  if ((mime_list == (LinkedListInfo *) NULL) || 
+  if ((mime_list == (LinkedListInfo *) NULL) ||
       (IsLinkedListEmpty(mime_list) != MagickFalse))
     status|=LoadMimeList(MimeMap,"built-in",0,exception);
   else
@@ -1067,14 +1022,89 @@ MagickExport char *MagickToMime(const char *magick)
   ExceptionInfo
     *exception;
 
-  (void) FormatMagickString(filename,MaxTextExtent,"file.%s",magick);
+  (void) FormatLocaleString(filename,MaxTextExtent,"file.%s",magick);
   LocaleLower(filename);
   exception=AcquireExceptionInfo();
   mime_info=GetMimeInfo(filename,(unsigned char *) " ",1,exception);
   exception=DestroyExceptionInfo(exception);
   if (mime_info != (const MimeInfo *) NULL)
     return(ConstantString(GetMimeType(mime_info)));
-  (void) FormatMagickString(media,MaxTextExtent,"image/x-%s",magick);
+  (void) FormatLocaleString(media,MaxTextExtent,"image/x-%s",magick);
   LocaleLower(media+8);
   return(ConstantString(media));
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   M i m e C o m p o n e n t G e n e s i s                                   %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MimeComponentGenesis() instantiates the mime component.
+%
+%  The format of the MimeComponentGenesis method is:
+%
+%      MagickBooleanType MimeComponentGenesis(void)
+%
+*/
+MagickExport MagickBooleanType MimeComponentGenesis(void)
+{
+  AcquireSemaphoreInfo(&mime_semaphore);
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   M i m e C o m p o n e n t T e r m i n u s                                 %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MimeComponentTerminus() destroys the mime component.
+%
+%  The format of the MimeComponentTerminus method is:
+%
+%      MimeComponentTerminus(void)
+%
+*/
+
+static void *DestroyMimeElement(void *mime_info)
+{
+  register MimeInfo
+    *p;
+
+  p=(MimeInfo *) mime_info;
+  if (p->magic != (unsigned char *) NULL)
+    p->magic=(unsigned char *) RelinquishMagickMemory(p->magic);
+  if (p->pattern != (char *) NULL)
+    p->pattern=DestroyString(p->pattern);
+  if (p->description != (char *) NULL)
+    p->description=DestroyString(p->description);
+  if (p->type != (char *) NULL)
+    p->type=DestroyString(p->type);
+  if (p->path != (char *) NULL)
+    p->path=DestroyString(p->path);
+  p=(MimeInfo *) RelinquishMagickMemory(p);
+  return((void *) NULL);
+}
+
+MagickExport void MimeComponentTerminus(void)
+{
+  if (mime_semaphore == (SemaphoreInfo *) NULL)
+    AcquireSemaphoreInfo(&mime_semaphore);
+  LockSemaphoreInfo(mime_semaphore);
+  if (mime_list != (LinkedListInfo *) NULL)
+    mime_list=DestroyLinkedList(mime_list,DestroyMimeElement);
+  instantiate_mime=MagickFalse;
+  UnlockSemaphoreInfo(mime_semaphore);
+  DestroySemaphoreInfo(&mime_semaphore);
 }

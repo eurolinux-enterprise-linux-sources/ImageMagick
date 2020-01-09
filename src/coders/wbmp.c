@@ -17,7 +17,7 @@
 %                               January 2000                                  %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -43,7 +43,9 @@
 #include "magick/blob-private.h"
 #include "magick/cache.h"
 #include "magick/color-private.h"
+#include "magick/colormap.h"
 #include "magick/colorspace.h"
+#include "magick/colorspace-private.h"
 #include "magick/exception.h"
 #include "magick/exception-private.h"
 #include "magick/image.h"
@@ -94,7 +96,7 @@ static MagickBooleanType
 %
 */
 
-static MagickBooleanType WBMPReadInteger(Image *image,unsigned long *value)
+static MagickBooleanType WBMPReadInteger(Image *image,size_t *value)
 {
   int
     byte;
@@ -120,23 +122,20 @@ static Image *ReadWBMPImage(const ImageInfo *image_info,
   int
     byte;
 
-  long
-    y;
-
   MagickBooleanType
     status;
 
   register IndexPacket
     *indexes;
 
-  register long
+  register ssize_t
     x;
 
   register PixelPacket
     *q;
 
-  register long
-    i;
+  ssize_t
+    y;
 
   unsigned char
     bit;
@@ -174,13 +173,9 @@ static Image *ReadWBMPImage(const ImageInfo *image_info,
     ThrowReaderException(CorruptImageError,"CorruptWBMPimage");
   if ((image->columns == 0) || (image->rows == 0))
     ThrowReaderException(CorruptImageError,"ImproperImageHeader");
-  for (i=0; i < image->offset; i++)
-    if (ReadBlobByte(image) == EOF)
-      {
-        ThrowFileException(exception,CorruptImageError,"UnexpectedEndOfFile",
-          image->filename);
-        break;
-      }
+  if (DiscardBlobBytes(image,image->offset) == MagickFalse)
+    ThrowFileException(exception,CorruptImageError,"UnexpectedEndOfFile",
+      image->filename);
   if (AcquireImageColormap(image,2) == MagickFalse)
     ThrowReaderException(ResourceLimitError,"MemoryAllocationFailed");
   if (image_info->ping != MagickFalse)
@@ -191,7 +186,7 @@ static Image *ReadWBMPImage(const ImageInfo *image_info,
   /*
     Convert bi-level image to pixel packets.
   */
-  for (y=0; y < (long) image->rows; y++)
+  for (y=0; y < (ssize_t) image->rows; y++)
   {
     q=QueueAuthenticPixels(image,0,y,image->columns,1,exception);
     if (q == (PixelPacket *) NULL)
@@ -199,7 +194,7 @@ static Image *ReadWBMPImage(const ImageInfo *image_info,
     indexes=GetAuthenticIndexQueue(image);
     bit=0;
     byte=0;
-    for (x=0; x < (long) image->columns; x++)
+    for (x=0; x < (ssize_t) image->columns; x++)
     {
       if (bit == 0)
         {
@@ -207,14 +202,15 @@ static Image *ReadWBMPImage(const ImageInfo *image_info,
           if (byte == EOF)
             ThrowReaderException(CorruptImageError,"CorruptImage");
         }
-      indexes[x]=(IndexPacket) ((byte & (0x01 << (7-bit))) ? 1 : 0);
+      SetPixelIndex(indexes+x,(byte & (0x01 << (7-bit))) ? 1 : 0);
       bit++;
       if (bit == 8)
         bit=0;
     }
     if (SyncAuthenticPixels(image,exception) == MagickFalse)
       break;
-    status=SetImageProgress(image,LoadImageTag,y,image->rows);
+    status=SetImageProgress(image,LoadImageTag,(MagickOffsetType) y,
+                image->rows);
     if (status == MagickFalse)
       break;
   }
@@ -246,10 +242,10 @@ static Image *ReadWBMPImage(const ImageInfo *image_info,
 %
 %  The format of the RegisterWBMPImage method is:
 %
-%      unsigned long RegisterWBMPImage(void)
+%      size_t RegisterWBMPImage(void)
 %
 */
-ModuleExport unsigned long RegisterWBMPImage(void)
+ModuleExport size_t RegisterWBMPImage(void)
 {
   MagickInfo
     *entry;
@@ -318,14 +314,14 @@ ModuleExport void UnregisterWBMPImage(void)
 %
 */
 
-static void WBMPWriteInteger(Image *image,const unsigned long value)
+static void WBMPWriteInteger(Image *image,const size_t value)
 {
   int
     bits,
     flag,
     n;
 
-  register long
+  register ssize_t
     i;
 
   unsigned char
@@ -352,20 +348,17 @@ static void WBMPWriteInteger(Image *image,const unsigned long value)
 static MagickBooleanType WriteWBMPImage(const ImageInfo *image_info,
   Image *image)
 {
-  long
-    y;
-
   MagickBooleanType
     status;
-
-  register const IndexPacket
-    *indexes;
 
   register const PixelPacket
     *p;
 
-  register long
+  register ssize_t
     x;
+
+  ssize_t
+    y;
 
   unsigned char
     bit,
@@ -383,7 +376,7 @@ static MagickBooleanType WriteWBMPImage(const ImageInfo *image_info,
   status=OpenBlob(image_info,image,WriteBinaryBlobMode,&image->exception);
   if (status == MagickFalse)
     return(status);
-  if (image->colorspace != RGBColorspace)
+  if (IsRGBColorspace(image->colorspace) == MagickFalse)
     (void) TransformImageColorspace(image,RGBColorspace);
   /*
     Convert image to a bi-level image.
@@ -392,15 +385,14 @@ static MagickBooleanType WriteWBMPImage(const ImageInfo *image_info,
   (void) WriteBlobMSBShort(image,0);
   WBMPWriteInteger(image,image->columns);
   WBMPWriteInteger(image,image->rows);
-  for (y=0; y < (long) image->rows; y++)
+  for (y=0; y < (ssize_t) image->rows; y++)
   {
     p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
     if (p == (const PixelPacket *) NULL)
       break;
-    indexes=GetVirtualIndexQueue(image);
     bit=0;
     byte=0;
-    for (x=0; x < (long) image->columns; x++)
+    for (x=0; x < (ssize_t) image->columns; x++)
     {
       if (PixelIntensity(p) >= ((MagickRealType) QuantumRange/2.0))
         byte|=0x1 << (7-bit);
@@ -415,7 +407,8 @@ static MagickBooleanType WriteWBMPImage(const ImageInfo *image_info,
     }
     if (bit != 0)
       (void) WriteBlobByte(image,byte);
-    status=SetImageProgress(image,SaveImageTag,y,image->rows);
+    status=SetImageProgress(image,SaveImageTag,(MagickOffsetType) y,
+      image->rows);
     if (status == MagickFalse)
       break;
   }

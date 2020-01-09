@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
   
   You may not use this file except in compliance with the License.
@@ -34,14 +34,14 @@ typedef struct gs_main_instance_s
 #endif
 
 #if !defined(MagickDLLCall)
-#  if defined(__WINDOWS__)
+#  if defined(MAGICKCORE_WINDOWS_SUPPORT)
 #    define MagickDLLCall __stdcall
 #  else
 #    define MagickDLLCall
 #  endif
 #endif
 
-typedef struct _GhostscriptVectors
+typedef struct _GhostInfo
 {
   int
     (MagickDLLCall *exit)(gs_main_instance *);
@@ -57,7 +57,7 @@ typedef struct _GhostscriptVectors
 
   void
     (MagickDLLCall *delete_instance)(gs_main_instance *);
-} GhostscriptVectors;
+} GhostInfo;
 
 #if defined(__cplusplus) || defined(c_plusplus)
 }

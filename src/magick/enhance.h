@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
   
   You may not use this file except in compliance with the License.
@@ -23,6 +23,13 @@ extern "C" {
 #endif
 
 extern MagickExport MagickBooleanType
+  AutoGammaImage(Image *),
+  AutoGammaImageChannel(Image *,const ChannelType),
+  AutoLevelImage(Image *),
+  AutoLevelImageChannel(Image *,const ChannelType),
+  BrightnessContrastImage(Image *,const double,const double),
+  BrightnessContrastImageChannel(Image *,const ChannelType,const double,
+    const double),
   ClutImage(Image *,const Image *),
   ClutImageChannel(Image *,const ChannelType,const Image *),
   ColorDecisionListImage(Image *,const char *),
@@ -39,10 +46,13 @@ extern MagickExport MagickBooleanType
   LevelImage(Image *,const char *),
   LevelImageChannel(Image *,const ChannelType,const double,const double,
     const double),
+  LevelizeImage(Image *,const double,const double,const double),
   LevelizeImageChannel(Image *,const ChannelType,const double,const double,
     const double),
-  LevelImageColors(Image *,const ChannelType,const MagickPixelPacket *,
-    const MagickPixelPacket *, const MagickBooleanType),
+  LevelColorsImage(Image *,const MagickPixelPacket *,const MagickPixelPacket *,
+    const MagickBooleanType),
+  LevelColorsImageChannel(Image *,const ChannelType,const MagickPixelPacket *,
+    const MagickPixelPacket *,const MagickBooleanType),
   LinearStretchImage(Image *,const double,const double),
   ModulateImage(Image *,const char *),
   NegateImage(Image *,const MagickBooleanType),

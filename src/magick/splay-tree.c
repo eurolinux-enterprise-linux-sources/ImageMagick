@@ -23,7 +23,7 @@
 %                               December 2002                                 %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -97,7 +97,7 @@ struct _SplayTreeInfo
     *key,
     *next;
 
-  unsigned long
+  size_t
     nodes;
 
   MagickBooleanType
@@ -106,7 +106,7 @@ struct _SplayTreeInfo
   SemaphoreInfo
     *semaphore;
 
-  unsigned long
+  size_t
     signature;
 };
 
@@ -156,7 +156,7 @@ MagickExport MagickBooleanType AddValueToSplayTree(SplayTreeInfo *splay_tree,
   register NodeInfo
     *node;
 
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
+  LockSemaphoreInfo(splay_tree->semaphore);
   SplaySplayTree(splay_tree,key);
   compare=0;
   if (splay_tree->root != (NodeInfo *) NULL)
@@ -168,24 +168,24 @@ MagickExport MagickBooleanType AddValueToSplayTree(SplayTreeInfo *splay_tree,
           ((splay_tree->root->key < key) ? -1 : 0);
       if (compare == 0)
         {
+          if ((splay_tree->relinquish_value != (void *(*)(void *)) NULL) &&
+              (splay_tree->root->value != (void *) NULL))
+            splay_tree->root->value=splay_tree->relinquish_value(
+              splay_tree->root->value);
           if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
               (splay_tree->root->key != (void *) NULL))
             splay_tree->root->key=splay_tree->relinquish_key(
               splay_tree->root->key);
           splay_tree->root->key=(void *) key;
-          if ((splay_tree->relinquish_value != (void *(*)(void *)) NULL) &&
-              (splay_tree->root->value != (void *) NULL))
-            splay_tree->root->value=splay_tree->relinquish_value(
-              splay_tree->root->value);
           splay_tree->root->value=(void *) value;
-          (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+          UnlockSemaphoreInfo(splay_tree->semaphore);
           return(MagickTrue);
         }
     }
   node=(NodeInfo *) AcquireMagickMemory(sizeof(*node));
   if (node == (NodeInfo *) NULL)
     {
-      (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+      UnlockSemaphoreInfo(splay_tree->semaphore);
       return(MagickFalse);
     }
   node->key=(void *) key;
@@ -211,7 +211,7 @@ MagickExport MagickBooleanType AddValueToSplayTree(SplayTreeInfo *splay_tree,
   splay_tree->root=node;
   splay_tree->key=(void *) NULL;
   splay_tree->nodes++;
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  UnlockSemaphoreInfo(splay_tree->semaphore);
   return(MagickTrue);
 }
 
@@ -240,13 +240,13 @@ MagickExport MagickBooleanType AddValueToSplayTree(SplayTreeInfo *splay_tree,
 %
 */
 
-static NodeInfo *LinkSplayTreeNodes(NodeInfo **nodes,const unsigned long low,
-  const unsigned long high)
+static NodeInfo *LinkSplayTreeNodes(NodeInfo **nodes,const size_t low,
+  const size_t high)
 {
   register NodeInfo
     *node;
 
-  unsigned long
+  size_t
     bisect;
 
   bisect=low+(high-low)/2;
@@ -325,9 +325,27 @@ static void BalanceSplayTree(SplayTreeInfo *splay_tree)
 %      whenever a value object is added to the splay-tree.
 %
 */
+
+static void *GetFirstSplayTreeNode(SplayTreeInfo *splay_tree)
+{
+  register NodeInfo
+    *node;
+
+  node=splay_tree->root;
+  if (splay_tree->root == (NodeInfo *) NULL)
+    return((NodeInfo *) NULL);
+  while (node->left != (NodeInfo *) NULL)
+    node=node->left;
+  return(node->key);
+}
+
 MagickExport SplayTreeInfo *CloneSplayTree(SplayTreeInfo *splay_tree,
   void *(*clone_key)(void *),void *(*clone_value)(void *))
 {
+  register NodeInfo
+    *next,
+    *node;
+
   SplayTreeInfo
     *clone_tree;
 
@@ -337,64 +355,28 @@ MagickExport SplayTreeInfo *CloneSplayTree(SplayTreeInfo *splay_tree,
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   clone_tree=NewSplayTree(splay_tree->compare,splay_tree->relinquish_key,
     splay_tree->relinquish_value);
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
-  if (splay_tree->root != (NodeInfo *) NULL)
+  LockSemaphoreInfo(splay_tree->semaphore);
+  if (splay_tree->root == (NodeInfo *) NULL)
     {
-      register NodeInfo
-        *active,
-        *next,
-        *node;
-
-      void
-        *key,
-        *value;
-
-      key=splay_tree->root->key;
-      if ((clone_key != (void *(*)(void *)) NULL) && (key != (void *) NULL))
-        key=clone_key(key);
-      value=splay_tree->root->value;
-      if ((clone_value != (void *(*)(void *)) NULL) && (value != (void *) NULL))
-        value=clone_value(value);
-      (void) AddValueToSplayTree(clone_tree,key,value);
-      for (node=splay_tree->root; node != (NodeInfo *) NULL; )
-      {
-        active=node;
-        for (node=(NodeInfo *) NULL; active != (NodeInfo *) NULL; )
-        {
-          next=(NodeInfo *) NULL;
-          if (active->left != (NodeInfo *) NULL)
-            {
-              next=node;
-              key=active->left->key;
-              if ((clone_key != (void *(*)(void *)) NULL) &&
-                  (key != (void *) NULL))
-                key=clone_key(key);
-              value=active->left->value;
-              if ((clone_value != (void *(*)(void *)) NULL) &&
-                  (value != (void *) NULL))
-                value=clone_value(value);
-              (void) AddValueToSplayTree(clone_tree,key,value);
-              node=active->left;
-            }
-          if (active->right != (NodeInfo *) NULL)
-            {
-              next=node;
-              key=active->right->key;
-              if ((clone_key != (void *(*)(void *)) NULL) &&
-                  (key != (void *) NULL))
-                key=clone_key(key);
-              value=active->right->value;
-              if ((clone_value != (void *(*)(void *)) NULL) &&
-                  (value != (void *) NULL))
-                value=clone_value(value);
-              (void) AddValueToSplayTree(clone_tree,key,value);
-              node=active->right;
-            }
-          active=next;
-        }
-      }
+      UnlockSemaphoreInfo(splay_tree->semaphore);
+      return(clone_tree);
     }
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  next=(NodeInfo *) GetFirstSplayTreeNode(splay_tree);
+  while (next != (NodeInfo *) NULL)
+  {
+    SplaySplayTree(splay_tree,next);
+    (void) AddValueToSplayTree(clone_tree,clone_key(splay_tree->root->key),
+      clone_value(splay_tree->root->value));
+    next=(NodeInfo *) NULL;
+    node=splay_tree->root->right;
+    if (node != (NodeInfo *) NULL)
+      {
+        while (node->left != (NodeInfo *) NULL)
+          node=node->left;
+        next=(NodeInfo *) node->key;
+      }
+  }
+  UnlockSemaphoreInfo(splay_tree->semaphore);
   return(clone_tree);
 }
 
@@ -497,20 +479,6 @@ MagickExport int CompareSplayTreeStringInfo(const void *target,
 %    o value: the value.
 %
 */
-
-static void *GetFirstSplayTreeNode(SplayTreeInfo *splay_tree)
-{
-  register NodeInfo
-    *node;
-
-  node=splay_tree->root;
-  if (splay_tree->root == (NodeInfo *) NULL)
-    return((NodeInfo *) NULL);
-  while (node->left != (NodeInfo *) NULL)
-    node=node->left;
-  return(node->key);
-}
-
 MagickExport MagickBooleanType DeleteNodeByValueFromSplayTree(
   SplayTreeInfo *splay_tree,const void *value)
 {
@@ -522,10 +490,10 @@ MagickExport MagickBooleanType DeleteNodeByValueFromSplayTree(
   assert(splay_tree->signature == MagickSignature);
   if (splay_tree->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
+  LockSemaphoreInfo(splay_tree->semaphore);
   if (splay_tree->root == (NodeInfo *) NULL)
     {
-      (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+      UnlockSemaphoreInfo(splay_tree->semaphore);
       return(MagickFalse);
     }
   next=(NodeInfo *) GetFirstSplayTreeNode(splay_tree);
@@ -565,25 +533,25 @@ MagickExport MagickBooleanType DeleteNodeByValueFromSplayTree(
             ((splay_tree->root->key < key) ? -1 : 0);
         if (compare != 0)
           {
-            (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+            UnlockSemaphoreInfo(splay_tree->semaphore);
             return(MagickFalse);
           }
         left=splay_tree->root->left;
         right=splay_tree->root->right;
-        if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
-            (splay_tree->root->key != (void *) NULL))
-          splay_tree->root->key=splay_tree->relinquish_key(
-            splay_tree->root->key);
         if ((splay_tree->relinquish_value != (void *(*)(void *)) NULL) &&
             (splay_tree->root->value != (void *) NULL))
           splay_tree->root->value=splay_tree->relinquish_value(
             splay_tree->root->value);
+        if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
+            (splay_tree->root->key != (void *) NULL))
+          splay_tree->root->key=splay_tree->relinquish_key(
+            splay_tree->root->key);
         splay_tree->root=(NodeInfo *) RelinquishMagickMemory(splay_tree->root);
         splay_tree->nodes--;
         if (left == (NodeInfo *) NULL)
           {
             splay_tree->root=right;
-            (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+            UnlockSemaphoreInfo(splay_tree->semaphore);
             return(MagickTrue);
           }
         splay_tree->root=left;
@@ -593,11 +561,11 @@ MagickExport MagickBooleanType DeleteNodeByValueFromSplayTree(
               left=left->right;
             left->right=right;
           }
-        (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+        UnlockSemaphoreInfo(splay_tree->semaphore);
         return(MagickTrue);
       }
   }
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  UnlockSemaphoreInfo(splay_tree->semaphore);
   return(MagickFalse);
 }
 
@@ -642,7 +610,7 @@ MagickExport MagickBooleanType DeleteNodeFromSplayTree(
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   if (splay_tree->root == (NodeInfo *) NULL)
     return(MagickFalse);
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
+  LockSemaphoreInfo(splay_tree->semaphore);
   SplaySplayTree(splay_tree,key);
   splay_tree->key=(void *) NULL;
   if (splay_tree->compare != (int (*)(const void *,const void *)) NULL)
@@ -652,7 +620,7 @@ MagickExport MagickBooleanType DeleteNodeFromSplayTree(
       ((splay_tree->root->key < key) ? -1 : 0);
   if (compare != 0)
     {
-      (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+      UnlockSemaphoreInfo(splay_tree->semaphore);
       return(MagickFalse);
     }
   left=splay_tree->root->left;
@@ -669,7 +637,7 @@ MagickExport MagickBooleanType DeleteNodeFromSplayTree(
   if (left == (NodeInfo *) NULL)
     {
       splay_tree->root=right;
-      (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+      UnlockSemaphoreInfo(splay_tree->semaphore);
       return(MagickTrue);
     }
   splay_tree->root=left;
@@ -679,7 +647,7 @@ MagickExport MagickBooleanType DeleteNodeFromSplayTree(
         left=left->right;
       left->right=right;
     }
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  UnlockSemaphoreInfo(splay_tree->semaphore);
   return(MagickTrue);
 }
 
@@ -714,17 +682,17 @@ MagickExport SplayTreeInfo *DestroySplayTree(SplayTreeInfo *splay_tree)
     *active,
     *pend;
 
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
+  LockSemaphoreInfo(splay_tree->semaphore);
   if (splay_tree->root != (NodeInfo *) NULL)
     {
-      if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
-          (splay_tree->root->key != (void *) NULL))
-        splay_tree->root->key=splay_tree->relinquish_key(splay_tree->root->key);
-      splay_tree->root->key=(void *) NULL;
       if ((splay_tree->relinquish_value != (void *(*)(void *)) NULL) &&
           (splay_tree->root->value != (void *) NULL))
         splay_tree->root->value=splay_tree->relinquish_value(
           splay_tree->root->value);
+      if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
+          (splay_tree->root->key != (void *) NULL))
+        splay_tree->root->key=splay_tree->relinquish_key(splay_tree->root->key);
+      splay_tree->root->key=(void *) NULL;
       for (pend=splay_tree->root; pend != (NodeInfo *) NULL; )
       {
         active=pend;
@@ -732,27 +700,27 @@ MagickExport SplayTreeInfo *DestroySplayTree(SplayTreeInfo *splay_tree)
         {
           if (active->left != (NodeInfo *) NULL)
             {
-              if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
-                  (active->left->key != (void *) NULL))
-                active->left->key=splay_tree->relinquish_key(active->left->key);
-              active->left->key=(void *) pend;
               if ((splay_tree->relinquish_value != (void *(*)(void *)) NULL) &&
                   (active->left->value != (void *) NULL))
                 active->left->value=splay_tree->relinquish_value(
                   active->left->value);
+              if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
+                  (active->left->key != (void *) NULL))
+                active->left->key=splay_tree->relinquish_key(active->left->key);
+              active->left->key=(void *) pend;
               pend=active->left;
             }
           if (active->right != (NodeInfo *) NULL)
             {
+              if ((splay_tree->relinquish_value != (void *(*)(void *)) NULL) &&
+                  (active->right->value != (void *) NULL))
+                active->right->value=splay_tree->relinquish_value(
+                  active->right->value);
               if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
                   (active->right->key != (void *) NULL))
                 active->right->key=splay_tree->relinquish_key(
                   active->right->key);
               active->right->key=(void *) pend;
-              if ((splay_tree->relinquish_value != (void *(*)(void *)) NULL) &&
-                  (active->right->value != (void *) NULL))
-                active->right->value=splay_tree->relinquish_value(
-                  active->right->value);
               pend=active->right;
             }
           node=active;
@@ -762,7 +730,7 @@ MagickExport SplayTreeInfo *DestroySplayTree(SplayTreeInfo *splay_tree)
       }
     }
   splay_tree->signature=(~MagickSignature);
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  UnlockSemaphoreInfo(splay_tree->semaphore);
   DestroySemaphoreInfo(&splay_tree->semaphore);
   splay_tree=(SplayTreeInfo *) RelinquishMagickMemory(splay_tree);
   return(splay_tree);
@@ -783,7 +751,7 @@ MagickExport SplayTreeInfo *DestroySplayTree(SplayTreeInfo *splay_tree)
 %
 %  The format of the GetNextKeyInSplayTree method is:
 %
-%      void *GetNextKeyInSplayTree(SplayTreeInfo *splay_tree)
+%      const void *GetNextKeyInSplayTree(SplayTreeInfo *splay_tree)
 %
 %  A description of each parameter follows:
 %
@@ -792,7 +760,7 @@ MagickExport SplayTreeInfo *DestroySplayTree(SplayTreeInfo *splay_tree)
 %    o key: the key.
 %
 */
-MagickExport void *GetNextKeyInSplayTree(SplayTreeInfo *splay_tree)
+MagickExport const void *GetNextKeyInSplayTree(SplayTreeInfo *splay_tree)
 {
   register NodeInfo
     *node;
@@ -807,7 +775,7 @@ MagickExport void *GetNextKeyInSplayTree(SplayTreeInfo *splay_tree)
   if ((splay_tree->root == (NodeInfo *) NULL) ||
       (splay_tree->next == (void *) NULL))
     return((void *) NULL);
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
+  LockSemaphoreInfo(splay_tree->semaphore);
   SplaySplayTree(splay_tree,splay_tree->next);
   splay_tree->next=(void *) NULL;
   node=splay_tree->root->right;
@@ -818,7 +786,7 @@ MagickExport void *GetNextKeyInSplayTree(SplayTreeInfo *splay_tree)
       splay_tree->next=node->key;
     }
   key=splay_tree->root->key;
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  UnlockSemaphoreInfo(splay_tree->semaphore);
   return(key);
 }
 
@@ -837,7 +805,7 @@ MagickExport void *GetNextKeyInSplayTree(SplayTreeInfo *splay_tree)
 %
 %  The format of the GetNextValueInSplayTree method is:
 %
-%      void *GetNextValueInSplayTree(SplayTreeInfo *splay_tree)
+%      const void *GetNextValueInSplayTree(SplayTreeInfo *splay_tree)
 %
 %  A description of each parameter follows:
 %
@@ -846,7 +814,7 @@ MagickExport void *GetNextKeyInSplayTree(SplayTreeInfo *splay_tree)
 %    o key: the key.
 %
 */
-MagickExport void *GetNextValueInSplayTree(SplayTreeInfo *splay_tree)
+MagickExport const void *GetNextValueInSplayTree(SplayTreeInfo *splay_tree)
 {
   register NodeInfo
     *node;
@@ -861,7 +829,7 @@ MagickExport void *GetNextValueInSplayTree(SplayTreeInfo *splay_tree)
   if ((splay_tree->root == (NodeInfo *) NULL) ||
       (splay_tree->next == (void *) NULL))
     return((void *) NULL);
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
+  LockSemaphoreInfo(splay_tree->semaphore);
   SplaySplayTree(splay_tree,splay_tree->next);
   splay_tree->next=(void *) NULL;
   node=splay_tree->root->right;
@@ -872,7 +840,7 @@ MagickExport void *GetNextValueInSplayTree(SplayTreeInfo *splay_tree)
       splay_tree->next=node->key;
     }
   value=splay_tree->root->value;
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  UnlockSemaphoreInfo(splay_tree->semaphore);
   return(value);
 }
 
@@ -889,9 +857,12 @@ MagickExport void *GetNextValueInSplayTree(SplayTreeInfo *splay_tree)
 %
 %  GetValueFromSplayTree() gets a value from the splay-tree by its key.
 %
+%  Note, the value is a constant.  Do not attempt to free it.
+%
 %  The format of the GetValueFromSplayTree method is:
 %
-%      void *GetValueFromSplayTree(SplayTreeInfo *splay_tree,const void *key)
+%      const void *GetValueFromSplayTree(SplayTreeInfo *splay_tree,
+%        const void *key)
 %
 %  A description of each parameter follows:
 %
@@ -900,7 +871,7 @@ MagickExport void *GetNextValueInSplayTree(SplayTreeInfo *splay_tree)
 %    o key: the key.
 %
 */
-MagickExport void *GetValueFromSplayTree(SplayTreeInfo *splay_tree,
+MagickExport const void *GetValueFromSplayTree(SplayTreeInfo *splay_tree,
   const void *key)
 {
   int
@@ -915,7 +886,7 @@ MagickExport void *GetValueFromSplayTree(SplayTreeInfo *splay_tree,
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   if (splay_tree->root == (NodeInfo *) NULL)
     return((void *) NULL);
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
+  LockSemaphoreInfo(splay_tree->semaphore);
   SplaySplayTree(splay_tree,key);
   if (splay_tree->compare != (int (*)(const void *,const void *)) NULL)
     compare=splay_tree->compare(splay_tree->root->key,key);
@@ -924,11 +895,11 @@ MagickExport void *GetValueFromSplayTree(SplayTreeInfo *splay_tree,
       ((splay_tree->root->key < key) ? -1 : 0);
   if (compare != 0)
     {
-      (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+      UnlockSemaphoreInfo(splay_tree->semaphore);
       return((void *) NULL);
     }
   value=splay_tree->root->value;
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  UnlockSemaphoreInfo(splay_tree->semaphore);
   return(value);
 }
 
@@ -947,7 +918,7 @@ MagickExport void *GetValueFromSplayTree(SplayTreeInfo *splay_tree,
 %
 %  The format of the GetNumberOfNodesInSplayTree method is:
 %
-%      unsigned long GetNumberOfNodesInSplayTree(
+%      size_t GetNumberOfNodesInSplayTree(
 %        const SplayTreeInfo *splay_tree)
 %
 %  A description of each parameter follows:
@@ -955,7 +926,7 @@ MagickExport void *GetValueFromSplayTree(SplayTreeInfo *splay_tree,
 %    o splay_tree: the splay tree.
 %
 */
-MagickExport unsigned long GetNumberOfNodesInSplayTree(
+MagickExport size_t GetNumberOfNodesInSplayTree(
   const SplayTreeInfo *splay_tree)
 {
   assert(splay_tree != (SplayTreeInfo *) NULL);
@@ -1012,7 +983,7 @@ static int IterateOverSplayTree(SplayTreeInfo *splay_tree,
   NodeInfo
     **nodes;
 
-  register long
+  register ssize_t
     i;
 
   register NodeInfo
@@ -1188,7 +1159,7 @@ MagickExport void *RemoveNodeByValueFromSplayTree(SplayTreeInfo *splay_tree,
   key=(void *) NULL;
   if (splay_tree->root == (NodeInfo *) NULL)
     return(key);
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
+  LockSemaphoreInfo(splay_tree->semaphore);
   next=(NodeInfo *) GetFirstSplayTreeNode(splay_tree);
   while (next != (NodeInfo *) NULL)
   {
@@ -1223,7 +1194,7 @@ MagickExport void *RemoveNodeByValueFromSplayTree(SplayTreeInfo *splay_tree,
             ((splay_tree->root->key < key) ? -1 : 0);
         if (compare != 0)
           {
-            (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+            UnlockSemaphoreInfo(splay_tree->semaphore);
             return(key);
           }
         left=splay_tree->root->left;
@@ -1237,7 +1208,7 @@ MagickExport void *RemoveNodeByValueFromSplayTree(SplayTreeInfo *splay_tree,
         if (left == (NodeInfo *) NULL)
           {
             splay_tree->root=right;
-            (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+            UnlockSemaphoreInfo(splay_tree->semaphore);
             return(key);
           }
         splay_tree->root=left;
@@ -1247,11 +1218,11 @@ MagickExport void *RemoveNodeByValueFromSplayTree(SplayTreeInfo *splay_tree,
               left=left->right;
             left->right=right;
           }
-        (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+        UnlockSemaphoreInfo(splay_tree->semaphore);
         return(key);
       }
   }
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  UnlockSemaphoreInfo(splay_tree->semaphore);
   return(key);
 }
 
@@ -1300,7 +1271,7 @@ MagickExport void *RemoveNodeFromSplayTree(SplayTreeInfo *splay_tree,
   value=(void *) NULL;
   if (splay_tree->root == (NodeInfo *) NULL)
     return(value);
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
+  LockSemaphoreInfo(splay_tree->semaphore);
   SplaySplayTree(splay_tree,key);
   splay_tree->key=(void *) NULL;
   if (splay_tree->compare != (int (*)(const void *,const void *)) NULL)
@@ -1310,7 +1281,7 @@ MagickExport void *RemoveNodeFromSplayTree(SplayTreeInfo *splay_tree,
       ((splay_tree->root->key < key) ? -1 : 0);
   if (compare != 0)
     {
-      (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+      UnlockSemaphoreInfo(splay_tree->semaphore);
       return(value);
     }
   left=splay_tree->root->left;
@@ -1324,7 +1295,7 @@ MagickExport void *RemoveNodeFromSplayTree(SplayTreeInfo *splay_tree,
   if (left == (NodeInfo *) NULL)
     {
       splay_tree->root=right;
-      (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+      UnlockSemaphoreInfo(splay_tree->semaphore);
       return(value);
     }
   splay_tree->root=left;
@@ -1334,7 +1305,7 @@ MagickExport void *RemoveNodeFromSplayTree(SplayTreeInfo *splay_tree,
         left=left->right;
       left->right=right;
     }
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  UnlockSemaphoreInfo(splay_tree->semaphore);
   return(value);
 }
 
@@ -1374,17 +1345,17 @@ MagickExport void ResetSplayTree(SplayTreeInfo *splay_tree)
   assert(splay_tree->signature == MagickSignature);
   if (splay_tree->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
+  LockSemaphoreInfo(splay_tree->semaphore);
   if (splay_tree->root != (NodeInfo *) NULL)
     {
-      if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
-          (splay_tree->root->key != (void *) NULL))
-        splay_tree->root->key=splay_tree->relinquish_key(splay_tree->root->key);
-      splay_tree->root->key=(void *) NULL;
       if ((splay_tree->relinquish_value != (void *(*)(void *)) NULL) &&
           (splay_tree->root->value != (void *) NULL))
         splay_tree->root->value=splay_tree->relinquish_value(
           splay_tree->root->value);
+      if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
+          (splay_tree->root->key != (void *) NULL))
+        splay_tree->root->key=splay_tree->relinquish_key(splay_tree->root->key);
+      splay_tree->root->key=(void *) NULL;
       for (pend=splay_tree->root; pend != (NodeInfo *) NULL; )
       {
         active=pend;
@@ -1392,27 +1363,27 @@ MagickExport void ResetSplayTree(SplayTreeInfo *splay_tree)
         {
           if (active->left != (NodeInfo *) NULL)
             {
-              if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
-                  (active->left->key != (void *) NULL))
-                active->left->key=splay_tree->relinquish_key(active->left->key);
-              active->left->key=(void *) pend;
               if ((splay_tree->relinquish_value != (void *(*)(void *)) NULL) &&
                   (active->left->value != (void *) NULL))
                 active->left->value=splay_tree->relinquish_value(
                   active->left->value);
+              if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
+                  (active->left->key != (void *) NULL))
+                active->left->key=splay_tree->relinquish_key(active->left->key);
+              active->left->key=(void *) pend;
               pend=active->left;
             }
           if (active->right != (NodeInfo *) NULL)
             {
+              if ((splay_tree->relinquish_value != (void *(*)(void *)) NULL) &&
+                  (active->right->value != (void *) NULL))
+                active->right->value=splay_tree->relinquish_value(
+                  active->right->value);
               if ((splay_tree->relinquish_key != (void *(*)(void *)) NULL) &&
                   (active->right->key != (void *) NULL))
                 active->right->key=splay_tree->relinquish_key(
                   active->right->key);
               active->right->key=(void *) pend;
-              if ((splay_tree->relinquish_value != (void *(*)(void *)) NULL) &&
-                  (active->right->value != (void *) NULL))
-                active->right->value=splay_tree->relinquish_value(
-                  active->right->value);
               pend=active->right;
             }
           node=active;
@@ -1426,7 +1397,7 @@ MagickExport void ResetSplayTree(SplayTreeInfo *splay_tree)
   splay_tree->next=(void *) NULL;
   splay_tree->nodes=0;
   splay_tree->balance=MagickFalse;
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  UnlockSemaphoreInfo(splay_tree->semaphore);
 }
 
 /*
@@ -1459,9 +1430,9 @@ MagickExport void ResetSplayTreeIterator(SplayTreeInfo *splay_tree)
   assert(splay_tree->signature == MagickSignature);
   if (splay_tree->debug != MagickFalse)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
-  (void) LockSemaphoreInfo(splay_tree->semaphore);
+  LockSemaphoreInfo(splay_tree->semaphore);
   splay_tree->next=GetFirstSplayTreeNode(splay_tree);
-  (void) UnlockSemaphoreInfo(splay_tree->semaphore);
+  UnlockSemaphoreInfo(splay_tree->semaphore);
 }
 
 /*
@@ -1496,7 +1467,7 @@ MagickExport void ResetSplayTreeIterator(SplayTreeInfo *splay_tree)
 %
 */
 
-static NodeInfo *Splay(SplayTreeInfo *splay_tree,const unsigned long depth,
+static NodeInfo *Splay(SplayTreeInfo *splay_tree,const size_t depth,
   const void *key,NodeInfo **node,NodeInfo **parent,NodeInfo **grandparent)
 {
   int

@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
   
   You may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ typedef struct _TimerInfo
   TimerState
     state;
   
-  unsigned long
+  size_t
     signature;
 } TimerInfo;
 

@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -99,6 +99,8 @@ static Image *ReadMPRImage(const ImageInfo *image_info,ExceptionInfo *exception)
   assert(exception->signature == MagickSignature);
   image=(Image *) GetImageRegistry(ImageRegistryType,image_info->filename,
     exception);
+  if (image != (Image *) NULL)
+    (void) SyncImageSettings(image_info,image);
   return(image);
 }
 
@@ -122,10 +124,10 @@ static Image *ReadMPRImage(const ImageInfo *image_info,ExceptionInfo *exception)
 %
 %  The format of the RegisterMPRImage method is:
 %
-%      unsigned long RegisterMPRImage(void)
+%      size_t RegisterMPRImage(void)
 %
 */
-ModuleExport unsigned long RegisterMPRImage(void)
+ModuleExport size_t RegisterMPRImage(void)
 {
   MagickInfo
     *entry;
@@ -134,6 +136,7 @@ ModuleExport unsigned long RegisterMPRImage(void)
   entry->decoder=(DecodeImageHandler *) ReadMPRImage;
   entry->encoder=(EncodeImageHandler *) WriteMPRImage;
   entry->adjoin=MagickFalse;
+  entry->format_type=ImplicitFormatType;
   entry->stealth=MagickTrue;
   entry->description=ConstantString("Magick Persistent Registry");
   entry->module=ConstantString("MPR");
@@ -141,8 +144,8 @@ ModuleExport unsigned long RegisterMPRImage(void)
   entry=SetMagickInfo("MPRI");
   entry->decoder=(DecodeImageHandler *) ReadMPRImage;
   entry->encoder=(EncodeImageHandler *) WriteMPRImage;
-  entry->stealth=MagickTrue;
   entry->adjoin=MagickFalse;
+  entry->format_type=ImplicitFormatType;
   entry->stealth=MagickTrue;
   entry->description=ConstantString("Magick Persistent Registry");
   entry->module=ConstantString("MPRI");

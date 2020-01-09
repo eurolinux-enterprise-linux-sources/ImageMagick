@@ -24,6 +24,8 @@ extern "C" {
 
 #include "magick/semaphore.h"
 
+#define RoundToQuantum(quantum)  ClampToQuantum(quantum)
+
 typedef enum
 {
   UndefinedEndian,
@@ -64,6 +66,7 @@ typedef enum
   OpacityQuantum,
   RedQuantum,
   RGBAQuantum,
+  BGRAQuantum,
   RGBOQuantum,
   RGBQuantum,
   YellowQuantum,
@@ -72,20 +75,22 @@ typedef enum
   CbYCrYQuantum,
   CbYCrQuantum,
   CbYCrAQuantum,
-  CMYKOQuantum
+  CMYKOQuantum,
+  BGRQuantum,
+  BGROQuantum
 } QuantumType;
 
 typedef struct _QuantumInfo
   QuantumInfo;
 
-static inline Quantum RoundToQuantum(const MagickRealType value)
+static inline Quantum ClampToQuantum(const MagickRealType value)
 {
 #if defined(MAGICKCORE_HDRI_SUPPORT)
   return((Quantum) value);
 #else
   if (value <= 0.0)
     return((Quantum) 0);
-  if (value >= QuantumRange)
+  if (value >= (MagickRealType) QuantumRange)
     return((Quantum) QuantumRange);
   return((Quantum) (value+0.5));
 #endif
@@ -98,7 +103,7 @@ static inline unsigned char ScaleQuantumToChar(const Quantum quantum)
   return((unsigned char) quantum);
 #else
   if (quantum <= 0.0)
-    return(0UL);
+    return(0);
   if (quantum >= 255.0)
     return(255);
   return((unsigned char) (quantum+0.5));
@@ -135,17 +140,21 @@ static inline unsigned char ScaleQuantumToChar(const Quantum quantum)
 static inline unsigned char ScaleQuantumToChar(const Quantum quantum)
 {
 #if !defined(MAGICKCORE_HDRI_SUPPORT)
-  return((unsigned char) ((quantum+2155839615.0)/71777214294589695.0));
+  return((unsigned char) (quantum/72340172838076673.0+0.5));
 #else
-  return((unsigned char) (quantum/71777214294589695.0+0.5));
+  if (quantum <= 0.0)
+    return(0);
+  if ((quantum/72340172838076673.0) >= 255.0)
+    return(255);
+  return((unsigned char) (quantum/72340172838076673.0+0.5));
 #endif
 }
 #endif
 
 extern MagickExport MagickBooleanType
-  SetQuantumDepth(const Image *,QuantumInfo *,const unsigned long),
+  SetQuantumDepth(const Image *,QuantumInfo *,const size_t),
   SetQuantumFormat(const Image *,QuantumInfo *,const QuantumFormatType),
-  SetQuantumPad(const Image *,QuantumInfo *,const unsigned long);
+  SetQuantumPad(const Image *,QuantumInfo *,const size_t);
 
 extern MagickExport QuantumInfo
   *AcquireQuantumInfo(const ImageInfo *,Image *),
@@ -170,7 +179,7 @@ extern MagickExport void
   SetQuantumImageType(Image *,const QuantumType),
   SetQuantumMinIsWhite(QuantumInfo *,const MagickBooleanType),
   SetQuantumPack(QuantumInfo *,const MagickBooleanType),
-  SetQuantumQuantum(QuantumInfo *,const unsigned long),
+  SetQuantumQuantum(QuantumInfo *,const size_t),
   SetQuantumScale(QuantumInfo *,const double);
 
 #if defined(__cplusplus) || defined(c_plusplus)

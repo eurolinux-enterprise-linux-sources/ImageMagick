@@ -1,6 +1,7 @@
-package Turtle;
+package
+  Turtle;
 
-# Written by jreed@itis.com, adapted by John Cristy.
+# Written by jreed@itis.com, adapted by Cristy.
 
 sub new
 {

@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
   
   You may not use this file except in compliance with the License.
@@ -26,13 +26,15 @@ extern MagickExport MagickBooleanType
   InvokeStaticImageFilter(const char *,Image **,const int,const char **,
     ExceptionInfo *);
 
-extern ModuleExport unsigned long
+extern ModuleExport size_t
+  RegisterAAIImage(void),
   RegisterARTImage(void),
   RegisterAVIImage(void),
   RegisterAVSImage(void),
   RegisterBIEImage(void),
   RegisterBMPImage(void),
   RegisterBRAILLEImage(void),
+  RegisterCALSImage(void),
   RegisterCAPTIONImage(void),
   RegisterCINImage(void),
   RegisterCIPImage(void),
@@ -43,6 +45,7 @@ extern ModuleExport unsigned long
   RegisterDCMImage(void),
   RegisterDCXImage(void),
   RegisterDDSImage(void),
+  RegisterDEBUGImage(void),
   RegisterDIBImage(void),
   RegisterDJVUImage(void),
   RegisterDNGImage(void),
@@ -66,6 +69,8 @@ extern ModuleExport unsigned long
   RegisterGRADIENTImage(void),
   RegisterGRANITEImage(void),
   RegisterGRAYImage(void),
+  RegisterHALDImage(void),
+  RegisterHDRImage(void),
   RegisterHImage(void),
   RegisterHISTOGRAMImage(void),
   RegisterHRZImage(void),
@@ -81,6 +86,7 @@ extern ModuleExport unsigned long
   RegisterJPEGImage(void),
   RegisterJP2Image(void),
   RegisterLABELImage(void),
+  RegisterMACImage(void),
   RegisterMAGICKImage(void),
   RegisterMAPImage(void),
   RegisterMATImage(void),
@@ -109,11 +115,12 @@ extern ModuleExport unsigned long
   RegisterPCXImage(void),
   RegisterPDBImage(void),
   RegisterPDFImage(void),
+  RegisterPESImage(void),
   RegisterPICImage(void),
   RegisterPICTImage(void),
   RegisterPIXImage(void),
-  RegisterPLASMAImage(void),
   RegisterPGMImage(void),
+  RegisterPLASMAImage(void),
   RegisterPMImage(void),
   RegisterPNGImage(void),
   RegisterPNMImage(void),
@@ -157,6 +164,7 @@ extern ModuleExport unsigned long
   RegisterVIFFImage(void),
   RegisterVSTImage(void),
   RegisterWBMPImage(void),
+  RegisterWEBPImage(void),
   RegisterWMFImage(void),
   RegisterWPGImage(void),
   RegisterXImage(void),
@@ -172,12 +180,14 @@ extern ModuleExport unsigned long
   RegisterYUVImage(void);
 
 extern ModuleExport void
+  UnregisterAAIImage(void),
   UnregisterARTImage(void),
   UnregisterAVIImage(void),
   UnregisterAVSImage(void),
   UnregisterBIEImage(void),
   UnregisterBMPImage(void),
   UnregisterBRAILLEImage(void),
+  UnregisterCALSImage(void),
   UnregisterCAPTIONImage(void),
   UnregisterCINImage(void),
   UnregisterCIPImage(void),
@@ -188,6 +198,7 @@ extern ModuleExport void
   UnregisterDCMImage(void),
   UnregisterDCXImage(void),
   UnregisterDDSImage(void),
+  UnregisterDEBUGImage(void),
   UnregisterDIBImage(void),
   UnregisterDJVUImage(void),
   UnregisterDNGImage(void),
@@ -211,6 +222,8 @@ extern ModuleExport void
   UnregisterGRADIENTImage(void),
   UnregisterGRANITEImage(void),
   UnregisterGRAYImage(void),
+  UnregisterHALDImage(void),
+  UnregisterHDRImage(void),
   UnregisterHImage(void),
   UnregisterHISTOGRAMImage(void),
   UnregisterHRZImage(void),
@@ -227,6 +240,7 @@ extern ModuleExport void
   UnregisterJP2Image(void),
   UnregisterLABELImage(void),
   UnregisterLOCALEImage(void),
+  UnregisterMACImage(void),
   UnregisterMAGICKImage(void),
   UnregisterMAPImage(void),
   UnregisterMATImage(void),
@@ -255,6 +269,7 @@ extern ModuleExport void
   UnregisterPCXImage(void),
   UnregisterPDBImage(void),
   UnregisterPDFImage(void),
+  UnregisterPESImage(void),
   UnregisterPICImage(void),
   UnregisterPICTImage(void),
   UnregisterPIXImage(void),
@@ -303,6 +318,7 @@ extern ModuleExport void
   UnregisterVIFFImage(void),
   UnregisterVSTImage(void),
   UnregisterWBMPImage(void),
+  UnregisterWEBPImage(void),
   UnregisterWMFImage(void),
   UnregisterWPGImage(void),
   UnregisterXImage(void),

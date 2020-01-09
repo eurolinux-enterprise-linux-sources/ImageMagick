@@ -43,6 +43,9 @@ Image Settings:
   \-seed value          seed a new sequence of pseudo-random numbers
   \-set attribute value set an image attribute
   \-size geometry       width and height of image
+  \-subimage-search     search for subimage
+  \-synchronize         synchronize image to storage device
+  \-taint               declare the image as modified
   \-transparent-color color
                        transparent color
   \-type type           image type
@@ -63,4 +66,4 @@ ImageMagick(1)
 
 .SH COPYRIGHT
 
-\fBCopyright (C) 1999-2009 ImageMagick Studio LLC. Additional copyrights and licenses apply to this software, see file://@DOCUMENTATION_PATH@/www/license.html or http://www.imagemagick.org/script/license.php\fP
+\fBCopyright (C) 1999-2011 ImageMagick Studio LLC. Additional copyrights and licenses apply to this software, see file://@DOCUMENTATION_PATH@/www/license.html or http://www.imagemagick.org/script/license.php\fP

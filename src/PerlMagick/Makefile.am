@@ -1,4 +1,4 @@
-#  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+#  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
 #  dedicated to making software imaging solutions freely available.
 #
 #  You may not use this file except in compliance with the License.  You may
@@ -22,7 +22,7 @@ perl-sources:
 	  echo "Linking PerlMagick Sources ..." ; \
 	  imagemagick=`(cd $(VPATH) ; pwd)` && \
 	  ( cd $(PERLMAGICK) && \
-	    sh $$imagemagick/lndir.sh $$imagemagick/$(PERLMAGICK) ) \
+	    sh $$imagemagick/config/lndir.sh $$imagemagick/$(PERLMAGICK) ) \
 	fi ; \
 	touch perl-sources
 
@@ -43,13 +43,14 @@ PERLMAGICK_TESTS = PerlMagick/check.sh
 
 if WITH_PERL_DYNAMIC
 
+PERLMAGICK_CHECKSCRIPTS =
+
 $(PERLMAKEFILE): perl-sources $(MAGICKCORE_LIBS) $(MAGICKWAND_LIBS) $(PERLMAKEMAKER)
 	cd $(PERLMAGICK) && @PERL@ Makefile.PL $(PERL_MAKE_OPTIONS)
 
 install-exec-perl: $(PERLMAKEFILE)
 	( cd $(PERLMAGICK) && $(MAKE) CC='@CC@' && \
-	$(MAKE) CC='@CC@' install && \
-	$(MAKE) clean && rm -f  Makefile.old )
+	$(MAKE) CC='@CC@' install )
 
 all-perl: perl-sources
 
@@ -57,7 +58,7 @@ uninstall-exec-perl: $(PERLMAKEFILE)
 	echo "Uninstall not supported for PerlMagick"
 
 check-perl: $(PERLMAKEFILE)
-	cd $(PERLMAGICK) && $(MAKE) CC='@CC@' test
+	cd $(PERLMAGICK) && $(abs_top_builddir)/magick.sh $(MAKE) CC='@CC@' test
 
 perl-build: $(PERLMAKEFILE)
 	( cd $(PERLMAGICK) && $(MAKE) CC='@CC@' )
@@ -95,7 +96,7 @@ uninstall-exec-perl:
 	rm -f '$(DESTDIR)$(BIN_DIR)/$(PERLSTATICNAME)'
 
 check-perl: $(PERLMAGICK)/$(PERLSTATICNAME)
-	cd $(PERLMAGICK) && $(MAKE) -f Makefile.aperl CC='@CC@' test
+	cd $(PERLMAGICK) && $(abs_top_builddir)/magick.sh $(MAKE) -f Makefile.aperl CC='@CC@' test
 
 perl-build: $(PERLMAGICK)/$(PERLSTATICNAME)
 

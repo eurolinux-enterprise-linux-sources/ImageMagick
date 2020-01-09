@@ -18,7 +18,7 @@
 %                             November 1998                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -41,7 +41,9 @@
   Include declarations.
 */
 #include "magick/studio.h"
+#include "magick/annotate.h"
 #include "magick/blob.h"
+#include "magick/blob-private.h"
 #include "magick/cache.h"
 #include "magick/coder.h"
 #include "magick/client.h"
@@ -59,7 +61,7 @@
 #include "magick/memory_.h"
 #include "magick/mime.h"
 #include "magick/module.h"
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
 # include "magick/nt-feature.h"
 #endif
 #include "magick/random_.h"
@@ -67,9 +69,11 @@
 #include "magick/resource_.h"
 #include "magick/policy.h"
 #include "magick/semaphore.h"
+#include "magick/semaphore-private.h"
 #include "magick/signature-private.h"
 #include "magick/splay-tree.h"
 #include "magick/string_.h"
+#include "magick/string-private.h"
 #include "magick/thread_.h"
 #include "magick/thread-private.h"
 #include "magick/token.h"
@@ -111,47 +115,14 @@ static SplayTreeInfo
   *magick_list = (SplayTreeInfo *) NULL;
 
 static volatile MagickBooleanType
-  instantiate_magick = MagickFalse;  /* double-checked locking pattern */
+  instantiate_magick = MagickFalse,
+  instantiate_magickcore = MagickFalse;
 
 /*
   Forward declarations.
 */
 static MagickBooleanType
   InitializeMagickList(ExceptionInfo *);
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-+   D e s t r o y M a g i c k L i s t                                         %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  DestroyMagickList() deallocates memory associated with the MagickInfo list.
-%
-%  The format of the DestroyMagickList method is:
-%
-%      void DestroyMagickList(void)
-%
-*/
-MagickExport void DestroyMagickList(void)
-{
-  AcquireSemaphoreInfo(&magick_semaphore);
-  if (magick_list != (SplayTreeInfo *) NULL)
-    magick_list=DestroySplayTree(magick_list);
-  instantiate_magick=MagickFalse;
-  RelinquishSemaphoreInfo(magick_semaphore);
-  DestroySemaphoreInfo(&magick_semaphore);
-#if !defined(MAGICKCORE_BUILD_MODULES)
-  UnregisterStaticModules();
-#endif
-#if defined(MAGICKCORE_MODULES_SUPPORT)
-  DestroyModuleList();
-#endif
-}
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -262,7 +233,7 @@ MagickExport MagickBooleanType GetImageMagick(const unsigned char *magick,
   if (p == (const MagickInfo *) NULL)
     return(MagickFalse);
   status=MagickFalse;
-  AcquireSemaphoreInfo(&magick_semaphore);
+  LockSemaphoreInfo(magick_semaphore);
   ResetSplayTreeIterator(magick_list);
   p=(const MagickInfo *) GetNextValueInSplayTree(magick_list);
   while (p != (const MagickInfo *) NULL)
@@ -276,7 +247,7 @@ MagickExport MagickBooleanType GetImageMagick(const unsigned char *magick,
       }
     p=(const MagickInfo *) GetNextValueInSplayTree(magick_list);
   }
-  RelinquishSemaphoreInfo(magick_semaphore);
+  UnlockSemaphoreInfo(magick_semaphore);
   return(status);
 }
 
@@ -383,7 +354,7 @@ MagickExport const char *GetMagickDescription(const MagickInfo *magick_info)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %  GetMagickEndianSupport() returns the MagickTrue if the coder respects
-%  endianess other than MSBEndian.
+%  endianness other than MSBEndian.
 %
 %  The format of the GetMagickEndianSupport method is:
 %
@@ -446,16 +417,16 @@ MagickExport const MagickInfo *GetMagickInfo(const char *name,
       if (LocaleCompare(name,"*") == 0)
         (void) OpenModules(exception);
 #endif
-      AcquireSemaphoreInfo(&magick_semaphore);
+      LockSemaphoreInfo(magick_semaphore);
       ResetSplayTreeIterator(magick_list);
       p=(const MagickInfo *) GetNextValueInSplayTree(magick_list);
-      RelinquishSemaphoreInfo(magick_semaphore);
+      UnlockSemaphoreInfo(magick_semaphore);
       return(p);
     }
   /*
     Find name in list.
   */
-  AcquireSemaphoreInfo(&magick_semaphore);
+  LockSemaphoreInfo(magick_semaphore);
   ResetSplayTreeIterator(magick_list);
   p=(const MagickInfo *) GetNextValueInSplayTree(magick_list);
   while (p != (const MagickInfo *) NULL)
@@ -479,7 +450,7 @@ MagickExport const MagickInfo *GetMagickInfo(const char *name,
       }
     }
 #endif
-  RelinquishSemaphoreInfo(magick_semaphore);
+  UnlockSemaphoreInfo(magick_semaphore);
   return(p);
 }
 
@@ -500,7 +471,7 @@ MagickExport const MagickInfo *GetMagickInfo(const char *name,
 %  The format of the GetMagickInfoList function is:
 %
 %      const MagickInfo **GetMagickInfoList(const char *pattern,
-%        unsigned long *number_formats,ExceptionInfo *exception)
+%        size_t *number_formats,ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
@@ -532,7 +503,7 @@ static int MagickInfoCompare(const void *x,const void *y)
 #endif
 
 MagickExport const MagickInfo **GetMagickInfoList(const char *pattern,
-  unsigned long *number_formats,ExceptionInfo *exception)
+  size_t *number_formats,ExceptionInfo *exception)
 {
   const MagickInfo
     **formats;
@@ -540,7 +511,7 @@ MagickExport const MagickInfo **GetMagickInfoList(const char *pattern,
   register const MagickInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -548,7 +519,7 @@ MagickExport const MagickInfo **GetMagickInfoList(const char *pattern,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_formats != (unsigned long *) NULL);
+  assert(number_formats != (size_t *) NULL);
   *number_formats=0;
   p=GetMagickInfo("*",exception);
   if (p == (const MagickInfo *) NULL)
@@ -560,7 +531,7 @@ MagickExport const MagickInfo **GetMagickInfoList(const char *pattern,
   /*
     Generate magick list.
   */
-  AcquireSemaphoreInfo(&magick_semaphore);
+  LockSemaphoreInfo(magick_semaphore);
   ResetSplayTreeIterator(magick_list);
   p=(const MagickInfo *) GetNextValueInSplayTree(magick_list);
   for (i=0; p != (const MagickInfo *) NULL; )
@@ -570,10 +541,10 @@ MagickExport const MagickInfo **GetMagickInfoList(const char *pattern,
       formats[i++]=p;
     p=(const MagickInfo *) GetNextValueInSplayTree(magick_list);
   }
-  RelinquishSemaphoreInfo(magick_semaphore);
+  UnlockSemaphoreInfo(magick_semaphore);
   qsort((void *) formats,(size_t) i,sizeof(*formats),MagickInfoCompare);
   formats[i]=(MagickInfo *) NULL;
-  *number_formats=(unsigned long) i;
+  *number_formats=(size_t) i;
   return(formats);
 }
 
@@ -592,7 +563,7 @@ MagickExport const MagickInfo **GetMagickInfoList(const char *pattern,
 %
 %  The format of the GetMagickList function is:
 %
-%      char **GetMagickList(const char *pattern,unsigned long *number_formats,
+%      char **GetMagickList(const char *pattern,size_t *number_formats,
 %        ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
@@ -625,7 +596,7 @@ static int MagickCompare(const void *x,const void *y)
 #endif
 
 MagickExport char **GetMagickList(const char *pattern,
-  unsigned long *number_formats,ExceptionInfo *exception)
+  size_t *number_formats,ExceptionInfo *exception)
 {
   char
     **formats;
@@ -633,7 +604,7 @@ MagickExport char **GetMagickList(const char *pattern,
   register const MagickInfo
     *p;
 
-  register long
+  register ssize_t
     i;
 
   /*
@@ -641,7 +612,7 @@ MagickExport char **GetMagickList(const char *pattern,
   */
   assert(pattern != (char *) NULL);
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",pattern);
-  assert(number_formats != (unsigned long *) NULL);
+  assert(number_formats != (size_t *) NULL);
   *number_formats=0;
   p=GetMagickInfo("*",exception);
   if (p == (const MagickInfo *) NULL)
@@ -650,7 +621,7 @@ MagickExport char **GetMagickList(const char *pattern,
     GetNumberOfNodesInSplayTree(magick_list)+1UL,sizeof(*formats));
   if (formats == (char **) NULL)
     return((char **) NULL);
-  AcquireSemaphoreInfo(&magick_semaphore);
+  LockSemaphoreInfo(magick_semaphore);
   ResetSplayTreeIterator(magick_list);
   p=(const MagickInfo *) GetNextValueInSplayTree(magick_list);
   for (i=0; p != (const MagickInfo *) NULL; )
@@ -660,10 +631,10 @@ MagickExport char **GetMagickList(const char *pattern,
       formats[i++]=ConstantString(p->name);
     p=(const MagickInfo *) GetNextValueInSplayTree(magick_list);
   }
-  RelinquishSemaphoreInfo(magick_semaphore);
+  UnlockSemaphoreInfo(magick_semaphore);
   qsort((void *) formats,(size_t) i,sizeof(*formats),MagickCompare);
   formats[i]=(char *) NULL;
-  *number_formats=(unsigned long) i;
+  *number_formats=(size_t) i;
   return(formats);
 }
 
@@ -672,7 +643,49 @@ MagickExport char **GetMagickList(const char *pattern,
 %                                                                             %
 %                                                                             %
 %                                                                             %
-+   G e t M a g i c k E n d i a n S u p p o r t                               %
+%   G e t M a g i c k P r e c i s i o n                                       %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  GetMagickPrecision() returns the maximum number of significant digits to be
+%  printed.
+%
+%  The format of the GetMagickPrecision method is:
+%
+%      int GetMagickPrecision(void)
+%
+*/
+MagickExport int GetMagickPrecision(void)
+{
+#define MagickPrecision  6
+
+  (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
+  if (SetMagickPrecision(0) == 0)
+    {
+      char
+        *limit;
+
+      (void) SetMagickPrecision(MagickPrecision);
+      limit=GetEnvironmentValue("MAGICK_PRECISION");
+      if (limit == (char *) NULL)
+        limit=GetPolicyValue("precision");
+      if (limit != (char *) NULL)
+        {
+          (void) SetMagickPrecision(StringToInteger(limit));
+          limit=DestroyString(limit);
+        }
+    }
+  return(SetMagickPrecision(0));
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   G e t M a g i c k R a w S u p p o r t                                     %
 %                                                                             %
 %                                                                             %
 %                                                                             %
@@ -805,10 +818,13 @@ static void *DestroyMagickNode(void *magick_info)
 
 static MagickBooleanType InitializeMagickList(ExceptionInfo *exception)
 {
+  (void) exception;
   if ((magick_list == (SplayTreeInfo *) NULL) &&
       (instantiate_magick == MagickFalse))
     {
-      AcquireSemaphoreInfo(&magick_semaphore);
+      if (magick_semaphore == (SemaphoreInfo *) NULL)
+        AcquireSemaphoreInfo(&magick_semaphore);
+      LockSemaphoreInfo(magick_semaphore);
       if ((magick_list == (SplayTreeInfo *) NULL) &&
           (instantiate_magick == MagickFalse))
         {
@@ -850,7 +866,7 @@ static MagickBooleanType InitializeMagickList(ExceptionInfo *exception)
 #endif
           instantiate_magick=MagickTrue;
         }
-      RelinquishSemaphoreInfo(magick_semaphore);
+      UnlockSemaphoreInfo(magick_semaphore);
     }
   return(magick_list != (SplayTreeInfo *) NULL ? MagickTrue : MagickFalse);
 }
@@ -866,8 +882,8 @@ static MagickBooleanType InitializeMagickList(ExceptionInfo *exception)
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  IsMagickConflict() returns MagickTrue if the image format is not a valid
-%  image format or conflicts with a logical drive (.e.g. X:).
+%  IsMagickConflict() returns MagickTrue if the image format conflicts with a
+%  logical drive (.e.g. X:).
 %
 %  The format of the IsMagickConflict method is:
 %
@@ -880,30 +896,12 @@ static MagickBooleanType InitializeMagickList(ExceptionInfo *exception)
 */
 MagickExport MagickBooleanType IsMagickConflict(const char *magick)
 {
-  const DelegateInfo
-    *delegate_info;
-
-  const MagickInfo
-    *magick_info;
-
-  ExceptionInfo
-    *exception;
-
   assert(magick != (char *) NULL);
-  exception=AcquireExceptionInfo();
-  magick_info=GetMagickInfo(magick,exception);
-  delegate_info=GetDelegateInfo(magick,(char *) NULL,exception);
-  if (delegate_info == (const DelegateInfo *) NULL)
-    delegate_info=GetDelegateInfo((char *) NULL,magick,exception);
-  exception=DestroyExceptionInfo(exception);
-  if ((magick_info == (const MagickInfo *) NULL) &&
-      (delegate_info == (const DelegateInfo *) NULL))
-    return(MagickTrue);
 #if defined(macintosh)
   return(MACIsMagickConflict(magick));
 #elif defined(vms)
   return(VMSIsMagickConflict(magick));
-#elif defined(__WINDOWS__)
+#elif defined(MAGICKCORE_WINDOWS_SUPPORT)
   return(NTIsMagickConflict(magick));
 #else
   return(MagickFalse);
@@ -940,14 +938,14 @@ MagickExport MagickBooleanType ListMagickInfo(FILE *file,
   const MagickInfo
     **magick_info;
 
-  long
-    j;
-
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     number_formats;
+
+  ssize_t
+    j;
 
   if (file == (FILE *) NULL)
     file=stdout;
@@ -956,18 +954,19 @@ MagickExport MagickBooleanType ListMagickInfo(FILE *file,
     return(MagickFalse);
   ClearMagickException(exception);
 #if !defined(MAGICKCORE_MODULES_SUPPORT)
-  (void) fprintf(file,"   Format  Mode  Description\n");
+  (void) FormatLocaleFile(file,"   Format  Mode  Description\n");
 #else
-  (void) fprintf(file,"   Format  Module    Mode  Description\n");
+  (void) FormatLocaleFile(file,"   Format  Module    Mode  Description\n");
 #endif
-  (void) fprintf(file,"--------------------------------------------------------"
+  (void) FormatLocaleFile(file,
+    "--------------------------------------------------------"
     "-----------------------\n");
-  for (i=0; i < (long) number_formats; i++)
+  for (i=0; i < (ssize_t) number_formats; i++)
   {
     if (magick_info[i]->stealth != MagickFalse)
       continue;
-    (void) fprintf(file,"%9s%c ",magick_info[i]->name != (char *) NULL ?
-      magick_info[i]->name : "",
+    (void) FormatLocaleFile(file,"%9s%c ",
+      magick_info[i]->name != (char *) NULL ? magick_info[i]->name : "",
       magick_info[i]->blob_support != MagickFalse ? '*' : ' ');
 #if defined(MAGICKCORE_MODULES_SUPPORT)
     {
@@ -979,17 +978,17 @@ MagickExport MagickBooleanType ListMagickInfo(FILE *file,
         (void) CopyMagickString(module,magick_info[i]->module,MaxTextExtent);
       (void) ConcatenateMagickString(module,"          ",MaxTextExtent);
       module[9]='\0';
-      (void) fprintf(file,"%9s ",module);
+      (void) FormatLocaleFile(file,"%9s ",module);
     }
 #endif
-    (void) fprintf(file,"%c%c%c ",magick_info[i]->decoder ? 'r' : '-',
+    (void) FormatLocaleFile(file,"%c%c%c ",magick_info[i]->decoder ? 'r' : '-',
       magick_info[i]->encoder ? 'w' : '-',magick_info[i]->encoder != NULL &&
       magick_info[i]->adjoin != MagickFalse ? '+' : '-');
     if (magick_info[i]->description != (char *) NULL)
-      (void) fprintf(file,"  %s",magick_info[i]->description);
+      (void) FormatLocaleFile(file,"  %s",magick_info[i]->description);
     if (magick_info[i]->version != (char *) NULL)
-      (void) fprintf(file," (%s)",magick_info[i]->version);
-    (void) fprintf(file,"\n");
+      (void) FormatLocaleFile(file," (%s)",magick_info[i]->version);
+    (void) FormatLocaleFile(file,"\n");
     if (magick_info[i]->note != (char *) NULL)
       {
         char
@@ -1000,17 +999,17 @@ MagickExport MagickBooleanType ListMagickInfo(FILE *file,
           {
             for (j=0; text[j] != (char *) NULL; j++)
             {
-              (void) fprintf(file,"           %s\n",text[j]);
+              (void) FormatLocaleFile(file,"           %s\n",text[j]);
               text[j]=DestroyString(text[j]);
             }
             text=(char **) RelinquishMagickMemory(text);
           }
       }
   }
-  (void) fprintf(file,"\n* native blob support\n");
-  (void) fprintf(file,"r read support\n");
-  (void) fprintf(file,"w write support\n");
-  (void) fprintf(file,"+ support for multiple images\n");
+  (void) FormatLocaleFile(file,"\n* native blob support\n");
+  (void) FormatLocaleFile(file,"r read support\n");
+  (void) FormatLocaleFile(file,"w write support\n");
+  (void) FormatLocaleFile(file,"+ support for multiple images\n");
   (void) fflush(file);
   magick_info=(const MagickInfo **) RelinquishMagickMemory((void *)
     magick_info);
@@ -1040,6 +1039,60 @@ MagickExport MagickBooleanType ListMagickInfo(FILE *file,
 MagickExport MagickBooleanType IsMagickInstantiated(void)
 {
   return(instantiate_magick);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   M a g i c k C o m p o n e n t G e n e s i s                               %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagickComponentGenesis() instantiates the magick component.
+%
+%  The format of the MagickComponentGenesis method is:
+%
+%      MagickBooleanType MagickComponentGenesis(void)
+%
+*/
+MagickExport MagickBooleanType MagickComponentGenesis(void)
+{
+  AcquireSemaphoreInfo(&magick_semaphore);
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   M a g i c k C o m p o n e n t T e r m i n u s                             %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  MagickComponentTerminus() destroys the magick component.
+%
+%  The format of the MagickComponentTerminus method is:
+%
+%      void MagickComponentTerminus(void)
+%
+*/
+MagickExport void MagickComponentTerminus(void)
+{
+  if (magick_semaphore == (SemaphoreInfo *) NULL)
+    AcquireSemaphoreInfo(&magick_semaphore);
+  LockSemaphoreInfo(magick_semaphore);
+  if (magick_list != (SplayTreeInfo *) NULL)
+    magick_list=DestroySplayTree(magick_list);
+  instantiate_magick=MagickFalse;
+  UnlockSemaphoreInfo(magick_semaphore);
+  DestroySemaphoreInfo(&magick_semaphore);
 }
 
 /*
@@ -1107,12 +1160,36 @@ static void MagickSignalHandler(int signal_number)
 #if !defined(MAGICKCORE_HAVE_SIGACTION)
   (void) signal(signal_number,SIG_IGN);
 #endif
-  AsynchronousDestroyMagickResources();
+  AsynchronousResourceComponentTerminus();
   instantiate_magick=MagickFalse;
   (void) SetMagickSignalHandler(signal_number,signal_handlers[signal_number]);
 #if defined(MAGICKCORE_HAVE_RAISE)
   if (signal_handlers[signal_number] != MagickSignalHandler)
     raise(signal_number);
+#endif
+#if defined(SIGQUIT)
+  if (signal_number == SIGQUIT)
+    abort();
+#endif
+#if defined(SIGABRT)
+  if (signal_number == SIGABRT)
+    abort();
+#endif
+#if defined(SIGFPE)
+  if (signal_number == SIGFPE)
+    abort();
+#endif
+#if defined(SIGXCPU)
+  if (signal_number == SIGXCPU)
+    abort();
+#endif
+#if defined(SIGXFSZ)
+  if (signal_number == SIGXFSZ)
+    abort();
+#endif
+#if defined(SIGSEGV)
+  if (signal_number == SIGSEGV)
+    abort();
 #endif
 #if !defined(MAGICKCORE_HAVE__EXIT)
   exit(signal_number);
@@ -1121,7 +1198,7 @@ static void MagickSignalHandler(int signal_number)
   if (signal_number == SIGHUP)
     exit(signal_number);
 #endif
-#if defined(SIGINT) && !defined(__WINDOWS__)
+#if defined(SIGINT) && !defined(MAGICKCORE_WINDOWS_SUPPORT)
   if (signal_number == SIGINT)
     exit(signal_number);
 #endif
@@ -1129,7 +1206,7 @@ static void MagickSignalHandler(int signal_number)
   if (signal_number == SIGTERM)
     exit(signal_number);
 #endif
-  _exit(signal_number);
+  _exit(signal_number);  /* do not invoke registered atexit() methods */
 #endif
 }
 
@@ -1157,26 +1234,26 @@ MagickExport void MagickCoreGenesis(const char *path,
     execution_path[MaxTextExtent],
     filename[MaxTextExtent];
 
-  ExceptionInfo
-    *exception;
-
-  time_t
-    seconds;
-
   /*
     Initialize the Magick environment.
   */
-  (void) setlocale(LC_ALL,"");
-  (void) setlocale(LC_NUMERIC,"C");
-  InitializeSemaphore();
-  seconds=time((time_t *) NULL);
+  LockMagickMutex();
+  if (instantiate_magickcore != MagickFalse)
+    {
+      UnlockMagickMutex();
+      return;
+    }
+  (void) SemaphoreComponentGenesis();
+  (void) LogComponentGenesis();
+  (void) LocaleComponentGenesis();
+  (void) RandomComponentGenesis();
   events=GetEnvironmentValue("MAGICK_DEBUG");
   if (events != (char *) NULL)
     {
       (void) SetLogEventMask(events);
       events=DestroyString(events);
     }
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
 #if defined(_DEBUG) && !defined(__BORLANDC__) && !defined(__MINGW32__)
   if (IsEventLogging() != MagickFalse)
     {
@@ -1213,6 +1290,10 @@ MagickExport void MagickCoreGenesis(const char *path,
       if (signal_handlers[SIGABRT] == (SignalHandler *) NULL)
         signal_handlers[SIGABRT]=RegisterMagickSignalHandler(SIGABRT);
 #endif
+#if defined(SIGSEGV)
+      if (signal_handlers[SIGSEGV] == (SignalHandler *) NULL)
+        signal_handlers[SIGSEGV]=RegisterMagickSignalHandler(SIGSEGV);
+#endif
 #if defined(SIGFPE)
       if (signal_handlers[SIGFPE] == (SignalHandler *) NULL)
         signal_handlers[SIGFPE]=RegisterMagickSignalHandler(SIGFPE);
@@ -1221,7 +1302,7 @@ MagickExport void MagickCoreGenesis(const char *path,
       if (signal_handlers[SIGHUP] == (SignalHandler *) NULL)
         signal_handlers[SIGHUP]=RegisterMagickSignalHandler(SIGHUP);
 #endif
-#if defined(SIGINT) && !defined(__WINDOWS__)
+#if defined(SIGINT) && !defined(MAGICKCORE_WINDOWS_SUPPORT)
       if (signal_handlers[SIGINT] == (SignalHandler *) NULL)
         signal_handlers[SIGINT]=RegisterMagickSignalHandler(SIGINT);
 #endif
@@ -1243,12 +1324,30 @@ MagickExport void MagickCoreGenesis(const char *path,
 #endif
     }
   /*
-    Initialize magick resources.
+    Instantiate magick resources.
   */
-  InitializeMagickResources();
-  exception=AcquireExceptionInfo();
-  (void) GetMagickInfo((char *) NULL,exception);
-  exception=DestroyExceptionInfo(exception);
+  (void) ConfigureComponentGenesis();
+  (void) PolicyComponentGenesis();
+  (void) CacheComponentGenesis();
+  (void) RegistryComponentGenesis();
+  (void) ResourceComponentGenesis();
+  (void) CoderComponentGenesis();
+  (void) MagickComponentGenesis();
+#if defined(MAGICKCORE_MODULES_SUPPORT)
+  (void) ModuleComponentGenesis();
+#endif
+  (void) DelegateComponentGenesis();
+  (void) MagicComponentGenesis();
+  (void) ColorComponentGenesis();
+  (void) TypeComponentGenesis();
+  (void) MimeComponentGenesis();
+  (void) ConstituteComponentGenesis();
+  (void) AnnotateComponentGenesis();
+#if defined(MAGICKCORE_X11_DELEGATE)
+  (void) XComponentGenesis();
+#endif
+  instantiate_magickcore=MagickTrue;
+  UnlockMagickMutex();
 }
 
 /*
@@ -1264,36 +1363,51 @@ MagickExport void MagickCoreGenesis(const char *path,
 %
 %  MagickCoreTerminus() destroys the MagickCore environment.
 %
-%  The format of the DestroyMagick function is:
+%  The format of the MagickCoreTerminus function is:
 %
 %      MagickCoreTerminus(void)
 %
 */
 MagickExport void MagickCoreTerminus(void)
 {
+  LockMagickMutex();
+  if (instantiate_magickcore == MagickFalse)
+    {
+      UnlockMagickMutex();
+      return;
+    }
 #if defined(MAGICKCORE_X11_DELEGATE)
-  DestroyXResources();
+  XComponentTerminus();
 #endif
-  DestroyConstitute();
-  DestroyMimeList();
-  DestroyConfigureList();
-  DestroyTypeList();
-  DestroyColorList();
-#if defined(__WINDOWS__)
+  AnnotateComponentTerminus();
+  ConstituteComponentTerminus();
+  MimeComponentTerminus();
+  TypeComponentTerminus();
+  ColorComponentTerminus();
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
   NTGhostscriptUnLoadDLL();
 #endif
-  DestroyMagicList();
-  DestroyDelegateList();
-  DestroyMagickList();
-  DestroyCoderList();
-  DestroyMagickResources();
-  DestroyImageRegistry();
-  DestroyPixelCacheResources();
-  DestroyPolicyList();
-  DestroyRandomReservoir();
-  DestroyLocaleList();
-  DestroyLogList();
-  instantiate_magick=MagickFalse;
+  MagicComponentTerminus();
+  DelegateComponentTerminus();
+  MagickComponentTerminus();
+#if !defined(MAGICKCORE_BUILD_MODULES)
+  UnregisterStaticModules();
+#endif
+#if defined(MAGICKCORE_MODULES_SUPPORT)
+  ModuleComponentTerminus();
+#endif
+  CoderComponentTerminus();
+  ResourceComponentTerminus();
+  RegistryComponentTerminus();
+  CacheComponentTerminus();
+  PolicyComponentTerminus();
+  ConfigureComponentTerminus();
+  RandomComponentTerminus();
+  LocaleComponentTerminus();
+  LogComponentTerminus();
+  SemaphoreComponentTerminus();
+  instantiate_magickcore=MagickFalse;
+  UnlockMagickMutex();
 }
 
 /*
@@ -1393,6 +1507,40 @@ MagickExport MagickInfo *SetMagickInfo(const char *name)
 %                                                                             %
 %                                                                             %
 %                                                                             %
+%   S e t M a g i c k P r e c i s i o n                                       %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  SetMagickPrecision() sets the maximum number of significant digits to be
+%  printed and returns it.
+%
+%  The format of the SetMagickPrecision method is:
+%
+%      int SetMagickPrecision(const int precision)
+%
+%  A description of each parameter follows:
+%
+%    o precision: set the maximum number of significant digits to be printed.
+%
+*/
+MagickExport int SetMagickPrecision(const int precision)
+{
+  static int
+    magick_precision = 0;
+
+  (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
+  if (precision != 0)
+    magick_precision=precision;
+  return(magick_precision);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
 +   U n r e g i s t e r M a g i c k I n f o                                   %
 %                                                                             %
 %                                                                             %
@@ -1425,7 +1573,7 @@ MagickExport MagickBooleanType UnregisterMagickInfo(const char *name)
     return(MagickFalse);
   if (GetNumberOfNodesInSplayTree(magick_list) == 0)
     return(MagickFalse);
-  AcquireSemaphoreInfo(&magick_semaphore);
+  LockSemaphoreInfo(magick_semaphore);
   ResetSplayTreeIterator(magick_list);
   p=(const MagickInfo *) GetNextValueInSplayTree(magick_list);
   while (p != (const MagickInfo *) NULL)
@@ -1435,6 +1583,6 @@ MagickExport MagickBooleanType UnregisterMagickInfo(const char *name)
     p=(const MagickInfo *) GetNextValueInSplayTree(magick_list);
   }
   status=DeleteNodeByValueFromSplayTree(magick_list,p);
-  RelinquishSemaphoreInfo(magick_semaphore);
+  UnlockSemaphoreInfo(magick_semaphore);
   return(status);
 }

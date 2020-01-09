@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -90,10 +90,10 @@ static MagickBooleanType
 %
 %  The format of the RegisterPREVIEWImage method is:
 %
-%      unsigned long RegisterPREVIEWImage(void)
+%      size_t RegisterPREVIEWImage(void)
 %
 */
-ModuleExport unsigned long RegisterPREVIEWImage(void)
+ModuleExport size_t RegisterPREVIEWImage(void)
 {
   MagickInfo
     *entry;
@@ -101,7 +101,7 @@ ModuleExport unsigned long RegisterPREVIEWImage(void)
   entry=SetMagickInfo("PREVIEW");
   entry->encoder=(EncodeImageHandler *) WritePreviewImage;
   entry->adjoin=MagickFalse;
-  entry->format_type=ExplicitFormatType;
+  entry->format_type=ImplicitFormatType;
   entry->description=ConstantString(
     "Show a preview an image enhancement, effect, or f/x");
   entry->module=ConstantString("PREVIEW");
@@ -187,9 +187,9 @@ static MagickBooleanType WritePreviewImage(const ImageInfo *image_info,
   (void) CopyMagickString(preview_image->filename,image_info->filename,
     MaxTextExtent);
   write_info=CloneImageInfo(image_info);
-  (void) SetImageInfo(write_info,MagickTrue,&image->exception);
+  (void) SetImageInfo(write_info,1,&image->exception);
   if (LocaleCompare(write_info->magick,"PREVIEW") == 0)
-    (void) FormatMagickString(preview_image->filename,MaxTextExtent,
+    (void) FormatLocaleString(preview_image->filename,MaxTextExtent,
       "miff:%s",image_info->filename);
   status=WriteImage(write_info,preview_image);
   preview_image=DestroyImage(preview_image);

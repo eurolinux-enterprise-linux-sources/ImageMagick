@@ -39,18 +39,22 @@ int main( int /*argc*/, char ** argv)
     try
       {
         failures++;
+        cout << "Throwing 'Magick::WarningResourceLimit' exception" << endl;
+        cout.flush();
         throw WarningResourceLimit("How now brown cow?");
       }
     catch( Exception & /*error_*/ )
       {
+        cout << "Successfully caught 'Magick::WarningResourceLimit' exception" << endl;
+        cout.flush();
         failures--;
       }
       
     // A more complex test
     try
       {
-        unsigned int columns = 640;
-        unsigned int rows = 480;
+        size_t columns = 640;
+        size_t rows = 480;
         Geometry geometry(columns,rows);
         Color canvasColor( "red" );
         Image image( geometry, canvasColor);
@@ -59,10 +63,14 @@ int main( int /*argc*/, char ** argv)
           try
             {
               failures++;
+              cout << "Throwing library 'Magick::Exception' exception" << endl;
+              cout.flush();
               image.directory();
             }
           catch ( Exception& /*error_*/ )
             {
+              cout << "Successfully caught library 'Magick::Exception' exception" << endl;
+              cout.flush();
               failures--;
             }
         }
@@ -70,21 +78,24 @@ int main( int /*argc*/, char ** argv)
       }
     catch( Exception &error_ )
       {
-        cout << "Caught exception: " << error_.what() << endl;
+        cout << "Bogus catch: Caught exception: " << error_.what() << endl;
+        cout.flush();
         return 1;
       }
     catch( exception &error_ )
       {
-        cout << "Caught exception: " << error_.what() << endl;
+        cout << "Bogus catch: Caught exception: " << error_.what() << endl;
+        cout.flush();
         return 1;
       }
   
     if ( failures )
       {
         cout << failures << " failures" << endl;
+        cout.flush();
         return 1;
       }
-    cout << "passed!" << endl;
+    cout << "Exception testing passed!" << endl;
   }
 
   return 0;

@@ -17,7 +17,7 @@
 %                                July 1993                                    %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -158,7 +158,7 @@ MagickExport void ClearMagickException(ExceptionInfo *exception)
   assert(exception->signature == MagickSignature);
   if (exception->exceptions  == (void *) NULL)
     return;
-  AcquireSemaphoreInfo(&exception->semaphore);
+  LockSemaphoreInfo(exception->semaphore);
   p=(ExceptionInfo *) RemoveLastElementFromLinkedList((LinkedListInfo *)
     exception->exceptions);
   while (p != (ExceptionInfo *) NULL)
@@ -170,7 +170,7 @@ MagickExport void ClearMagickException(ExceptionInfo *exception)
   exception->severity=UndefinedException;
   exception->reason=(char *) NULL;
   exception->description=(char *) NULL;
-  RelinquishSemaphoreInfo(exception->semaphore);
+  UnlockSemaphoreInfo(exception->semaphore);
   errno=0;
 }
 
@@ -206,7 +206,7 @@ MagickExport void CatchException(ExceptionInfo *exception)
   assert(exception->signature == MagickSignature);
   if (exception->exceptions  == (void *) NULL)
     return;
-  AcquireSemaphoreInfo(&exception->semaphore);
+  LockSemaphoreInfo(exception->semaphore);
   ResetLinkedListIterator((LinkedListInfo *) exception->exceptions);
   p=(const ExceptionInfo *) GetNextValueInLinkedList((LinkedListInfo *)
     exception->exceptions);
@@ -216,12 +216,12 @@ MagickExport void CatchException(ExceptionInfo *exception)
       MagickWarning(p->severity,p->reason,p->description);
     if ((p->severity >= ErrorException) && (p->severity < FatalErrorException))
       MagickError(p->severity,p->reason,p->description);
-    if (exception->severity >= FatalErrorException)
+    if (p->severity >= FatalErrorException)
       MagickFatalError(p->severity,p->reason,p->description);
     p=(const ExceptionInfo *) GetNextValueInLinkedList((LinkedListInfo *)
       exception->exceptions);
   }
-  RelinquishSemaphoreInfo(exception->semaphore);
+  UnlockSemaphoreInfo(exception->semaphore);
   ClearMagickException(exception);
 }
 
@@ -258,10 +258,10 @@ static void DefaultErrorHandler(const ExceptionType magick_unused(severity),
 {
   if (reason == (char *) NULL)
     return;
-  (void) fprintf(stderr,"%s: %s",GetClientName(),reason);
+  (void) FormatLocaleFile(stderr,"%s: %s",GetClientName(),reason);
   if (description != (char *) NULL)
-    (void) fprintf(stderr," (%s)",description);
-  (void) fprintf(stderr,".\n");
+    (void) FormatLocaleFile(stderr," (%s)",description);
+  (void) FormatLocaleFile(stderr,".\n");
   (void) fflush(stderr);
 }
 
@@ -300,10 +300,10 @@ static void DefaultFatalErrorHandler(
 {
   if (reason == (char *) NULL)
     return;
-  (void) fprintf(stderr,"%s: %s",GetClientName(),reason);
+  (void) FormatLocaleFile(stderr,"%s: %s",GetClientName(),reason);
   if (description != (char *) NULL)
-    (void) fprintf(stderr," (%s)",description);
-  (void) fprintf(stderr,".\n");
+    (void) FormatLocaleFile(stderr," (%s)",description);
+  (void) FormatLocaleFile(stderr,".\n");
   (void) fflush(stderr);
   MagickCoreTerminus();
   exit(1);
@@ -324,12 +324,12 @@ static void DefaultFatalErrorHandler(
 %
 %  The format of the DefaultWarningHandler method is:
 %
-%      void DefaultWarningHandler(const ExceptionType warning,
+%      void DefaultWarningHandler(const ExceptionType severity,
 %        const char *reason,const char *description)
 %
 %  A description of each parameter follows:
 %
-%    o warning: Specifies the numeric warning category.
+%    o severity: Specifies the numeric warning category.
 %
 %    o reason: Specifies the reason to display before terminating the
 %      program.
@@ -342,10 +342,10 @@ static void DefaultWarningHandler(const ExceptionType magick_unused(severity),
 {
   if (reason == (char *) NULL)
     return;
-  (void) fprintf(stderr,"%s: %s",GetClientName(),reason);
+  (void) FormatLocaleFile(stderr,"%s: %s",GetClientName(),reason);
   if (description != (char *) NULL)
-    (void) fprintf(stderr," (%s)",description);
-  (void) fprintf(stderr,".\n");
+    (void) FormatLocaleFile(stderr," (%s)",description);
+  (void) FormatLocaleFile(stderr,".\n");
   (void) fflush(stderr);
 }
 
@@ -378,7 +378,9 @@ MagickExport ExceptionInfo *DestroyExceptionInfo(ExceptionInfo *exception)
 
   assert(exception != (ExceptionInfo *) NULL);
   assert(exception->signature == MagickSignature);
-  AcquireSemaphoreInfo(&exception->semaphore);
+  if (exception->semaphore == (SemaphoreInfo *) NULL)
+    AcquireSemaphoreInfo(&exception->semaphore);
+  LockSemaphoreInfo(exception->semaphore);
   exception->severity=UndefinedException;
   if (exception->exceptions != (void *) NULL)
     exception->exceptions=(void *) DestroyLinkedList((LinkedListInfo *)
@@ -386,7 +388,7 @@ MagickExport ExceptionInfo *DestroyExceptionInfo(ExceptionInfo *exception)
   relinquish=exception->relinquish;
   if (exception->relinquish != MagickFalse)
     exception->signature=(~MagickSignature);
-  RelinquishSemaphoreInfo(exception->semaphore);
+  UnlockSemaphoreInfo(exception->semaphore);
   DestroySemaphoreInfo(&exception->semaphore);
   if (relinquish != MagickFalse)
     exception=(ExceptionInfo *) RelinquishMagickMemory(exception);
@@ -421,6 +423,7 @@ MagickExport void GetExceptionInfo(ExceptionInfo *exception)
   (void) ResetMagickMemory(exception,0,sizeof(*exception));
   exception->severity=UndefinedException;
   exception->exceptions=(void *) NewLinkedList(0);
+  exception->semaphore=AllocateSemaphoreInfo();
   exception->signature=MagickSignature;
 }
 
@@ -452,8 +455,14 @@ MagickExport char *GetExceptionMessage(const int error)
   char
     exception[MaxTextExtent];
 
+  *exception='\0';
 #if defined(MAGICKCORE_HAVE_STRERROR_R)
+#if !defined(_GNU_SOURCE)
   (void) strerror_r(error,exception,sizeof(exception));
+#else
+  (void) CopyMagickString(exception,strerror_r(error,exception,
+    sizeof(exception)),sizeof(exception));
+#endif
 #else
   (void) CopyMagickString(exception,strerror(error),sizeof(exception));
 #endif
@@ -502,6 +511,7 @@ static const char *ExceptionSeverityToTag(const ExceptionType severity)
     case StreamWarning: return("Stream/Warning/");
     case CacheWarning: return("Cache/Warning/");
     case CoderWarning: return("Coder/Warning/");
+    case FilterWarning: return("Filter/Warning/");
     case ModuleWarning: return("Module/Warning/");
     case DrawWarning: return("Draw/Warning/");
     case ImageWarning: return("Image/Warning/");
@@ -522,6 +532,7 @@ static const char *ExceptionSeverityToTag(const ExceptionType severity)
     case StreamError: return("Stream/Error/");
     case CacheError: return("Cache/Error/");
     case CoderError: return("Coder/Error/");
+    case FilterError: return("Filter/Error/");
     case ModuleError: return("Module/Error/");
     case DrawError: return("Draw/Error/");
     case ImageError: return("Image/Error/");
@@ -542,6 +553,7 @@ static const char *ExceptionSeverityToTag(const ExceptionType severity)
     case StreamFatalError: return("Stream/FatalError/");
     case CacheFatalError: return("Cache/FatalError/");
     case CoderFatalError: return("Coder/FatalError/");
+    case FilterFatalError: return("Filter/FatalError/");
     case ModuleFatalError: return("Module/FatalError/");
     case DrawFatalError: return("Draw/FatalError/");
     case ImageFatalError: return("Image/FatalError/");
@@ -566,7 +578,7 @@ MagickExport const char *GetLocaleExceptionMessage(const ExceptionType severity,
     *locale_message;
 
   assert(tag != (const char *) NULL);
-  (void) FormatMagickString(message,MaxTextExtent,"Exception/%s%s",
+  (void) FormatLocaleString(message,MaxTextExtent,"Exception/%s%s",
     ExceptionSeverityToTag(severity),tag);
   locale_message=GetLocaleMessage(message);
   if (locale_message == (const char *) NULL)
@@ -612,7 +624,7 @@ MagickExport void InheritException(ExceptionInfo *exception,
   assert(relative->signature == MagickSignature);
   if (relative->exceptions == (void *) NULL)
     return;
-  AcquireSemaphoreInfo(&exception->semaphore);
+  LockSemaphoreInfo(exception->semaphore);
   ResetLinkedListIterator((LinkedListInfo *) relative->exceptions);
   p=(const ExceptionInfo *) GetNextValueInLinkedList((LinkedListInfo *)
     relative->exceptions);
@@ -622,7 +634,7 @@ MagickExport void InheritException(ExceptionInfo *exception,
     p=(const ExceptionInfo *) GetNextValueInLinkedList((LinkedListInfo *)
       relative->exceptions);
   }
-  RelinquishSemaphoreInfo(exception->semaphore);
+  UnlockSemaphoreInfo(exception->semaphore);
 }
 
 /*
@@ -908,7 +920,7 @@ MagickExport MagickBooleanType ThrowException(ExceptionInfo *exception,
 %  The format of the ThrowMagickException method is:
 %
 %      MagickBooleanType ThrowFileException(ExceptionInfo *exception,
-%        const char *module,const char *function,const unsigned long line,
+%        const char *module,const char *function,const size_t line,
 %        const ExceptionType severity,const char *tag,const char *format,...)
 %
 %  A description of each parameter follows:
@@ -931,7 +943,7 @@ MagickExport MagickBooleanType ThrowException(ExceptionInfo *exception,
 
 MagickExport MagickBooleanType ThrowMagickExceptionList(
   ExceptionInfo *exception,const char *module,const char *function,
-  const unsigned long line,const ExceptionType severity,const char *tag,
+  const size_t line,const ExceptionType severity,const char *tag,
   const char *format,va_list operands)
 {
   char
@@ -940,7 +952,8 @@ MagickExport MagickBooleanType ThrowMagickExceptionList(
     reason[MaxTextExtent];
 
   const char
-    *locale;
+    *locale,
+    *type;
 
   int
     n;
@@ -966,14 +979,21 @@ MagickExport MagickBooleanType ThrowMagickExceptionList(
     reason[MaxTextExtent-1]='\0';
   status=LogMagickEvent(ExceptionEvent,module,function,line,"%s",reason);
   GetPathComponent(module,TailPath,path);
-  (void) FormatMagickString(message,MaxTextExtent,"%s @ %s/%s/%ld",reason,path,
-    function,line);
+  type="undefined";
+  if ((severity >= WarningException) && (severity < ErrorException))
+    type="warning";
+  if ((severity >= ErrorException) && (severity < FatalErrorException))
+    type="error";
+  if (severity >= FatalErrorException)
+    type="fatal";
+  (void) FormatLocaleString(message,MaxTextExtent,"%s @ %s/%s/%s/%.20g",reason,
+    type,path,function,(double) line);
   (void) ThrowException(exception,severity,message,(char *) NULL);
   return(status);
 }
 
 MagickExport MagickBooleanType ThrowMagickException(ExceptionInfo *exception,
-  const char *module,const char *function,const unsigned long line,
+  const char *module,const char *function,const size_t line,
   const ExceptionType severity,const char *tag,const char *format,...)
 {
   MagickBooleanType

@@ -16,7 +16,7 @@
 %                              December 2001                                  %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -97,17 +97,17 @@ struct _RandomInfo
   SemaphoreInfo
     *semaphore;
 
-  long
+  ssize_t
     timestamp;
 
-  unsigned long
+  size_t
     signature;
 };
 
 /*
   External declarations.
 */
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(TARGET_OS_IPHONE)
 #include <crt_externs.h>
 #define environ (*_NSGetEnviron())
 #endif
@@ -172,7 +172,7 @@ MagickExport RandomInfo *AcquireRandomInfo(void)
     *key,
     *nonce;
 
-  random_info=(RandomInfo *) AcquireAlignedMemory(1,sizeof(*random_info));
+  random_info=(RandomInfo *) AcquireMagickMemory(sizeof(*random_info));
   if (random_info == (RandomInfo *) NULL)
     ThrowFatalException(ResourceLimitFatalError,"MemoryAllocationFailed");
   (void) ResetMagickMemory(random_info,0,sizeof(*random_info));
@@ -187,7 +187,7 @@ MagickExport RandomInfo *AcquireRandomInfo(void)
   random_info->semaphore=AllocateSemaphoreInfo();
   random_info->protocol_major=RandomProtocolMajorVersion;
   random_info->protocol_minor=RandomProtocolMinorVersion;
-  random_info->timestamp=(long) time(0);
+  random_info->timestamp=(ssize_t) time(0);
   random_info->signature=MagickSignature;
   /*
     Seed random nonce.
@@ -275,7 +275,7 @@ MagickExport RandomInfo *DestroyRandomInfo(RandomInfo *random_info)
   (void) LogMagickEvent(TraceEvent,GetMagickModule(),"...");
   assert(random_info != (RandomInfo *) NULL);
   assert(random_info->signature == MagickSignature);
-  (void) LockSemaphoreInfo(random_info->semaphore);
+  LockSemaphoreInfo(random_info->semaphore);
   if (random_info->reservoir != (StringInfo *) NULL)
     random_info->reservoir=DestroyStringInfo(random_info->reservoir);
   if (random_info->nonce != (StringInfo *) NULL)
@@ -285,36 +285,10 @@ MagickExport RandomInfo *DestroyRandomInfo(RandomInfo *random_info)
       random_info->signature_info);
   (void) ResetMagickMemory(random_info->seed,0,sizeof(*random_info->seed));
   random_info->signature=(~MagickSignature);
-  (void) UnlockSemaphoreInfo(random_info->semaphore);
+  UnlockSemaphoreInfo(random_info->semaphore);
   DestroySemaphoreInfo(&random_info->semaphore);
-  random_info=(RandomInfo *) RelinquishAlignedMemory(random_info);
+  random_info=(RandomInfo *) RelinquishMagickMemory(random_info);
   return(random_info);
-}
-
-/*
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%                                                                             %
-%                                                                             %
-%                                                                             %
-+   D e s t r o y R a n d o m R e s e r v i o r                               %
-%                                                                             %
-%                                                                             %
-%                                                                             %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
-%  DestroyRandomReservoir() deallocates memory associated with the random
-%  reservoir.
-%
-%  The format of the DestroyRandomReservoir method is:
-%
-%      DestroyRandomReservoir(void)
-%
-*/
-MagickExport void DestroyRandomReservoir(void)
-{
-  AcquireSemaphoreInfo(&random_semaphore);
-  (void) UnlockSemaphoreInfo(random_semaphore);
-  DestroySemaphoreInfo(&random_semaphore);
 }
 
 /*
@@ -341,6 +315,7 @@ MagickExport void DestroyRandomReservoir(void)
 %
 */
 
+#if !defined(MAGICKCORE_WINDOWS_SUPPORT)
 static ssize_t ReadRandom(int file,unsigned char *source,size_t length)
 {
   register unsigned char
@@ -366,13 +341,11 @@ static ssize_t ReadRandom(int file,unsigned char *source,size_t length)
   }
   return(offset);
 }
+#endif
 
 static StringInfo *GenerateEntropicChaos(RandomInfo *random_info)
 {
 #define MaxEntropyExtent  64
-
-  long
-    pid;
 
   MagickThreadType
     tid;
@@ -381,21 +354,24 @@ static StringInfo *GenerateEntropicChaos(RandomInfo *random_info)
     *chaos,
     *entropy;
 
-  unsigned long
+  size_t
     nanoseconds,
     seconds;
+
+  ssize_t
+    pid;
 
   /*
     Initialize random reservoir.
   */
   entropy=AcquireStringInfo(0);
-  (void) LockSemaphoreInfo(random_info->semaphore);
+  LockSemaphoreInfo(random_info->semaphore);
   chaos=AcquireStringInfo(sizeof(unsigned char *));
   SetStringInfoDatum(chaos,(unsigned char *) &entropy);
   ConcatenateStringInfo(entropy,chaos);
   SetStringInfoDatum(chaos,(unsigned char *) entropy);
   ConcatenateStringInfo(entropy,chaos);
-  pid=(long) getpid();
+  pid=(ssize_t) getpid();
   SetStringInfoLength(chaos,sizeof(pid));
   SetStringInfoDatum(chaos,(unsigned char *) &pid);
   ConcatenateStringInfo(entropy,chaos);
@@ -403,6 +379,18 @@ static StringInfo *GenerateEntropicChaos(RandomInfo *random_info)
   SetStringInfoLength(chaos,sizeof(tid));
   SetStringInfoDatum(chaos,(unsigned char *) &tid);
   ConcatenateStringInfo(entropy,chaos);
+#if defined(MAGICKCORE_HAVE_GETRUSAGE) && defined(RUSAGE_SELF)
+  {
+    struct rusage
+      usage;
+
+    if (getrusage(RUSAGE_SELF,&usage) == 0)
+      {
+        SetStringInfoLength(chaos,sizeof(usage));
+        SetStringInfoDatum(chaos,(unsigned char *) &usage);
+      }
+  }
+#endif
   seconds=time((time_t *) 0);
   nanoseconds=0;
 #if defined(MAGICKCORE_HAVE_GETTIMEOFDAY)
@@ -410,19 +398,19 @@ static StringInfo *GenerateEntropicChaos(RandomInfo *random_info)
     struct timeval
       timer;
 
-    if (gettimeofday(&timer,0) == 0)
+    if (gettimeofday(&timer,(struct timezone *) NULL) == 0)
       {
         seconds=timer.tv_sec;
         nanoseconds=1000UL*timer.tv_usec;
       }
   }
 #endif
-#if defined(MAGICKCORE_HAVE_CLOCK_GETTIME) && defined(CLOCK_HIGHRES)
+#if defined(MAGICKCORE_HAVE_CLOCK_GETTIME) && defined(CLOCK_REALTIME_HR)
   {
     struct timespec
       timer;
 
-    if (clock_gettime(CLOCK_HIGHRES,&timer) == 0)
+    if (clock_gettime(CLOCK_REALTIME_HR,&timer) == 0)
       {
         seconds=timer.tv_sec;
         nanoseconds=timer.tv_nsec;
@@ -473,7 +461,7 @@ static StringInfo *GenerateEntropicChaos(RandomInfo *random_info)
     filename=DestroyString(filename);
   }
 #endif
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
   {
     double
       seconds;
@@ -523,7 +511,7 @@ static StringInfo *GenerateEntropicChaos(RandomInfo *random_info)
     */
     if (environ != (char **) NULL)
       {
-        register long
+        register ssize_t
           i;
 
         /*
@@ -578,7 +566,7 @@ static StringInfo *GenerateEntropicChaos(RandomInfo *random_info)
   }
 #endif
   chaos=DestroyStringInfo(chaos);
-  (void) UnlockSemaphoreInfo(random_info->semaphore);
+  UnlockSemaphoreInfo(random_info->semaphore);
   return(entropy);
 }
 
@@ -701,6 +689,55 @@ MagickExport double GetRandomValue(RandomInfo *random_info)
 %                                                                             %
 %                                                                             %
 %                                                                             %
++   R a n d o m C o m p o n e n t G e n e s i s                               %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  RandomComponentGenesis() instantiates the random component.
+%
+%  The format of the RandomComponentGenesis method is:
+%
+%      MagickBooleanType RandomComponentGenesis(void)
+%
+*/
+MagickExport MagickBooleanType RandomComponentGenesis(void)
+{
+  AcquireSemaphoreInfo(&random_semaphore);
+  return(MagickTrue);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
++   R a n d o m C o m p o n e n t T e r m i n u s                             %
+%                                                                             %
+%                                                                             %
+%                                                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%  RandomComponentTerminus() destroys the random component.
+%
+%  The format of the RandomComponentTerminus method is:
+%
+%      RandomComponentTerminus(void)
+%
+*/
+MagickExport void RandomComponentTerminus(void)
+{
+  if (random_semaphore == (SemaphoreInfo *) NULL)
+    AcquireSemaphoreInfo(&random_semaphore);
+  DestroySemaphoreInfo(&random_semaphore);
+}
+
+/*
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                                                             %
+%                                                                             %
+%                                                                             %
 %   S e e d P s e u d o R a n d o m G e n e r a t o r                         %
 %                                                                             %
 %                                                                             %
@@ -754,14 +791,14 @@ MagickExport void SeedPseudoRandomGenerator(const unsigned long seed)
 
 static inline void IncrementRandomNonce(StringInfo *nonce)
 {
-  register long
+  register ssize_t
     i;
 
   unsigned char
     *datum;
 
   datum=GetStringInfoDatum(nonce);
-  for (i=(long) (GetStringInfoLength(nonce)-1); i != 0; i--)
+  for (i=(ssize_t) (GetStringInfoLength(nonce)-1); i != 0; i--)
   {
     datum[i]++;
     if (datum[i] != 0)
@@ -788,7 +825,7 @@ MagickExport void SetRandomKey(RandomInfo *random_info,const size_t length,
   assert(random_info != (RandomInfo *) NULL);
   if (length == 0)
     return;
-  (void) LockSemaphoreInfo(random_info->semaphore);
+  LockSemaphoreInfo(random_info->semaphore);
   signature_info=random_info->signature_info;
   datum=GetStringInfoDatum(random_info->reservoir);
   i=length;
@@ -822,7 +859,7 @@ MagickExport void SetRandomKey(RandomInfo *random_info,const size_t length,
       while (i-- != 0)
         p[i]=datum[i];
     }
-  (void) UnlockSemaphoreInfo(random_info->semaphore);
+  UnlockSemaphoreInfo(random_info->semaphore);
 }
 
 /*

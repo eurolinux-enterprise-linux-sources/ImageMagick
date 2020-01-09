@@ -17,7 +17,7 @@
 %                              January 1993                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -131,8 +131,8 @@ MagickExport MagickBooleanType ContinueTimer(TimerInfo *time_info)
   if (time_info->state == StoppedTimerState)
     {
       time_info->user.total-=time_info->user.stop-time_info->user.start;
-      time_info->elapsed.total-=
-        time_info->elapsed.stop-time_info->elapsed.start;
+      time_info->elapsed.total-=time_info->elapsed.stop-
+        time_info->elapsed.start;
     }
   time_info->state=RunningTimerState;
   return(MagickTrue);
@@ -194,9 +194,9 @@ static double ElapsedTime(void)
   struct tms
     timer;
 
-  return((double) (times(&timer)/CLK_TCK));
+  return((double) times(&timer)/CLK_TCK);
 #else
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
   return(NTElapsedTime());
 #else
   return((double) clock()/CLK_TCK);
@@ -415,10 +415,10 @@ static void StopTimer(TimerInfo *time_info)
   time_info->user.stop=UserTime();
   if (time_info->state == RunningTimerState)
     {
-      time_info->user.total+=
-        time_info->user.stop-time_info->user.start+MagickEpsilon;
-      time_info->elapsed.total+=
-        time_info->elapsed.stop-time_info->elapsed.start+MagickEpsilon;
+      time_info->user.total+=time_info->user.stop-
+        time_info->user.start+MagickEpsilon;
+      time_info->elapsed.total+=time_info->elapsed.stop-
+        time_info->elapsed.start+MagickEpsilon;
     }
   time_info->state=StoppedTimerState;
 }
@@ -451,7 +451,7 @@ static double UserTime(void)
   (void) times(&timer);
   return((double) (timer.tms_utime+timer.tms_stime)/CLK_TCK);
 #else
-#if defined(__WINDOWS__)
+#if defined(MAGICKCORE_WINDOWS_SUPPORT)
   return(NTUserTime());
 #else
   return((double) clock()/CLK_TCK);

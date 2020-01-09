@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -107,7 +107,7 @@ static Image *ReadLABELImage(const ImageInfo *image_info,
   TypeMetric
     metrics;
 
-  unsigned long
+  size_t
     height,
     width;
 
@@ -138,22 +138,23 @@ static Image *ReadLABELImage(const ImageInfo *image_info,
       status=GetMultilineTypeMetrics(image,draw_info,&metrics);
       for ( ; status != MagickFalse; draw_info->pointsize*=2.0)
       {
-        width=(unsigned long) (metrics.width+draw_info->stroke_width+0.5);
-        height=(unsigned long) (metrics.height+draw_info->stroke_width+0.5);
-        if (((image->columns != 0) && (width > (image->columns+1))) ||
-            ((image->rows != 0) && (height > (image->rows+1))))
+        width=(size_t) floor(metrics.width+draw_info->stroke_width+0.5);
+        height=(size_t) floor(metrics.height+draw_info->stroke_width+0.5);
+        if (((image->columns != 0) && (width >= image->columns)) ||
+            ((image->rows != 0) && (height >= image->rows)))
           break;
         status=GetMultilineTypeMetrics(image,draw_info,&metrics);
       }
+      draw_info->pointsize/=2.0;
       for ( ; status != MagickFalse; draw_info->pointsize--)
       {
-        width=(unsigned long) (metrics.width+draw_info->stroke_width+0.5);
-        height=(unsigned long) (metrics.height+draw_info->stroke_width+0.5);
-        if ((image->columns != 0) && (width <= (image->columns+1)) &&
-           ((image->rows == 0) || (height <= (image->rows+1))))
+        width=(size_t) floor(metrics.width+draw_info->stroke_width+0.5);
+        height=(size_t) floor(metrics.height+draw_info->stroke_width+0.5);
+        if ((image->columns != 0) && (width < image->columns) &&
+           ((image->rows == 0) || (height < image->rows)))
           break;
-        if ((image->rows != 0) && (height <= (image->rows+1)) &&
-           ((image->columns == 0) || (width <= (image->columns+1))))
+        if ((image->rows != 0) && (height < image->rows) &&
+           ((image->columns == 0) || (width < image->columns)))
           break;
         if (draw_info->pointsize < 2.0)
           break;
@@ -168,24 +169,42 @@ static Image *ReadLABELImage(const ImageInfo *image_info,
       return((Image *) NULL);
     }
   if (image->columns == 0)
-    image->columns=(unsigned long) (metrics.width+draw_info->stroke_width+1.5);
+    image->columns=(size_t) (metrics.width+draw_info->stroke_width+1.5);
   if (image->columns == 0)
-    image->columns=(unsigned long) (draw_info->pointsize+
-      draw_info->stroke_width+1.5);
-  if (draw_info->gravity == UndefinedGravity)
+    image->columns=(size_t) (draw_info->pointsize+draw_info->stroke_width+1.5);
+  if ((draw_info->gravity == UndefinedGravity) ||
+      (draw_info->direction == RightToLeftDirection))
     {
-      (void) FormatMagickString(geometry,MaxTextExtent,"%+g%+g",
+      (void) FormatLocaleString(geometry,MaxTextExtent,"%+g%+g",
         -metrics.bounds.x1+draw_info->stroke_width/2.0,metrics.ascent+
         draw_info->stroke_width/2.0);
+      if (draw_info->direction == RightToLeftDirection)
+        (void) FormatLocaleString(geometry,MaxTextExtent,"%+g%+g",
+          image->columns-(metrics.bounds.x2+draw_info->stroke_width/2.0),
+          metrics.ascent+draw_info->stroke_width/2.0);
       draw_info->geometry=AcquireString(geometry);
     }
   if (image->rows == 0)
-    image->rows=(unsigned long) (metrics.height+draw_info->stroke_width+0.5);
+    image->rows=(size_t) floor(metrics.height+draw_info->stroke_width+0.5);
   if (image->rows == 0)
-    image->rows=(unsigned long) (draw_info->pointsize+draw_info->stroke_width+
+    image->rows=(size_t) floor(draw_info->pointsize+draw_info->stroke_width+
       0.5);
-  (void) SetImageBackgroundColor(image);
+  if (SetImageBackgroundColor(image) == MagickFalse)
+    {
+      InheritException(exception,&image->exception);
+      image=DestroyImageList(image);
+      return((Image *) NULL);
+    }
   (void) AnnotateImage(image,draw_info);
+  if (image_info->pointsize == 0.0)
+    {
+      char
+        pointsize[MaxTextExtent];
+
+      (void) FormatLocaleString(pointsize,MaxTextExtent,"%.20g",
+        draw_info->pointsize);
+      (void) SetImageProperty(image,"label:pointsize",pointsize);
+    }
   draw_info=DestroyDrawInfo(draw_info);
   return(GetFirstImageInList(image));
 }
@@ -210,10 +229,10 @@ static Image *ReadLABELImage(const ImageInfo *image_info,
 %
 %  The format of the RegisterLABELImage method is:
 %
-%      unsigned long RegisterLABELImage(void)
+%      size_t RegisterLABELImage(void)
 %
 */
-ModuleExport unsigned long RegisterLABELImage(void)
+ModuleExport size_t RegisterLABELImage(void)
 {
   MagickInfo
     *entry;
@@ -221,7 +240,7 @@ ModuleExport unsigned long RegisterLABELImage(void)
   entry=SetMagickInfo("LABEL");
   entry->decoder=(DecodeImageHandler *) ReadLABELImage;
   entry->adjoin=MagickFalse;
-  entry->format_type=ExplicitFormatType;
+  entry->format_type=ImplicitFormatType;
   entry->description=ConstantString("Image label");
   entry->module=ConstantString("LABEL");
   (void) RegisterMagickInfo(entry);

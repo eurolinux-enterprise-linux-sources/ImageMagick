@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -42,7 +42,9 @@
 #include "magick/studio.h"
 #include "magick/blob.h"
 #include "magick/blob-private.h"
+#include "magick/colormap.h"
 #include "magick/colorspace.h"
+#include "magick/colorspace-private.h"
 #include "magick/exception.h"
 #include "magick/exception-private.h"
 #include "magick/compress.h"
@@ -205,10 +207,10 @@ static Image *ReadFAXImage(const ImageInfo *image_info,ExceptionInfo *exception)
 %
 %  The format of the RegisterFAXImage method is:
 %
-%      unsigned long RegisterFAXImage(void)
+%      size_t RegisterFAXImage(void)
 %
 */
-ModuleExport unsigned long RegisterFAXImage(void)
+ModuleExport size_t RegisterFAXImage(void)
 {
   MagickInfo
     *entry;
@@ -216,10 +218,10 @@ ModuleExport unsigned long RegisterFAXImage(void)
   static const char
     *Note=
     {
-      "FAX machines use non-square pixels which are 1.5 times wider than they\n"
-      "are tall but computer displays use square pixels, therefore FAX images\n"
-      "may appear to be narrow unless they are explicitly resized using a\n"
-      "geometry of \"150x100%\".\n"
+      "FAX machines use non-square pixels which are 1.5 times wider than\n"
+      "they are tall but computer displays use square pixels, therefore\n"
+      "FAX images may appear to be narrow unless they are explicitly\n"
+      "resized using a geometry of \"150x100%\".\n"
     };
 
   entry=SetMagickInfo("FAX");
@@ -322,7 +324,7 @@ static MagickBooleanType WriteFAXImage(const ImageInfo *image_info,Image *image)
     /*
       Convert MIFF to monochrome.
     */
-    if (image->colorspace != RGBColorspace)
+    if (IsRGBColorspace(image->colorspace) == MagickFalse)
       (void) TransformImageColorspace(image,RGBColorspace);
     status=HuffmanEncodeImage(write_info,image,image);
     if (GetNextImageInList(image) == (Image *) NULL)

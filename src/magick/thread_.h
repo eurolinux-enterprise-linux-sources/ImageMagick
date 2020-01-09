@@ -1,5 +1,5 @@
 /*
-  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
   dedicated to making software imaging solutions freely available.
 
   You may not use this file except in compliance with the License.
@@ -22,20 +22,20 @@
 extern "C" {
 #endif
 
-#if defined(MAGICKCORE_HAVE_PTHREAD)
+#if defined(MAGICKCORE_THREAD_SUPPORT)
 typedef pthread_t MagickThreadType;
-#elif defined(MAGICKORE_HAVE_WINTHREADS)
+#elif defined(MAGICKCORE_HAVE_WINTHREADS)
 typedef DWORD MagickThreadType;
 #else
 typedef pid_t MagickThreadType;
 #endif
 
-#if defined(MAGICKCORE_HAVE_PTHREAD)
+#if defined(MAGICKCORE_THREAD_SUPPORT)
 typedef pthread_key_t MagickThreadKey;
-#elif defined(MAGICKORE_HAVE_WINTHREADS)
+#elif defined(MAGICKCORE_HAVE_WINTHREADS)
 typedef DWORD MagickThreadKey;
 #else
-typedef unsigned long *MagickThreadKey;
+typedef size_t *MagickThreadKey;
 #endif
 
 extern MagickExport MagickBooleanType

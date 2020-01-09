@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -109,17 +109,17 @@ static inline void PlasmaPixel(Image *image,RandomInfo *random_info,double x,
     *q;
 
   exception=(&image->exception);
-  q=GetAuthenticPixels(image,(long) ceil(x-0.5),(long) ceil(y-0.5),1,1,
+  q=GetAuthenticPixels(image,(ssize_t) ceil(x-0.5),(ssize_t) ceil(y-0.5),1,1,
     exception);
   if (q == (PixelPacket *) NULL)
     return;
   range=GetQuantumRange(16UL);
-  q->red=ScaleAnyToQuantum((unsigned long) (65535.0*
-    GetPseudoRandomValue(random_info)+0.5),range);
-  q->green=ScaleAnyToQuantum((unsigned long) (65535.0*
-    GetPseudoRandomValue(random_info)+0.5),range);
-  q->blue=ScaleAnyToQuantum((unsigned long) (65535.0*
-    GetPseudoRandomValue(random_info)+0.5),range);
+  SetPixelRed(q,ScaleAnyToQuantum((size_t) (65535.0*
+    GetPseudoRandomValue(random_info)+0.5),range));
+  SetPixelGreen(q,ScaleAnyToQuantum((size_t) (65535.0*
+    GetPseudoRandomValue(random_info)+0.5),range));
+  SetPixelBlue(q,ScaleAnyToQuantum((size_t) (65535.0*
+    GetPseudoRandomValue(random_info)+0.5),range));
   (void) SyncAuthenticPixels(image,exception);
 }
 
@@ -132,48 +132,48 @@ static Image *ReadPlasmaImage(const ImageInfo *image_info,
   ImageInfo
     *read_info;
 
-  long
-    y;
-
   MagickBooleanType
     status;
 
-  register long
+  register ssize_t
     x;
 
   register PixelPacket
     *q;
 
-  register unsigned long
+  register size_t
     i;
 
   SegmentInfo
     segment_info;
 
-  unsigned long
+  size_t
     depth,
     max_depth;
+
+  ssize_t
+    y;
 
   /*
     Recursively apply plasma to the image.
   */
   read_info=CloneImageInfo(image_info);
   SetImageInfoBlob(read_info,(void *) NULL,0);
-  (void) FormatMagickString(read_info->filename,MaxTextExtent,
+  (void) FormatLocaleString(read_info->filename,MaxTextExtent,
     "gradient:%s",image_info->filename);
   image=ReadImage(read_info,exception);
   read_info=DestroyImageInfo(read_info);
   if (image == (Image *) NULL)
     return((Image *) NULL);
   image->storage_class=DirectClass;
-  for (y=0; y < (long) image->rows; y++)
+  for (y=0; y < (ssize_t) image->rows; y++)
   {
     q=GetAuthenticPixels(image,0,y,image->columns,1,exception);
     if (q == (PixelPacket *) NULL)
       break;
-    for (x=0; x < (long) image->columns; x++)
+    for (x=0; x < (ssize_t) image->columns; x++)
     {
-      q->opacity=(Quantum) (QuantumRange/2);
+      SetPixelOpacity(q,QuantumRange/2);
       q++;
     }
     if (SyncAuthenticPixels(image,exception) == MagickFalse)
@@ -208,7 +208,7 @@ static Image *ReadPlasmaImage(const ImageInfo *image_info,
       PlasmaPixel(image,random_info,segment_info.x2,segment_info.y2);
       random_info=DestroyRandomInfo(random_info);
     }
-  i=(unsigned long) MagickMax(image->columns,image->rows)/2;
+  i=(size_t) MagickMax(image->columns,image->rows)/2;
   for (max_depth=0; i != 0; max_depth++)
     i>>=1;
   for (depth=1; ; depth++)
@@ -244,10 +244,10 @@ static Image *ReadPlasmaImage(const ImageInfo *image_info,
 %
 %  The format of the RegisterPLASMAImage method is:
 %
-%      unsigned long RegisterPLASMAImage(void)
+%      size_t RegisterPLASMAImage(void)
 %
 */
-ModuleExport unsigned long RegisterPLASMAImage(void)
+ModuleExport size_t RegisterPLASMAImage(void)
 {
   MagickInfo
     *entry;
@@ -255,14 +255,14 @@ ModuleExport unsigned long RegisterPLASMAImage(void)
   entry=SetMagickInfo("PLASMA");
   entry->decoder=(DecodeImageHandler *) ReadPlasmaImage;
   entry->adjoin=MagickFalse;
-  entry->format_type=ExplicitFormatType;
+  entry->format_type=ImplicitFormatType;
   entry->description=ConstantString("Plasma fractal image");
   entry->module=ConstantString("PLASMA");
   (void) RegisterMagickInfo(entry);
   entry=SetMagickInfo("FRACTAL");
   entry->decoder=(DecodeImageHandler *) ReadPlasmaImage;
   entry->adjoin=MagickFalse;
-  entry->format_type=ExplicitFormatType;
+  entry->format_type=ImplicitFormatType;
   entry->description=ConstantString("Plasma fractal image");
   entry->module=ConstantString("PLASMA");
   (void) RegisterMagickInfo(entry);

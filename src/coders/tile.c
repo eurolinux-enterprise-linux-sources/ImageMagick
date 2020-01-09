@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -74,7 +74,8 @@
 %
 %  The format of the ReadTILEImage method is:
 %
-%      Image *ReadTILEImage(const ImageInfo *image_info,ExceptionInfo *exception)
+%      Image *ReadTILEImage(const ImageInfo *image_info,
+%        ExceptionInfo *exception)
 %
 %  A description of each parameter follows:
 %
@@ -115,8 +116,9 @@ static Image *ReadTILEImage(const ImageInfo *image_info,
     ThrowReaderException(OptionError,"MustSpecifyImageSize");
   if (*image_info->filename == '\0')
     ThrowReaderException(OptionError,"MustSpecifyAnImageName");
-  (void) SetImageBackgroundColor(image);
   image->matte=tile_image->matte;
+  if (image->matte != MagickFalse)
+    (void) SetImageBackgroundColor(image);
   (void) CopyMagickString(image->filename,image_info->filename,MaxTextExtent);
   if (LocaleCompare(tile_image->magick,"PATTERN") == 0)
     {
@@ -148,10 +150,10 @@ static Image *ReadTILEImage(const ImageInfo *image_info,
 %
 %  The format of the RegisterTILEImage method is:
 %
-%      unsigned long RegisterTILEImage(void)
+%      size_t RegisterTILEImage(void)
 %
 */
-ModuleExport unsigned long RegisterTILEImage(void)
+ModuleExport size_t RegisterTILEImage(void)
 {
   MagickInfo
     *entry;
@@ -160,7 +162,7 @@ ModuleExport unsigned long RegisterTILEImage(void)
   entry->decoder=(DecodeImageHandler *) ReadTILEImage;
   entry->raw=MagickTrue;
   entry->endian_support=MagickTrue;
-  entry->format_type=ExplicitFormatType;
+  entry->format_type=ImplicitFormatType;
   entry->description=ConstantString("Tile image with a texture");
   entry->module=ConstantString("TILE");
   (void) RegisterMagickInfo(entry);

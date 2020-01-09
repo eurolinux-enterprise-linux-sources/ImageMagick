@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -44,6 +44,7 @@
 #include "magick/blob-private.h"
 #include "magick/cache.h"
 #include "magick/colorspace.h"
+#include "magick/colorspace-private.h"
 #include "magick/exception.h"
 #include "magick/exception-private.h"
 #include "magick/image.h"
@@ -95,33 +96,29 @@ static Image *ReadAVSImage(const ImageInfo *image_info,ExceptionInfo *exception)
   Image
     *image;
 
-  long
-    y;
-
   MagickBooleanType
     status;
-
-  register long
-    x;
 
   register PixelPacket
     *q;
 
+  register ssize_t
+    x;
+
   register unsigned char
     *p;
 
-  ssize_t
-    count;
-
   size_t
-    length;
+    height,
+    length,
+    width;
+
+  ssize_t
+    count,
+    y;
 
   unsigned char
     *pixels;
-
-  unsigned long
-    height,
-    width;
 
   /*
     Open image file.
@@ -165,7 +162,7 @@ static Image *ReadAVSImage(const ImageInfo *image_info,ExceptionInfo *exception)
     if (pixels == (unsigned char *) NULL) 
       ThrowReaderException(ResourceLimitError,"MemoryAllocationFailed");
     length=(size_t) 4*image->columns;
-    for (y=0; y < (long) image->rows; y++)
+    for (y=0; y < (ssize_t) image->rows; y++)
     {
       count=ReadBlob(image,length,pixels);
       if ((size_t) count != length)
@@ -174,21 +171,25 @@ static Image *ReadAVSImage(const ImageInfo *image_info,ExceptionInfo *exception)
       q=QueueAuthenticPixels(image,0,y,image->columns,1,exception);
       if (q == (PixelPacket *) NULL)
         break;
-      for (x=0; x < (long) image->columns; x++)
+      for (x=0; x < (ssize_t) image->columns; x++)
       {
-        q->opacity=(Quantum) (QuantumRange-ScaleCharToQuantum(*p++));
-        q->red=ScaleCharToQuantum(*p++);
-        q->green=ScaleCharToQuantum(*p++);
-        q->blue=ScaleCharToQuantum(*p++);
+        SetPixelAlpha(q,ScaleCharToQuantum(*p++));
+        SetPixelRed(q,ScaleCharToQuantum(*p++));
+        SetPixelGreen(q,ScaleCharToQuantum(*p++));
+        SetPixelBlue(q,ScaleCharToQuantum(*p++));
         if (q->opacity != OpaqueOpacity)
           image->matte=MagickTrue;
         q++;
       }
       if (SyncAuthenticPixels(image,exception) == MagickFalse)
         break;
-      if ((image->previous == (Image *) NULL) &&
-          (SetImageProgress(image,LoadImageTag,y,image->rows) == MagickFalse))
-        break;
+      if (image->previous == (Image *) NULL)
+        {
+          status=SetImageProgress(image,LoadImageTag,(MagickOffsetType) y,
+            image->rows);
+          if (status == MagickFalse)
+            break;
+        }
     }
     pixels=(unsigned char *) RelinquishMagickMemory(pixels);
     if (EOFBlob(image) != MagickFalse)
@@ -246,10 +247,10 @@ static Image *ReadAVSImage(const ImageInfo *image_info,ExceptionInfo *exception)
 %
 %  The format of the RegisterAVSImage method is:
 %
-%      unsigned long RegisterAVSImage(void)
+%      size_t RegisterAVSImage(void)
 %
 */
-ModuleExport unsigned long RegisterAVSImage(void)
+ModuleExport size_t RegisterAVSImage(void)
 {
   MagickInfo
     *entry;
@@ -320,17 +321,17 @@ static MagickBooleanType WriteAVSImage(const ImageInfo *image_info,Image *image)
     scene;
 
   register const PixelPacket
-    *p;
+    *restrict p;
 
-  register long
-    x,
-    y;
+  register ssize_t
+    x;
 
   register unsigned char
-    *q;
+    *restrict q;
 
   ssize_t
-    count;
+    count,
+    y;
 
   unsigned char
     *pixels;
@@ -353,7 +354,7 @@ static MagickBooleanType WriteAVSImage(const ImageInfo *image_info,Image *image)
     /*
       Write AVS header.
     */
-    if (image->colorspace != RGBColorspace)
+    if (IsRGBColorspace(image->colorspace) == MagickFalse)
       (void) TransformImageColorspace(image,RGBColorspace);
     (void) WriteBlobMSBLong(image,(unsigned int) image->columns);
     (void) WriteBlobMSBLong(image,(unsigned int) image->rows);
@@ -367,27 +368,31 @@ static MagickBooleanType WriteAVSImage(const ImageInfo *image_info,Image *image)
     /*
       Convert MIFF to AVS raster pixels.
     */
-    for (y=0; y < (long) image->rows; y++)
+    for (y=0; y < (ssize_t) image->rows; y++)
     {
       p=GetVirtualPixels(image,0,y,image->columns,1,&image->exception);
       if (p == (PixelPacket *) NULL)
         break;
       q=pixels;
-      for (x=0; x < (long) image->columns; x++)
+      for (x=0; x < (ssize_t) image->columns; x++)
       {
-        *q++=ScaleQuantumToChar((Quantum) (QuantumRange-
-          (image->matte != MagickFalse ? p->opacity : OpaqueOpacity)));
-        *q++=ScaleQuantumToChar(p->red);
-        *q++=ScaleQuantumToChar(p->green);
-        *q++=ScaleQuantumToChar(p->blue);
+        *q++=ScaleQuantumToChar((Quantum) (QuantumRange-(image->matte !=
+          MagickFalse ? GetPixelOpacity(p) : OpaqueOpacity)));
+        *q++=ScaleQuantumToChar(GetPixelRed(p));
+        *q++=ScaleQuantumToChar(GetPixelGreen(p));
+        *q++=ScaleQuantumToChar(GetPixelBlue(p));
         p++;
       }
       count=WriteBlob(image,(size_t) (q-pixels),pixels);
       if (count != (ssize_t) (q-pixels))
         break;
-      if ((image->previous == (Image *) NULL) &&
-          (SetImageProgress(image,SaveImageTag,y,image->rows) == MagickFalse))
-        break;
+      if (image->previous == (Image *) NULL)
+        {
+          status=SetImageProgress(image,SaveImageTag,(MagickOffsetType) y,
+            image->rows);
+          if (status == MagickFalse)
+            break;
+        }
     }
     pixels=(unsigned char *) RelinquishMagickMemory(pixels);
     if (GetNextImageInList(image) == (Image *) NULL)

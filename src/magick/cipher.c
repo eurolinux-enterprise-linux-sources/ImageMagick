@@ -16,7 +16,7 @@
 %                               March  2003                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -78,11 +78,11 @@ typedef struct _AESInfo
     *encipher_key,
     *decipher_key;
 
-  long
+  ssize_t
     rounds,
     timestamp;
 
-  unsigned long
+  size_t
     signature;
 } AESInfo;
 
@@ -204,7 +204,7 @@ static AESInfo *AcquireAESInfo(void)
       (aes_info->encipher_key == (unsigned int *) NULL) ||
       (aes_info->decipher_key == (unsigned int *) NULL))
     ThrowFatalException(ResourceLimitFatalError,"MemoryAllocationFailed");
-  aes_info->timestamp=(long) time(0);
+  aes_info->timestamp=(ssize_t) time(0);
   aes_info->signature=MagickSignature;
   return(aes_info);
 }
@@ -281,7 +281,7 @@ static AESInfo *DestroyAESInfo(AESInfo *aes_info)
 static inline void AddRoundKey(const unsigned int *ciphertext,
   const unsigned int *key,unsigned int *plaintext)
 {
-  register long
+  register ssize_t
     i;
 
   /*
@@ -380,7 +380,7 @@ static inline unsigned int RotateLeft(const unsigned int x)
 static void EncipherAESBlock(AESInfo *aes_info,const unsigned char *plaintext,
   unsigned char *ciphertext)
 {
-  register long
+  register ssize_t
     i,
     j;
 
@@ -553,14 +553,11 @@ MagickExport MagickBooleanType PasskeyDecipherImage(Image *image,
   AESInfo
     *aes_info;
 
+  CacheView
+    *image_view;
+
   const unsigned char
     *digest;
-
-  IndexPacket
-    *indexes;
-
-  long
-    y;
 
   MagickBooleanType
     proceed;
@@ -580,6 +577,9 @@ MagickExport MagickBooleanType PasskeyDecipherImage(Image *image,
   size_t
     length;
 
+  ssize_t
+    y;
+
   StringInfo
     *key,
     *nonce;
@@ -588,9 +588,6 @@ MagickExport MagickBooleanType PasskeyDecipherImage(Image *image,
     input_block[AESBlocksize],
     output_block[AESBlocksize],
     *pixels;
-
-  CacheView
-    *image_view;
 
   /*
     Generate decipher key and nonce.
@@ -645,22 +642,21 @@ MagickExport MagickBooleanType PasskeyDecipherImage(Image *image,
   quantum_type=GetQuantumType(image,exception);
   pixels=GetQuantumPixels(quantum_info);
   image_view=AcquireCacheView(image);
-  for (y=0; y < (long) image->rows; y++)
+  for (y=0; y < (ssize_t) image->rows; y++)
   {
-    register long
+    register ssize_t
       x;
 
     register PixelPacket
-      *__restrict q;
+      *restrict q;
 
     q=GetCacheViewAuthenticPixels(image_view,0,y,image->columns,1,exception);
     if (q == (PixelPacket *) NULL)
       break;
-    indexes=GetCacheViewAuthenticIndexQueue(image_view);
     length=ExportQuantumPixels(image,image_view,quantum_info,quantum_type,
       pixels,exception);
     p=pixels;
-    for (x=0; x < (long) length; x++)
+    for (x=0; x < (ssize_t) length; x++)
     {
       (void) CopyMagickMemory(output_block,input_block,AESBlocksize*
         sizeof(*output_block));
@@ -674,7 +670,8 @@ MagickExport MagickBooleanType PasskeyDecipherImage(Image *image,
       pixels,exception);
     if (SyncCacheViewAuthenticPixels(image_view,exception) == MagickFalse)
       break;
-    proceed=SetImageProgress(image,DecipherImageTag,y,image->rows);
+    proceed=SetImageProgress(image,DecipherImageTag,(MagickOffsetType) y,
+      image->rows);
     if (proceed == MagickFalse)
       break;
   }
@@ -690,7 +687,7 @@ MagickExport MagickBooleanType PasskeyDecipherImage(Image *image,
   aes_info=DestroyAESInfo(aes_info);
   (void) ResetMagickMemory(input_block,0,sizeof(input_block));
   (void) ResetMagickMemory(output_block,0,sizeof(output_block));
-  return(y == (long) image->rows ? MagickTrue : MagickFalse);
+  return(y == (ssize_t) image->rows ? MagickTrue : MagickFalse);
 }
 
 /*
@@ -752,17 +749,14 @@ MagickExport MagickBooleanType PasskeyEncipherImage(Image *image,
   AESInfo
     *aes_info;
 
+  CacheView
+    *image_view;
+
   char
     *signature;
 
   const unsigned char
     *digest;
-
-  IndexPacket
-    *indexes;
-
-  long
-    y;
 
   MagickBooleanType
     proceed;
@@ -782,6 +776,9 @@ MagickExport MagickBooleanType PasskeyEncipherImage(Image *image,
   size_t
     length;
 
+  ssize_t
+    y;
+
   StringInfo
     *key,
     *nonce;
@@ -790,9 +787,6 @@ MagickExport MagickBooleanType PasskeyEncipherImage(Image *image,
     input_block[AESBlocksize],
     output_block[AESBlocksize],
     *pixels;
-
-  CacheView
-    *image_view;
 
   /*
     Generate encipher key and nonce.
@@ -854,22 +848,21 @@ MagickExport MagickBooleanType PasskeyEncipherImage(Image *image,
   quantum_type=GetQuantumType(image,exception);
   pixels=GetQuantumPixels(quantum_info);
   image_view=AcquireCacheView(image);
-  for (y=0; y < (long) image->rows; y++)
+  for (y=0; y < (ssize_t) image->rows; y++)
   {
-    register long
+    register ssize_t
       x;
 
     register PixelPacket
-      *__restrict q;
+      *restrict q;
 
     q=GetCacheViewAuthenticPixels(image_view,0,y,image->columns,1,exception);
     if (q == (PixelPacket *) NULL)
       break;
-    indexes=GetCacheViewAuthenticIndexQueue(image_view);
     length=ExportQuantumPixels(image,image_view,quantum_info,quantum_type,
       pixels,exception);
     p=pixels;
-    for (x=0; x < (long) length; x++)
+    for (x=0; x < (ssize_t) length; x++)
     {
       (void) CopyMagickMemory(output_block,input_block,AESBlocksize*
         sizeof(*output_block));
@@ -883,7 +876,8 @@ MagickExport MagickBooleanType PasskeyEncipherImage(Image *image,
       pixels,exception);
     if (SyncCacheViewAuthenticPixels(image_view,exception) == MagickFalse)
       break;
-    proceed=SetImageProgress(image,EncipherImageTag,y,image->rows);
+    proceed=SetImageProgress(image,EncipherImageTag,(MagickOffsetType) y,
+      image->rows);
     if (proceed == MagickFalse)
       break;
   }
@@ -896,7 +890,7 @@ MagickExport MagickBooleanType PasskeyEncipherImage(Image *image,
   aes_info=DestroyAESInfo(aes_info);
   (void) ResetMagickMemory(input_block,0,sizeof(input_block));
   (void) ResetMagickMemory(output_block,0,sizeof(output_block));
-  return(y == (long) image->rows ? MagickTrue : MagickFalse);
+  return(y == (ssize_t) image->rows ? MagickTrue : MagickFalse);
 }
 
 /*
@@ -962,12 +956,12 @@ static inline unsigned int RotateRight(const unsigned int x)
 
 static void SetAESKey(AESInfo *aes_info,const StringInfo *key)
 {
-  long
+  register ssize_t
+    i;
+
+  ssize_t
     bytes,
     n;
-
-  register long
-    i;
 
   unsigned char
     *datum;

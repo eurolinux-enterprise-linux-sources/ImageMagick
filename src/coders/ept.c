@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -49,6 +49,7 @@
 #include "magick/exception-private.h"
 #include "magick/delegate.h"
 #include "magick/geometry.h"
+#include "magick/histogram.h"
 #include "magick/image.h"
 #include "magick/image-private.h"
 #include "magick/list.h"
@@ -70,7 +71,7 @@
 */
 typedef struct _EPTInfo
 {
-  unsigned long
+  size_t
     magick;
 
   MagickOffsetType
@@ -164,14 +165,14 @@ static Image *ReadEPTImage(const ImageInfo *image_info,ExceptionInfo *exception)
   ImageInfo
     *read_info;
 
-  ssize_t
-    count;
-
   MagickBooleanType
     status;
 
   MagickOffsetType
     offset;
+
+  ssize_t
+    count;
 
   /*
     Open image file.
@@ -201,25 +202,31 @@ static Image *ReadEPTImage(const ImageInfo *image_info,ExceptionInfo *exception)
   ept_info.tiff_length=ReadBlobLSBLong(image);
   (void) ReadBlobLSBShort(image);
   ept_info.postscript=(unsigned char *) AcquireQuantumMemory(
-    ept_info.postscript_length,sizeof(*ept_info.postscript));
+    ept_info.postscript_length+1,sizeof(*ept_info.postscript));
   if (ept_info.postscript == (unsigned char *) NULL)
     ThrowReaderException(ResourceLimitError,"MemoryAllocationFailed");
-  ept_info.tiff=(unsigned char *) AcquireQuantumMemory(ept_info.tiff_length,
+  (void) ResetMagickMemory(ept_info.postscript,0,(ept_info.postscript_length+1)*
+    sizeof(*ept_info.postscript));
+  ept_info.tiff=(unsigned char *) AcquireQuantumMemory(ept_info.tiff_length+1,
     sizeof(*ept_info.tiff));
-  if ((ept_info.tiff_length != 0) && (ept_info.tiff == (unsigned char *) NULL))
+  if (ept_info.tiff == (unsigned char *) NULL)
     ThrowReaderException(ResourceLimitError,"MemoryAllocationFailed");
+  (void) ResetMagickMemory(ept_info.tiff,0,(ept_info.tiff_length+1)*
+    sizeof(*ept_info.tiff));
   offset=SeekBlob(image,ept_info.tiff_offset,SEEK_SET);
   if (offset < 0)
     ThrowReaderException(CorruptImageError,"ImproperImageHeader");
   count=ReadBlob(image,ept_info.tiff_length,ept_info.tiff);
   if (count != (ssize_t) (ept_info.tiff_length))
-    ThrowReaderException(CorruptImageError,"InsufficientImageDataInFile");
+    (void) ThrowMagickException(exception,GetMagickModule(),CorruptImageWarning,
+      "InsufficientImageDataInFile","`%s'",image->filename);
   offset=SeekBlob(image,ept_info.postscript_offset,SEEK_SET);
   if (offset < 0)
     ThrowReaderException(CorruptImageError,"ImproperImageHeader");
   count=ReadBlob(image,ept_info.postscript_length,ept_info.postscript);
   if (count != (ssize_t) (ept_info.postscript_length))
-    ThrowReaderException(CorruptImageError,"InsufficientImageDataInFile");
+    (void) ThrowMagickException(exception,GetMagickModule(),CorruptImageWarning,
+      "InsufficientImageDataInFile","`%s'",image->filename);
   (void) CloseBlob(image);
   image=DestroyImage(image);
   read_info=CloneImageInfo(image_info);
@@ -260,10 +267,10 @@ static Image *ReadEPTImage(const ImageInfo *image_info,ExceptionInfo *exception)
 %
 %  The format of the RegisterEPTImage method is:
 %
-%      unsigned long RegisterEPTImage(void)
+%      size_t RegisterEPTImage(void)
 %
 */
-ModuleExport unsigned long RegisterEPTImage(void)
+ModuleExport size_t RegisterEPTImage(void)
 {
   MagickInfo
     *entry;
@@ -272,6 +279,7 @@ ModuleExport unsigned long RegisterEPTImage(void)
   entry->decoder=(DecodeImageHandler *) ReadEPTImage;
   entry->encoder=(EncodeImageHandler *) WriteEPTImage;
   entry->magick=(IsImageFormatHandler *) IsEPT;
+  entry->seekable_stream=MagickTrue;
   entry->adjoin=MagickFalse;
   entry->blob_support=MagickFalse;
   entry->description=ConstantString(
@@ -283,6 +291,7 @@ ModuleExport unsigned long RegisterEPTImage(void)
   entry->encoder=(EncodeImageHandler *) WriteEPTImage;
   entry->magick=(IsImageFormatHandler *) IsEPT;
   entry->adjoin=MagickFalse;
+  entry->seekable_stream=MagickTrue;
   entry->blob_support=MagickFalse;
   entry->description=ConstantString(
     "Encapsulated PostScript Level II with TIFF preview");
@@ -292,6 +301,7 @@ ModuleExport unsigned long RegisterEPTImage(void)
   entry->decoder=(DecodeImageHandler *) ReadEPTImage;
   entry->encoder=(EncodeImageHandler *) WriteEPTImage;
   entry->magick=(IsImageFormatHandler *) IsEPT;
+  entry->seekable_stream=MagickTrue;
   entry->blob_support=MagickFalse;
   entry->description=ConstantString(
     "Encapsulated PostScript Level III with TIFF preview");
@@ -351,6 +361,9 @@ ModuleExport void UnregisterEPTImage(void)
 */
 static MagickBooleanType WriteEPTImage(const ImageInfo *image_info,Image *image)
 {
+  char
+     filename[MaxTextExtent];
+
   EPTInfo
     ept_info;
 
@@ -397,8 +410,9 @@ static MagickBooleanType WriteEPTImage(const ImageInfo *image_info,Image *image)
     return(MagickFalse);
   write_info=CloneImageInfo(image_info);
   (void) CopyMagickString(write_info->magick,"TIFF",MaxTextExtent);
-  (void) FormatMagickString(write_info->filename,MaxTextExtent,"tiff:%.1024s",
+  (void) FormatLocaleString(filename,MaxTextExtent,"tiff:%s",
     write_info->filename); 
+  (void) CopyMagickString(write_info->filename,filename,MaxTextExtent);
   (void) TransformImage(&write_image,(char *) NULL,"512x512>");
   if ((write_image->storage_class == DirectClass) ||
       (write_image->colors > 256))
@@ -428,13 +442,13 @@ static MagickBooleanType WriteEPTImage(const ImageInfo *image_info,Image *image)
   /*
     Write EPT image.
   */
-  (void) WriteBlobLSBLong(image,ept_info.magick);
+  (void) WriteBlobLSBLong(image,(unsigned int) ept_info.magick);
   (void) WriteBlobLSBLong(image,30);
-  (void) WriteBlobLSBLong(image,(unsigned long) ept_info.postscript_length);
+  (void) WriteBlobLSBLong(image,(unsigned int) ept_info.postscript_length);
   (void) WriteBlobLSBLong(image,0);
   (void) WriteBlobLSBLong(image,0);
-  (void) WriteBlobLSBLong(image,(unsigned long) ept_info.postscript_length+30);
-  (void) WriteBlobLSBLong(image,(unsigned long) ept_info.tiff_length);
+  (void) WriteBlobLSBLong(image,(unsigned int) ept_info.postscript_length+30);
+  (void) WriteBlobLSBLong(image,(unsigned int) ept_info.tiff_length);
   (void) WriteBlobLSBShort(image,0xffff);
   (void) WriteBlob(image,ept_info.postscript_length,ept_info.postscript);
   (void) WriteBlob(image,ept_info.tiff_length,ept_info.tiff);

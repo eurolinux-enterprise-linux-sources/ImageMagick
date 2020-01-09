@@ -16,7 +16,7 @@
 %                               January 2006                                  %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -53,6 +53,7 @@
 #include "magick/memory_.h"
 #include "magick/monitor.h"
 #include "magick/monitor-private.h"
+#include "magick/option.h"
 #include "magick/pixel-private.h"
 #include "magick/property.h"
 #include "magick/profile.h"
@@ -97,7 +98,7 @@ static void ClearBounds(Image *image,RectangleInfo *bounds)
   ExceptionInfo
     *exception;
 
-  long
+  ssize_t
     y;
 
   if (bounds->x < 0)
@@ -105,18 +106,18 @@ static void ClearBounds(Image *image,RectangleInfo *bounds)
   if (image->matte == MagickFalse)
     (void) SetImageAlphaChannel(image,OpaqueAlphaChannel);
   exception=(&image->exception);
-  for (y=0; y < (long) bounds->height; y++)
+  for (y=0; y < (ssize_t) bounds->height; y++)
   {
-    register long
+    register ssize_t
       x;
 
     register PixelPacket
-      *__restrict q;
+      *restrict q;
 
     q=GetAuthenticPixels(image,bounds->x,bounds->y+y,bounds->width,1,exception);
     if (q == (PixelPacket *) NULL)
       break;
-    for (x=0; x < (long) bounds->width; x++)
+    for (x=0; x < (ssize_t) bounds->width; x++)
     {
       q->opacity=(Quantum) TransparentOpacity;
       q++;
@@ -163,19 +164,24 @@ static void ClearBounds(Image *image,RectangleInfo *bounds)
 static MagickBooleanType IsBoundsCleared(const Image *image1,
   const Image *image2,RectangleInfo *bounds,ExceptionInfo *exception)
 {
-  long
-    y;
-
-  register long
+  register ssize_t
     x;
 
   register const PixelPacket
     *p,
     *q;
 
+  ssize_t
+    y;
+
+#if 0
+  assert(image1->matte==MagickTrue);
+  assert(image2->matte==MagickTrue);
+#endif
+
   if ( bounds->x< 0 ) return(MagickFalse);
 
-  for (y=0; y < (long) bounds->height; y++)
+  for (y=0; y < (ssize_t) bounds->height; y++)
   {
     p=GetVirtualPixels(image1,bounds->x,bounds->y+y,bounds->width,1,
       exception);
@@ -183,18 +189,18 @@ static MagickBooleanType IsBoundsCleared(const Image *image1,
       exception);
     if ((p == (const PixelPacket *) NULL) || (q == (PixelPacket *) NULL))
       break;
-    for (x=0; x < (long) bounds->width; x++)
+    for (x=0; x < (ssize_t) bounds->width; x++)
     {
-      if ((p->opacity <= (long) (QuantumRange/2)) &&
-          (q->opacity > (long) (QuantumRange/2)))
+      if ((GetPixelOpacity(p) <= (Quantum) (QuantumRange/2)) &&
+          (q->opacity > (Quantum) (QuantumRange/2)))
         break;
       p++;
       q++;
     }
-    if (x < (long) bounds->width)
+    if (x < (ssize_t) bounds->width)
       break;
   }
-  return(y < (long) bounds->height ? MagickTrue : MagickFalse);
+  return(y < (ssize_t) bounds->height ? MagickTrue : MagickFalse);
 }
 
 /*
@@ -295,14 +301,14 @@ MagickExport Image *CoalesceImages(const Image *image,ExceptionInfo *exception)
         bounds.width+=bounds.x;
         bounds.x=0;
       }
-    if ((long) (bounds.x+bounds.width) > (long) coalesce_image->columns)
+    if ((ssize_t) (bounds.x+bounds.width) > (ssize_t) coalesce_image->columns)
       bounds.width=coalesce_image->columns-bounds.x;
     if (bounds.y < 0)
       {
         bounds.height+=bounds.y;
         bounds.y=0;
       }
-    if ((long) (bounds.y+bounds.height) > (long) coalesce_image->rows)
+    if ((ssize_t) (bounds.y+bounds.height) > (ssize_t) coalesce_image->rows)
       bounds.height=coalesce_image->rows-bounds.y;
     /*
       Replace the dispose image with the new coalesced image.
@@ -382,7 +388,10 @@ MagickExport Image *DisposeImages(const Image *image,ExceptionInfo *exception)
     *dispose_images;
 
   register Image
-    *next;
+    *curr;
+
+  RectangleInfo
+    bounds;
 
   /*
     Run the image through the animation sequence
@@ -393,19 +402,19 @@ MagickExport Image *DisposeImages(const Image *image,ExceptionInfo *exception)
     (void) LogMagickEvent(TraceEvent,GetMagickModule(),"%s",image->filename);
   assert(exception != (ExceptionInfo *) NULL);
   assert(exception->signature == MagickSignature);
-  next=GetFirstImageInList(image);
-  dispose_image=CloneImage(next,next->page.width,next->page.height,MagickTrue,
+  curr=GetFirstImageInList(image);
+  dispose_image=CloneImage(curr,curr->page.width,curr->page.height,MagickTrue,
     exception);
   if (dispose_image == (Image *) NULL)
     return((Image *) NULL);
-  dispose_image->page=next->page;
+  dispose_image->page=curr->page;
   dispose_image->page.x=0;
   dispose_image->page.y=0;
   dispose_image->dispose=NoneDispose;
   dispose_image->background_color.opacity=(Quantum) TransparentOpacity;
   (void) SetImageBackgroundColor(dispose_image);
   dispose_images=NewImageList();
-  for ( ; next != (Image *) NULL; next=GetNextImageInList(next))
+  for ( ; curr != (Image *) NULL; curr=GetNextImageInList(curr))
   {
     Image
       *current_image;
@@ -420,52 +429,51 @@ MagickExport Image *DisposeImages(const Image *image,ExceptionInfo *exception)
         dispose_image=DestroyImage(dispose_image);
         return((Image *) NULL);
       }
-    (void) CompositeImage(current_image,next->matte != MagickFalse ?
-      OverCompositeOp : CopyCompositeOp,next,next->page.x,next->page.y);
+    (void) CompositeImage(current_image,curr->matte != MagickFalse ?
+      OverCompositeOp : CopyCompositeOp,curr,curr->page.x,curr->page.y);
+
     /*
       Handle Background dispose: image is displayed for the delay period.
     */
-    if (next->dispose == BackgroundDispose)
+    if (curr->dispose == BackgroundDispose)
       {
-        RectangleInfo
-          bounds;
-
-        bounds=next->page;
-        bounds.width=next->columns;
-        bounds.height=next->rows;
+        bounds=curr->page;
+        bounds.width=curr->columns;
+        bounds.height=curr->rows;
         if (bounds.x < 0)
           {
             bounds.width+=bounds.x;
             bounds.x=0;
           }
-        if ((long) (bounds.x+bounds.width) > (long) current_image->columns)
+        if ((ssize_t) (bounds.x+bounds.width) > (ssize_t) current_image->columns)
           bounds.width=current_image->columns-bounds.x;
         if (bounds.y < 0)
           {
             bounds.height+=bounds.y;
             bounds.y=0;
           }
-        if ((long) (bounds.y+bounds.height) > (long) current_image->rows)
+        if ((ssize_t) (bounds.y+bounds.height) > (ssize_t) current_image->rows)
           bounds.height=current_image->rows-bounds.y;
         ClearBounds(current_image,&bounds);
       }
     /*
       Select the appropriate previous/disposed image.
     */
-    if (next->dispose == PreviousDispose)
+    if (curr->dispose == PreviousDispose)
       current_image=DestroyImage(current_image);
     else
       {
         dispose_image=DestroyImage(dispose_image);
         dispose_image=current_image;
+        current_image=(Image *)NULL;
       }
+    /*
+      Save the dispose image just calculated for return.
+    */
     {
       Image
         *dispose;
 
-      /*
-        Save the dispose image just calculated for return.
-      */
       dispose=CloneImage(dispose_image,0,0,MagickTrue,exception);
       if (dispose == (Image *) NULL)
         {
@@ -473,12 +481,12 @@ MagickExport Image *DisposeImages(const Image *image,ExceptionInfo *exception)
           dispose_image=DestroyImage(dispose_image);
           return((Image *) NULL);
         }
-      (void) CloneImageProfiles(dispose,next);
-      (void) CloneImageProperties(dispose,next);
-      (void) CloneImageArtifacts(dispose,next);
+      (void) CloneImageProfiles(dispose,curr);
+      (void) CloneImageProperties(dispose,curr);
+      (void) CloneImageArtifacts(dispose,curr);
       dispose->page.x=0;
       dispose->page.y=0;
-      dispose->dispose=next->dispose;
+      dispose->dispose=curr->dispose;
       AppendImageToList(&dispose_images,dispose);
     }
   }
@@ -528,9 +536,9 @@ static MagickBooleanType ComparePixels(const ImageLayerMethod method,
     Any change in pixel values
   */
   if (method == CompareAnyLayer)
-    return(IsMagickColorSimilar(p,q) == MagickFalse ? MagickTrue : MagickFalse);
+    return((MagickBooleanType)(IsMagickColorSimilar(p,q) == MagickFalse));
 
-  o1 = (p->matte != MagickFalse) ? p->opacity : OpaqueOpacity;
+  o1 = (p->matte != MagickFalse) ? GetPixelOpacity(p) : OpaqueOpacity;
   o2 = (q->matte != MagickFalse) ? q->opacity : OpaqueOpacity;
 
   /*
@@ -605,18 +613,24 @@ static RectangleInfo CompareImageBounds(const Image *image1,const Image *image2,
     *p,
     *q;
 
-  long
+  register ssize_t
+    x;
+
+  ssize_t
     y;
 
-  register long
-    x;
+#if 0
+  /* only same sized images can be compared */
+  assert(image1->columns == image2->columns);
+  assert(image1->rows == image2->rows);
+#endif
 
   /*
     Set bounding box of the differences between images
   */
   GetMagickPixelPacket(image1,&pixel1);
   GetMagickPixelPacket(image2,&pixel2);
-  for (x=0; x < (long) image1->columns; x++)
+  for (x=0; x < (ssize_t) image1->columns; x++)
   {
     p=GetVirtualPixels(image1,x,0,1,image1->rows,exception);
     q=GetVirtualPixels(image2,x,0,1,image2->rows,exception);
@@ -625,7 +639,7 @@ static RectangleInfo CompareImageBounds(const Image *image1,const Image *image2,
       break;
     indexes1=GetVirtualIndexQueue(image1);
     indexes2=GetVirtualIndexQueue(image2);
-    for (y=0; y < (long) image1->rows; y++)
+    for (y=0; y < (ssize_t) image1->rows; y++)
     {
       SetMagickPixelPacket(image1,p,indexes1+x,&pixel1);
       SetMagickPixelPacket(image2,q,indexes2+x,&pixel2);
@@ -634,10 +648,10 @@ static RectangleInfo CompareImageBounds(const Image *image1,const Image *image2,
       p++;
       q++;
     }
-    if (y < (long) image1->rows)
+    if (y < (ssize_t) image1->rows)
       break;
   }
-  if (x >= (long) image1->columns)
+  if (x >= (ssize_t) image1->columns)
     {
       /*
         Images are identical, return a null image.
@@ -649,7 +663,7 @@ static RectangleInfo CompareImageBounds(const Image *image1,const Image *image2,
       return(bounds);
     }
   bounds.x=x;
-  for (x=(long) image1->columns-1; x >= 0; x--)
+  for (x=(ssize_t) image1->columns-1; x >= 0; x--)
   {
     p=GetVirtualPixels(image1,x,0,1,image1->rows,exception);
     q=GetVirtualPixels(image2,x,0,1,image2->rows,exception);
@@ -658,7 +672,7 @@ static RectangleInfo CompareImageBounds(const Image *image1,const Image *image2,
       break;
     indexes1=GetVirtualIndexQueue(image1);
     indexes2=GetVirtualIndexQueue(image2);
-    for (y=0; y < (long) image1->rows; y++)
+    for (y=0; y < (ssize_t) image1->rows; y++)
     {
       SetMagickPixelPacket(image1,p,indexes1+x,&pixel1);
       SetMagickPixelPacket(image2,q,indexes2+x,&pixel2);
@@ -667,11 +681,11 @@ static RectangleInfo CompareImageBounds(const Image *image1,const Image *image2,
       p++;
       q++;
     }
-    if (y < (long) image1->rows)
+    if (y < (ssize_t) image1->rows)
       break;
   }
-  bounds.width=(unsigned long) (x-bounds.x+1);
-  for (y=0; y < (long) image1->rows; y++)
+  bounds.width=(size_t) (x-bounds.x+1);
+  for (y=0; y < (ssize_t) image1->rows; y++)
   {
     p=GetVirtualPixels(image1,0,y,image1->columns,1,exception);
     q=GetVirtualPixels(image2,0,y,image2->columns,1,exception);
@@ -680,7 +694,7 @@ static RectangleInfo CompareImageBounds(const Image *image1,const Image *image2,
       break;
     indexes1=GetVirtualIndexQueue(image1);
     indexes2=GetVirtualIndexQueue(image2);
-    for (x=0; x < (long) image1->columns; x++)
+    for (x=0; x < (ssize_t) image1->columns; x++)
     {
       SetMagickPixelPacket(image1,p,indexes1+x,&pixel1);
       SetMagickPixelPacket(image2,q,indexes2+x,&pixel2);
@@ -689,11 +703,11 @@ static RectangleInfo CompareImageBounds(const Image *image1,const Image *image2,
       p++;
       q++;
     }
-    if (x < (long) image1->columns)
+    if (x < (ssize_t) image1->columns)
       break;
   }
   bounds.y=y;
-  for (y=(long) image1->rows-1; y >= 0; y--)
+  for (y=(ssize_t) image1->rows-1; y >= 0; y--)
   {
     p=GetVirtualPixels(image1,0,y,image1->columns,1,exception);
     q=GetVirtualPixels(image2,0,y,image2->columns,1,exception);
@@ -702,7 +716,7 @@ static RectangleInfo CompareImageBounds(const Image *image1,const Image *image2,
       break;
     indexes1=GetVirtualIndexQueue(image1);
     indexes2=GetVirtualIndexQueue(image2);
-    for (x=0; x < (long) image1->columns; x++)
+    for (x=0; x < (ssize_t) image1->columns; x++)
     {
       SetMagickPixelPacket(image1,p,indexes1+x,&pixel1);
       SetMagickPixelPacket(image2,q,indexes2+x,&pixel2);
@@ -711,10 +725,10 @@ static RectangleInfo CompareImageBounds(const Image *image1,const Image *image2,
       p++;
       q++;
     }
-    if (x < (long) image1->columns)
+    if (x < (ssize_t) image1->columns)
       break;
   }
-  bounds.height=(unsigned long) (y-bounds.y+1);
+  bounds.height=(size_t) (y-bounds.y+1);
   return(bounds);
 }
 
@@ -770,7 +784,7 @@ MagickExport Image *CompareImageLayers(const Image *image,
   register const Image
     *next;
 
-  register long
+  register ssize_t
     i;
 
   assert(image != (const Image *) NULL);
@@ -910,16 +924,14 @@ MagickExport Image *DeconstructImages(const Image *images,
 %                                                                             %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-%  OptimizeLayerFrames() compares each image the GIF disposed forms of the
-%  previous image in the sequence.  From this it attempts to select the
-%  smallest cropped image to replace each frame, while preserving the results
-%  of the animation.
+%  OptimizeLayerFrames() takes a coalesced GIF animation, and compares each
+%  frame against the three different 'disposal' forms of the previous frame.
+%  From this it then attempts to select the smallest cropped image and
+%  disposal method needed to reproduce the resulting image.
 %
-%  Note that this not easy, and may require the expandsion of the bounds
-%  of previous frame, to clear pixels for the next animation frame,
-%  using GIF Background Dispose method.
-%
-%  Currently this only used internally, with external wrappers below.
+%  Note that this not easy, and may require the expansion of the bounds
+%  of previous frame, simply clear pixels for the next animation frame to
+%  transparency according to the selected dispose method.
 %
 %  The format of the OptimizeLayerFrames method is:
 %
@@ -930,22 +942,27 @@ MagickExport Image *DeconstructImages(const Image *images,
 %
 %    o image: the image.
 %
-%    o method: the layers type to optimize with. Must be one of...
-%             OptimizeImageLayer, or  OptimizePlusLayer
+%    o method: the layers technique to optimize with. Must be one of...
+%             OptimizeImageLayer, or  OptimizePlusLayer.  The Plus form allows
+%             the addition of extra 'zero delay' frames to clear pixels from
+%             the previous frame, and the removal of frames that done change,
+%             merging the delay times together.
 %
 %    o exception: return any errors or warnings in this structure.
 %
 */
 /*
-  Define a 'fake' dispose method where the frame is duplicated, with a
-  extra zero time delay frame which does a BackgroundDisposal to clear the
-  pixels that need to be cleared.
+  Define a 'fake' dispose method where the frame is duplicated, (for
+  OptimizePlusLayer) with a extra zero time delay frame which does a
+  BackgroundDisposal to clear the pixels that need to be cleared.
 */
 #define DupDispose  ((DisposeType)9)
 /*
   Another 'fake' dispose method used to removed frames that don't change.
 */
 #define DelDispose  ((DisposeType)8)
+
+#define DEBUG_OPT_FRAME 0
 
 static Image *OptimizeLayerFrames(const Image *image,
   const ImageLayerMethod method, ExceptionInfo *exception)
@@ -974,9 +991,9 @@ static Image *OptimizeLayerFrames(const Image *image,
     *disposals;
 
   register const Image
-    *next;
+    *curr;
 
-  register long
+  register ssize_t
     i;
 
   assert(image != (const Image *) NULL);
@@ -996,21 +1013,22 @@ static Image *OptimizeLayerFrames(const Image *image,
   /*
     Ensure  all the images are the same size
   */
-  next=GetFirstImageInList(image);
-  for (; next != (Image *) NULL; next=GetNextImageInList(next))
+  curr=GetFirstImageInList(image);
+  for (; curr != (Image *) NULL; curr=GetNextImageInList(curr))
   {
-    if ((next->columns != image->columns) || (next->rows != image->rows))
+    if ((curr->columns != image->columns) || (curr->rows != image->rows))
       ThrowImageException(OptionError,"ImagesAreNotTheSameSize");
     /*
-      FUTURE: also check they are fully coalesced (full page settings)
+      FUTURE: also check that image is also fully coalesced (full page)
+      Though as long as they are the same size it should not matter.
     */
   }
   /*
-    Allocate memory (times 2 if we allow frame additions)
+    Allocate memory (times 2 if we allow the use of frame duplications)
   */
-  next=GetFirstImageInList(image);
+  curr=GetFirstImageInList(image);
   bounds=(RectangleInfo *) AcquireQuantumMemory((size_t)
-    GetImageListLength(next),(add_frames != MagickFalse ? 2UL : 1UL)*
+    GetImageListLength(curr),(add_frames != MagickFalse ? 2UL : 1UL)*
     sizeof(*bounds));
   if (bounds == (RectangleInfo *) NULL)
     ThrowImageException(ResourceLimitError,"MemoryAllocationFailed");
@@ -1025,7 +1043,7 @@ static Image *OptimizeLayerFrames(const Image *image,
   /*
     Initialise Previous Image as fully transparent
   */
-  prev_image=CloneImage(next,next->page.width,next->page.height,
+  prev_image=CloneImage(curr,curr->page.width,curr->page.height,
     MagickTrue,exception);
   if (prev_image == (Image *) NULL)
     {
@@ -1033,7 +1051,7 @@ static Image *OptimizeLayerFrames(const Image *image,
       disposals=(DisposeType *) RelinquishMagickMemory(disposals);
       return((Image *) NULL);
     }
-  prev_image->page=next->page;  /* ERROR: <-- should not be need, but is! */
+  prev_image->page=curr->page;  /* ERROR: <-- should not be need, but is! */
   prev_image->page.x=0;
   prev_image->page.y=0;
   prev_image->dispose=NoneDispose;
@@ -1044,8 +1062,17 @@ static Image *OptimizeLayerFrames(const Image *image,
     Figure out the area of overlay of the first frame
     No pixel could be cleared as all pixels are already cleared.
   */
+#if DEBUG_OPT_FRAME
+  i=0;
+  (void) FormatLocaleFile(stderr, "frame %.20g :-\n", (double) i);
+#endif
   disposals[0]=NoneDispose;
-  bounds[0]=CompareImageBounds(prev_image,next,CompareAnyLayer,exception);
+  bounds[0]=CompareImageBounds(prev_image,curr,CompareAnyLayer,exception);
+#if DEBUG_OPT_FRAME
+  (void) FormatLocaleFile(stderr, "overlay: %.20gx%.20g%+.20g%+.20g\n\n",
+    (double) bounds[i].width,(double) bounds[i].height,
+    (double) bounds[i].x,(double) bounds[i].y );
+#endif
   /*
     Compute the bounding box of changes for each pair of images.
   */
@@ -1056,15 +1083,25 @@ static Image *OptimizeLayerFrames(const Image *image,
   dup_bounds.height=0;
   dup_bounds.x=0;
   dup_bounds.y=0;
-  next=GetNextImageInList(next);
-  for ( ; next != (const Image *) NULL; next=GetNextImageInList(next))
+  curr=GetNextImageInList(curr);
+  for ( ; curr != (const Image *) NULL; curr=GetNextImageInList(curr))
   {
+#if DEBUG_OPT_FRAME
+    (void) FormatLocaleFile(stderr, "frame %.20g :-\n", (double) i);
+#endif
     /*
       Assume none disposal is the best
     */
-    bounds[i]=CompareImageBounds(next->previous,next,CompareAnyLayer,exception);
-    cleared=IsBoundsCleared(next->previous,next,&bounds[i],exception);
+    bounds[i]=CompareImageBounds(curr->previous,curr,CompareAnyLayer,exception);
+    cleared=IsBoundsCleared(curr->previous,curr,&bounds[i],exception);
     disposals[i-1]=NoneDispose;
+#if DEBUG_OPT_FRAME
+    (void) FormatLocaleFile(stderr, "overlay: %.20gx%.20g%+.20g%+.20g%s%s\n",
+         (double) bounds[i].width,(double) bounds[i].height,
+         (double) bounds[i].x,(double) bounds[i].y,
+         bounds[i].x < 0?"  (unchanged)":"",
+         cleared?"  (pixels cleared)":"");
+#endif
     if ( bounds[i].x < 0 ) {
       /*
         Image frame is exactly the same as the previous frame!
@@ -1085,8 +1122,14 @@ static Image *OptimizeLayerFrames(const Image *image,
         /*
           Compare a none disposal against a previous disposal
         */
-        try_bounds=CompareImageBounds(prev_image,next,CompareAnyLayer,exception);
-        try_cleared=IsBoundsCleared(prev_image,next,&try_bounds,exception);
+        try_bounds=CompareImageBounds(prev_image,curr,CompareAnyLayer,exception);
+        try_cleared=IsBoundsCleared(prev_image,curr,&try_bounds,exception);
+#if DEBUG_OPT_FRAME
+    (void) FormatLocaleFile(stderr, "test_prev: %.20gx%.20g%+.20g%+.20g%s\n",
+         (double) try_bounds.width,(double) try_bounds.height,
+         (double) try_bounds.x,(double) try_bounds.y,
+         try_cleared?"  (pixels were cleared)":"");
+#endif
         if ( (!try_cleared && cleared ) ||
                 try_bounds.width * try_bounds.height
                     <  bounds[i].width * bounds[i].height )
@@ -1094,6 +1137,11 @@ static Image *OptimizeLayerFrames(const Image *image,
             cleared=try_cleared;
             bounds[i]=try_bounds;
             disposals[i-1]=PreviousDispose;
+#if DEBUG_OPT_FRAME
+            (void) FormatLocaleFile(stderr, "previous: accepted\n");
+          } else {
+            (void) FormatLocaleFile(stderr, "previous: rejected\n");
+#endif
           }
 
         /*
@@ -1101,11 +1149,11 @@ static Image *OptimizeLayerFrames(const Image *image,
           It is useless if the previous image already clears pixels correctly.
           This method will always clear all the pixels that need to be cleared.
         */
-        dup_bounds.width=dup_bounds.height=0;
+        dup_bounds.width=dup_bounds.height=0; /* no dup, no pixel added */
         if ( add_frames )
           {
-            dup_image=CloneImage(next->previous,next->previous->page.width,
-                next->previous->page.height,MagickTrue,exception);
+            dup_image=CloneImage(curr->previous,curr->previous->page.width,
+                curr->previous->page.height,MagickTrue,exception);
             if (dup_image == (Image *) NULL)
               {
                 bounds=(RectangleInfo *) RelinquishMagickMemory(bounds);
@@ -1113,9 +1161,9 @@ static Image *OptimizeLayerFrames(const Image *image,
                 prev_image=DestroyImage(prev_image);
                 return((Image *) NULL);
               }
-            dup_bounds=CompareImageBounds(dup_image,next,CompareClearLayer,exception);
+            dup_bounds=CompareImageBounds(dup_image,curr,CompareClearLayer,exception);
             ClearBounds(dup_image,&dup_bounds);
-            try_bounds=CompareImageBounds(dup_image,next,CompareAnyLayer,exception);
+            try_bounds=CompareImageBounds(dup_image,curr,CompareAnyLayer,exception);
             if ( cleared ||
                    dup_bounds.width*dup_bounds.height
                       +try_bounds.width*try_bounds.height
@@ -1129,26 +1177,28 @@ static Image *OptimizeLayerFrames(const Image *image,
             else
               dup_bounds.width=dup_bounds.height=0;
           }
-
         /*
           Now compare against a simple background disposal
         */
-        bgnd_image=CloneImage(next->previous,next->previous->page.width,
-          next->previous->page.height,MagickTrue,exception);
+        bgnd_image=CloneImage(curr->previous,curr->previous->page.width,
+          curr->previous->page.height,MagickTrue,exception);
         if (bgnd_image == (Image *) NULL)
           {
             bounds=(RectangleInfo *) RelinquishMagickMemory(bounds);
             disposals=(DisposeType *) RelinquishMagickMemory(disposals);
             prev_image=DestroyImage(prev_image);
-            if ( disposals[i-1] == DupDispose )
-              bgnd_image=DestroyImage(bgnd_image);
+            if ( dup_image != (Image *) NULL)
+              dup_image=DestroyImage(dup_image);
             return((Image *) NULL);
           }
-        bgnd_bounds=bounds[i-1];
+        bgnd_bounds=bounds[i-1]; /* interum bounds of the previous image */
         ClearBounds(bgnd_image,&bgnd_bounds);
-        try_bounds=CompareImageBounds(bgnd_image,next,CompareAnyLayer,exception);
-
-        try_cleared=IsBoundsCleared(bgnd_image,next,&try_bounds,exception);
+        try_bounds=CompareImageBounds(bgnd_image,curr,CompareAnyLayer,exception);
+        try_cleared=IsBoundsCleared(bgnd_image,curr,&try_bounds,exception);
+#if DEBUG_OPT_FRAME
+    (void) FormatLocaleFile(stderr, "background: %s\n",
+         try_cleared?"(pixels cleared)":"");
+#endif
         if ( try_cleared )
           {
             /*
@@ -1157,11 +1207,22 @@ static Image *OptimizeLayerFrames(const Image *image,
               include the pixels that are cleared.  This guaranteed
               to work, though may not be the most optimized solution.
             */
-            try_bounds=CompareImageBounds(prev_image,next,CompareClearLayer,exception);
+            try_bounds=CompareImageBounds(curr->previous,curr,CompareClearLayer,exception);
+#if DEBUG_OPT_FRAME
+            (void) FormatLocaleFile(stderr, "expand_clear: %.20gx%.20g%+.20g%+.20g%s\n",
+                (double) try_bounds.width,(double) try_bounds.height,
+                (double) try_bounds.x,(double) try_bounds.y,
+                try_bounds.x<0?"  (no expand nessary)":"");
+#endif
             if ( bgnd_bounds.x < 0 )
               bgnd_bounds = try_bounds;
             else
               {
+#if DEBUG_OPT_FRAME
+                (void) FormatLocaleFile(stderr, "expand_bgnd: %.20gx%.20g%+.20g%+.20g\n",
+                    (double) bgnd_bounds.width,(double) bgnd_bounds.height,
+                    (double) bgnd_bounds.x,(double) bgnd_bounds.y );
+#endif
                 if ( try_bounds.x < bgnd_bounds.x )
                   {
                      bgnd_bounds.width+= bgnd_bounds.x-try_bounds.x;
@@ -1188,9 +1249,40 @@ static Image *OptimizeLayerFrames(const Image *image,
                      if ( bgnd_bounds.height < try_bounds.height )
                        bgnd_bounds.height = try_bounds.height;
                   }
+#if DEBUG_OPT_FRAME
+                (void) FormatLocaleFile(stderr, "        to : %.20gx%.20g%+.20g%+.20g\n",
+                    (double) bgnd_bounds.width,(double) bgnd_bounds.height,
+                    (double) bgnd_bounds.x,(double) bgnd_bounds.y );
+#endif
               }
             ClearBounds(bgnd_image,&bgnd_bounds);
-            try_bounds=CompareImageBounds(bgnd_image,next,CompareAnyLayer,exception);
+#if DEBUG_OPT_FRAME
+/* Something strange is happening with a specific animation
+ * CompareAnyLayers (normal method) and CompareClearLayers returns the whole
+ * image, which is not posibly correct!  As verified by previous tests.
+ * Something changed beyond the bgnd_bounds clearing.  But without being able
+ * to see, or writet he image at this point it is hard to tell what is wrong!
+ * Only CompareOverlay seemed to return something sensible.
+ */
+            try_bounds=CompareImageBounds(bgnd_image,curr,CompareClearLayer,exception);
+            (void) FormatLocaleFile(stderr, "expand_ctst: %.20gx%.20g%+.20g%+.20g\n",
+                (double) try_bounds.width,(double) try_bounds.height,
+                (double) try_bounds.x,(double) try_bounds.y );
+            try_bounds=CompareImageBounds(bgnd_image,curr,CompareAnyLayer,exception);
+            try_cleared=IsBoundsCleared(bgnd_image,curr,&try_bounds,exception);
+            (void) FormatLocaleFile(stderr, "expand_any : %.20gx%.20g%+.20g%+.20g%s\n",
+                (double) try_bounds.width,(double) try_bounds.height,
+                (double) try_bounds.x,(double) try_bounds.y,
+                try_cleared?"   (pixels cleared)":"");
+#endif
+            try_bounds=CompareImageBounds(bgnd_image,curr,CompareOverlayLayer,exception);
+#if DEBUG_OPT_FRAME
+            try_cleared=IsBoundsCleared(bgnd_image,curr,&try_bounds,exception);
+            (void) FormatLocaleFile(stderr, "expand_test: %.20gx%.20g%+.20g%+.20g%s\n",
+                (double) try_bounds.width,(double) try_bounds.height,
+                (double) try_bounds.x,(double) try_bounds.y,
+                try_cleared?"   (pixels cleared)":"");
+#endif
           }
         /*
           Test if this background dispose is smaller than any of the
@@ -1209,6 +1301,11 @@ static Image *OptimizeLayerFrames(const Image *image,
             if ( disposals[i-1] == DupDispose )
               dup_image=DestroyImage(dup_image);
             disposals[i-1]=BackgroundDispose;
+#if DEBUG_OPT_FRAME
+    (void) FormatLocaleFile(stderr, "expand_bgnd: accepted\n");
+          } else {
+    (void) FormatLocaleFile(stderr, "expand_bgnd: reject\n");
+#endif
           }
       }
     /*
@@ -1229,18 +1326,18 @@ static Image *OptimizeLayerFrames(const Image *image,
       }
     else
       {
+        if ( dup_image != (Image *) NULL)
+          dup_image=DestroyImage(dup_image);
         if ( disposals[i-1] != PreviousDispose )
           prev_image=DestroyImage(prev_image);
         if ( disposals[i-1] == BackgroundDispose )
           prev_image=bgnd_image,  bgnd_image=(Image *)NULL;
-        else if (bgnd_image != (Image *) NULL)
+        if (bgnd_image != (Image *) NULL)
           bgnd_image=DestroyImage(bgnd_image);
-        if ( dup_image != (Image *) NULL)
-          dup_image=DestroyImage(dup_image);
         if ( disposals[i-1] == NoneDispose )
           {
-            prev_image=CloneImage(next->previous,next->previous->page.width,
-              next->previous->page.height,MagickTrue,exception);
+            prev_image=CloneImage(curr->previous,curr->previous->page.width,
+              curr->previous->page.height,MagickTrue,exception);
             if (prev_image == (Image *) NULL)
               {
                 bounds=(RectangleInfo *) RelinquishMagickMemory(bounds);
@@ -1248,8 +1345,25 @@ static Image *OptimizeLayerFrames(const Image *image,
                 return((Image *) NULL);
               }
           }
+
       }
+    assert(prev_image != (Image *) NULL);
     disposals[i]=disposals[i-1];
+#if DEBUG_OPT_FRAME
+    (void) FormatLocaleFile(stderr, "final   %.20g : %s  %.20gx%.20g%+.20g%+.20g\n",
+         (double) i-1,
+         CommandOptionToMnemonic(MagickDisposeOptions, disposals[i-1]),
+         (double) bounds[i-1].width, (double) bounds[i-1].height,
+         (double) bounds[i-1].x, (double) bounds[i-1].y );
+#endif
+#if DEBUG_OPT_FRAME
+    (void) FormatLocaleFile(stderr, "interum %.20g : %s  %.20gx%.20g%+.20g%+.20g\n",
+         (double) i,
+         CommandOptionToMnemonic(MagickDisposeOptions, disposals[i]),
+         (double) bounds[i].width, (double) bounds[i].height,
+         (double) bounds[i].x, (double) bounds[i].y );
+    (void) FormatLocaleFile(stderr, "\n");
+#endif
     i++;
   }
   prev_image=DestroyImage(prev_image);
@@ -1258,25 +1372,21 @@ static Image *OptimizeLayerFrames(const Image *image,
   */
   sans_exception=AcquireExceptionInfo();
   i=0;
-  next=GetFirstImageInList(image);
+  curr=GetFirstImageInList(image);
   optimized_image=NewImageList();
-  while ( next != (const Image *) NULL )
+  while ( curr != (const Image *) NULL )
   {
-#if 0 /*  For debuging */
-    printf("image %ld :- %d  %ldx%ld%+ld%+ld\n", i, disposals[i],
-           bounds[i].width, bounds[i].height, bounds[i].x, bounds[i].y );
-#endif
-    prev_image=CloneImage(next,0,0,MagickTrue,exception);
+    prev_image=CloneImage(curr,0,0,MagickTrue,exception);
     if (prev_image == (Image *) NULL)
       break;
     if ( disposals[i] == DelDispose ) {
-      unsigned long time = 0;
+      size_t time = 0;
       while ( disposals[i] == DelDispose ) {
-        time += next->delay*1000/next->ticks_per_second;
-        next=GetNextImageInList(next);
+        time += curr->delay*1000/curr->ticks_per_second;
+        curr=GetNextImageInList(curr);
         i++;
       }
-      time += next->delay*1000/next->ticks_per_second;
+      time += curr->delay*1000/curr->ticks_per_second;
       prev_image->ticks_per_second = 100L;
       prev_image->delay = time*prev_image->ticks_per_second/1000;
     }
@@ -1290,14 +1400,14 @@ static Image *OptimizeLayerFrames(const Image *image,
       bgnd_image->dispose=NoneDispose;
     }
     else
-      next=GetNextImageInList(next);
+      curr=GetNextImageInList(curr);
     AppendImageToList(&optimized_image,bgnd_image);
     i++;
   }
   sans_exception=DestroyExceptionInfo(sans_exception);
   bounds=(RectangleInfo *) RelinquishMagickMemory(bounds);
   disposals=(DisposeType *) RelinquishMagickMemory(disposals);
-  if (next != (Image *) NULL)
+  if (curr != (Image *) NULL)
     {
       optimized_image=DestroyImageList(optimized_image);
       return((Image *) NULL);
@@ -1466,14 +1576,14 @@ MagickExport void OptimizeImageTransparency(const Image *image,
             bounds.width+=bounds.x;
             bounds.x=0;
           }
-        if ((long) (bounds.x+bounds.width) > (long) current_image->columns)
+        if ((ssize_t) (bounds.x+bounds.width) > (ssize_t) current_image->columns)
           bounds.width=current_image->columns-bounds.x;
         if (bounds.y < 0)
           {
             bounds.height+=bounds.y;
             bounds.y=0;
           }
-        if ((long) (bounds.y+bounds.height) > (long) current_image->rows)
+        if ((ssize_t) (bounds.y+bounds.height) > (ssize_t) current_image->rows)
           bounds.height=current_image->rows-bounds.y;
         ClearBounds(current_image, &bounds);
       }
@@ -1557,7 +1667,7 @@ MagickExport void RemoveDuplicateLayers(Image **images,
       /*
         the two images are the same, merge time delays and delete one.
       */
-      unsigned long time;
+      size_t time;
       time = curr->delay*1000/curr->ticks_per_second;
       time += next->delay*1000/next->ticks_per_second;
       next->ticks_per_second = 100L;
@@ -1681,7 +1791,7 @@ MagickExport void RemoveZeroDelayLayers(Image **images,
 %
 %      void CompositeLayers(Image *destination,
 %          const CompositeOperator compose, Image *source,
-%          const long x_offset, const long y_offset,
+%          const ssize_t x_offset, const ssize_t y_offset,
 %          ExceptionInfo *exception);
 %
 %  A description of each parameter follows:
@@ -1696,18 +1806,17 @@ MagickExport void RemoveZeroDelayLayers(Image **images,
 %
 */
 static inline void CompositeCanvas(Image *destination,
-     const CompositeOperator compose, Image *source,
-     long x_offset, long y_offset )
+  const CompositeOperator compose, Image *source,ssize_t x_offset,
+  ssize_t y_offset )
 {
-  x_offset += source->page.x - destination->page.x;
-  y_offset += source->page.y - destination->page.y;
-  (void) CompositeImage(destination, compose, source, x_offset, y_offset);
+  x_offset+=source->page.x-destination->page.x;
+  y_offset+=source->page.y-destination->page.y;
+  (void) CompositeImage(destination,compose,source,x_offset,y_offset);
 }
 
 MagickExport void CompositeLayers(Image *destination,
-      const CompositeOperator compose, Image *source,
-      const long x_offset, const long y_offset,
-      ExceptionInfo *exception)
+  const CompositeOperator compose, Image *source,const ssize_t x_offset,
+  const ssize_t y_offset,ExceptionInfo *exception)
 {
   assert(destination != (Image *) NULL);
   assert(destination->signature == MagickSignature);
@@ -1743,6 +1852,11 @@ MagickExport void CompositeLayers(Image *destination,
 
     CompositeCanvas(destination, compose, source, x_offset, y_offset);
     /* copy source image attributes ? */
+    if ( source->next != (Image *) NULL )
+      {
+        destination->delay = source->delay;
+        destination->iterations = source->iterations;
+      }
     source=GetNextImageInList(source);
 
     while ( source != (Image *) NULL )
@@ -1836,21 +1950,19 @@ MagickExport Image *MergeImageLayers(Image *image,
   MagickBooleanType
     proceed;
 
-  MagickOffsetType
-    scene;
-
   RectangleInfo
     page;
-
-  unsigned long
-    width,
-    height;
 
   register const Image
     *next;
 
-  unsigned long
-    number_images;
+  size_t
+    number_images,
+    height,
+    width;
+
+  ssize_t
+    scene;
 
   assert(image != (Image *) NULL);
   assert(image->signature == MagickSignature);
@@ -1880,10 +1992,10 @@ MagickExport Image *MergeImageLayers(Image *image,
              height += page.y-next->page.y;
              page.y = next->page.y;
         }
-        if ( width < (next->page.x + next->columns - page.x) )
-           width = (unsigned long) next->page.x + next->columns - page.x;
-        if ( height < (next->page.y + next->rows - page.y) )
-           height = (unsigned long) next->page.y + next->rows - page.y;
+        if ( (ssize_t) width < (next->page.x + (ssize_t)next->columns - page.x) )
+           width = (size_t) next->page.x + (ssize_t)next->columns - page.x;
+        if ( (ssize_t) height < (next->page.y + (ssize_t)next->rows - page.y) )
+           height = (size_t) next->page.y + (ssize_t)next->rows - page.y;
       }
       break;
     }
@@ -1907,10 +2019,10 @@ MagickExport Image *MergeImageLayers(Image *image,
         if (method == MosaicLayer) {
           page.x=next->page.x;
           page.y=next->page.y;
-          if ( width < (next->page.x + next->columns) )
-             width = (unsigned long) next->page.x + next->columns;
-          if ( height < (next->page.y + next->rows) )
-             height = (unsigned long) next->page.y + next->rows;
+          if ( (ssize_t) width < (next->page.x + (ssize_t)next->columns) )
+             width = (size_t) next->page.x + next->columns;
+          if ( (ssize_t) height < (next->page.y + (ssize_t)next->rows) )
+             height = (size_t) next->page.y + next->rows;
         }
       }
       page.width=width;
@@ -1927,17 +2039,18 @@ MagickExport Image *MergeImageLayers(Image *image,
     page.height = (page.y < 0) ? height : height+page.y;
 
   /*
-    Handle "TrimBoundsLayer" method seperatally to normal 'layer merge'
+    Handle "TrimBoundsLayer" method separately to normal 'layer merge'
   */
   if ( method == TrimBoundsLayer ) {
     number_images=GetImageListLength(image);
-    for (scene=0; scene < (long) number_images; scene++)
+    for (scene=0; scene < (ssize_t) number_images; scene++)
     {
       image->page.x -= page.x;
       image->page.y -= page.y;
       image->page.width = width;
       image->page.height = height;
-      proceed=SetImageProgress(image,MergeLayersTag,scene,number_images);
+      proceed=SetImageProgress(image,MergeLayersTag,(MagickOffsetType) scene,
+        number_images);
       if (proceed == MagickFalse)
         break;
       image=GetNextImageInList(image);
@@ -1959,11 +2072,12 @@ MagickExport Image *MergeImageLayers(Image *image,
     Compose images onto canvas, with progress monitor
   */
   number_images=GetImageListLength(image);
-  for (scene=0; scene < (long) number_images; scene++)
+  for (scene=0; scene < (ssize_t) number_images; scene++)
   {
     (void) CompositeImage(canvas,image->compose,image,image->page.x-
       canvas->page.x,image->page.y-canvas->page.y);
-    proceed=SetImageProgress(image,MergeLayersTag,scene,number_images);
+    proceed=SetImageProgress(image,MergeLayersTag,(MagickOffsetType) scene,
+      number_images);
     if (proceed == MagickFalse)
       break;
     image=GetNextImageInList(image);

@@ -23,7 +23,7 @@
 %                                 August 2003                                 %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -135,8 +135,8 @@ WandExport MagickWand *CloneMagickWand(const MagickWand *wand)
       wand->name);
   (void) ResetMagickMemory(clone_wand,0,sizeof(*clone_wand));
   clone_wand->id=AcquireWandId();
-  (void) FormatMagickString(clone_wand->name,MaxTextExtent,"%s-%lu",
-    MagickWandId,clone_wand->id);
+  (void) FormatLocaleString(clone_wand->name,MaxTextExtent,"%s-%.20g",
+    MagickWandId,(double) clone_wand->id);
   clone_wand->exception=AcquireExceptionInfo();
   InheritException(clone_wand->exception,wand->exception);
   clone_wand->image_info=CloneImageInfo(wand->image_info);
@@ -359,14 +359,14 @@ WandExport ExceptionType MagickGetExceptionType(const MagickWand *wand)
 %
 %  The format of the MagickGetIteratorIndex method is:
 %
-%      long MagickGetIteratorIndex(MagickWand *wand)
+%      ssize_t MagickGetIteratorIndex(MagickWand *wand)
 %
 %  A description of each parameter follows:
 %
 %    o wand: the magick wand.
 %
 */
-WandExport long MagickGetIteratorIndex(MagickWand *wand)
+WandExport ssize_t MagickGetIteratorIndex(MagickWand *wand)
 {
   assert(wand != (MagickWand *) NULL);
   assert(wand->signature == WandSignature);
@@ -415,7 +415,7 @@ WandExport char *MagickQueryConfigureOption(const char *option)
   ExceptionInfo
     *exception;
 
-  unsigned long
+  size_t
     number_options;
 
   exception=AcquireExceptionInfo();
@@ -447,7 +447,7 @@ WandExport char *MagickQueryConfigureOption(const char *option)
 %  The format of the MagickQueryConfigureOptions function is:
 %
 %      char **MagickQueryConfigureOptions(const char *pattern,
-%        unsigned long *number_options)
+%        size_t *number_options)
 %
 %  A description of each parameter follows:
 %
@@ -458,7 +458,7 @@ WandExport char *MagickQueryConfigureOption(const char *option)
 %
 */
 WandExport char **MagickQueryConfigureOptions(const char *pattern,
-  unsigned long *number_options)
+  size_t *number_options)
 {
   char
     **options;
@@ -701,7 +701,7 @@ WandExport double *MagickQueryMultilineFontMetrics(MagickWand *wand,
 %
 %  The format of the MagickQueryFonts function is:
 %
-%      char **MagickQueryFonts(const char *pattern,unsigned long *number_fonts)
+%      char **MagickQueryFonts(const char *pattern,size_t *number_fonts)
 %
 %  A description of each parameter follows:
 %
@@ -712,7 +712,7 @@ WandExport double *MagickQueryMultilineFontMetrics(MagickWand *wand,
 %
 */
 WandExport char **MagickQueryFonts(const char *pattern,
-  unsigned long *number_fonts)
+  size_t *number_fonts)
 {
   char
     **fonts;
@@ -743,7 +743,7 @@ WandExport char **MagickQueryFonts(const char *pattern,
 %  The format of the MagickQueryFonts function is:
 %
 %      char **MagickQueryFonts(const char *pattern,
-%        unsigned long *number_formats)
+%        size_t *number_formats)
 %
 %  A description of each parameter follows:
 %
@@ -754,7 +754,7 @@ WandExport char **MagickQueryFonts(const char *pattern,
 %
 */
 WandExport char **MagickQueryFormats(const char *pattern,
-  unsigned long *number_formats)
+  size_t *number_formats)
 {
   char
     **formats;
@@ -882,7 +882,7 @@ WandExport void MagickSetFirstIterator(MagickWand *wand)
 %  The format of the MagickSetIteratorIndex method is:
 %
 %      MagickBooleanType MagickSetIteratorIndex(MagickWand *wand,
-%        const long index)
+%        const ssize_t index)
 %
 %  A description of each parameter follows:
 %
@@ -892,7 +892,7 @@ WandExport void MagickSetFirstIterator(MagickWand *wand)
 %
 */
 WandExport MagickBooleanType MagickSetIteratorIndex(MagickWand *wand,
-  const long index)
+  const ssize_t index)
 {
   Image
     *image;
@@ -1007,6 +1007,9 @@ WandExport void MagickWandTerminus(void)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 %  NewMagickWand() returns a wand required for all other methods in the API.
+%  A fatal exception is thrown if there is not enough memory to allocate the
+%  wand.   Use DestroyMagickWand() to dispose of the wand when it is no longer
+%  needed.
 %
 %  The format of the NewMagickWand method is:
 %
@@ -1021,7 +1024,7 @@ WandExport MagickWand *NewMagickWand(void)
   MagickWand
     *wand;
 
-  unsigned long
+  size_t
     depth;
 
   depth=MAGICKCORE_QUANTUM_DEPTH;
@@ -1034,8 +1037,8 @@ WandExport MagickWand *NewMagickWand(void)
       GetExceptionMessage(errno));
   (void) ResetMagickMemory(wand,0,sizeof(*wand));
   wand->id=AcquireWandId();
-  (void) FormatMagickString(wand->name,MaxTextExtent,"%s-%lu",MagickWandId,
-    wand->id);
+  (void) FormatLocaleString(wand->name,MaxTextExtent,"%s-%.20g",MagickWandId,
+    (double) wand->id);
   wand->exception=AcquireExceptionInfo();
   wand->image_info=AcquireImageInfo();
   wand->quantize_info=CloneQuantizeInfo((QuantizeInfo *) NULL);

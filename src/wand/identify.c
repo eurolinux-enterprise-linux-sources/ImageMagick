@@ -17,7 +17,7 @@
 %                            September 1994                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -104,6 +104,11 @@ static MagickBooleanType IdentifyUsage(void)
       "-version             print version information",
       (char *) NULL
     },
+    *operators[]=
+    {
+      "-negate              replace every pixel with its complementary color ",
+      (char *) NULL
+    },
     *settings[]=
     {
       "-alpha option        on, activate, off, deactivate, set, opaque, copy",
@@ -119,9 +124,10 @@ static MagickBooleanType IdentifyUsage(void)
       "-density geometry    horizontal and vertical density of the image",
       "-depth value         image depth",
       "-extract geometry    extract area from image",
+      "-features distance   display image features (e.g. contrast, correlation)",
       "-format \"string\"     output formatted image characteristics",
       "-fuzz distance       colors within this distance are considered equal",
-      "-gamma value         level of gamma correction",
+      "-gamma value         of gamma correction",
       "-interlace type      type of image interlacing scheme",
       "-interpolate method  pixel color interpolation method",
       "-limit type value    pixel cache resource limit",
@@ -136,6 +142,7 @@ static MagickBooleanType IdentifyUsage(void)
       "-set attribute value set an image attribute",
       "-size geometry       width and height of image",
       "-strip               strip image of all profiles and comments",
+      "-unique              display the number of unique colors in the image",
       "-units type          the units of image resolution",
       "-verbose             print detailed information about the image",
       "-virtual-pixel method",
@@ -143,12 +150,16 @@ static MagickBooleanType IdentifyUsage(void)
       (char *) NULL
     };
 
-  (void) printf("Version: %s\n",GetMagickVersion((unsigned long *) NULL));
-  (void) printf("Copyright: %s\n\n",GetMagickCopyright());
+  (void) printf("Version: %s\n",GetMagickVersion((size_t *) NULL));
+  (void) printf("Copyright: %s\n",GetMagickCopyright());
+  (void) printf("Features: %s\n\n",GetMagickFeatures());
   (void) printf("Usage: %s [options ...] file [ [options ...] "
     "file ... ]\n",GetClientName());
   (void) printf("\nImage Settings:\n");
   for (p=settings; *p != (char *) NULL; p++)
+    (void) printf("  %s\n",*p);
+  (void) printf("\nImage Operators:\n");
+  for (p=operators; *p != (char *) NULL; p++)
     (void) printf("  %s\n",*p);
   (void) printf("\nMiscellaneous Options:\n");
   for (p=miscellaneous; *p != (char *) NULL; p++)
@@ -171,7 +182,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
 #define DestroyIdentify() \
 { \
   DestroyImageStack(); \
-  for (i=0; i < (long) argc; i++) \
+  for (i=0; i < (ssize_t) argc; i++) \
     argv[i]=DestroyString(argv[i]); \
   argv=(char **) RelinquishMagickMemory(argv); \
 }
@@ -200,22 +211,23 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
   ImageStack
     image_stack[MaxImageStackDepth+1];
 
-  long
-    j,
-    k;
-
   MagickBooleanType
     fire,
-    pend;
+    pend,
+    respect_parenthesis;
 
   MagickStatusType
     status;
 
-  register long
+  register ssize_t
     i;
 
-  unsigned long
+  size_t
     count;
+
+  ssize_t
+    j,
+    k;
 
   /*
     Set defaults.
@@ -231,17 +243,17 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
       if ((LocaleCompare("version",option+1) == 0) ||
           (LocaleCompare("-version",option+1) == 0))
         {
-          (void) fprintf(stdout,"Version: %s\n",
-            GetMagickVersion((unsigned long *) NULL));
-          (void) fprintf(stdout,"Copyright: %s\n\n",GetMagickCopyright());
+          (void) FormatLocaleFile(stdout,"Version: %s\n",
+            GetMagickVersion((size_t *) NULL));
+          (void) FormatLocaleFile(stdout,"Copyright: %s\n",
+            GetMagickCopyright());
+          (void) FormatLocaleFile(stdout,"Features: %s\n\n",
+            GetMagickFeatures());
           return(MagickFalse);
         }
     }
   if (argc < 2)
-    {
-      (void) IdentifyUsage();
-      return(MagickTrue);
-    }
+    return(IdentifyUsage());
   count=0;
   format=NULL;
   j=1;
@@ -249,6 +261,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
   NewImageStack();
   option=(char *) NULL;
   pend=MagickFalse;
+  respect_parenthesis=MagickFalse;
   status=MagickTrue;
   /*
     Identify an image.
@@ -259,7 +272,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
     ThrowIdentifyException(ResourceLimitError,"MemoryAllocationFailed",
       GetExceptionMessage(errno));
   image_info->ping=MagickTrue;
-  for (i=1; i < (long) argc; i++)
+  for (i=1; i < (ssize_t) argc; i++)
   {
     option=argv[i];
     if (LocaleCompare(option,"(") == 0)
@@ -279,7 +292,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
         PopImageStack();
         continue;
       }
-    if (IsMagickOption(option) == MagickFalse)
+    if (IsCommandOption(option) == MagickFalse)
       {
         char
           *filename;
@@ -297,7 +310,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
         identify_info=CloneImageInfo(image_info);
         identify_info->verbose=MagickFalse;
         filename=argv[i];
-        if ((LocaleCompare(filename,"--") == 0) && (i < (argc-1)))
+        if ((LocaleCompare(filename,"--") == 0) && (i < (ssize_t) (argc-1)))
           filename=argv[++i];
         (void) CopyMagickString(identify_info->filename,filename,MaxTextExtent);
         if (identify_info->ping != MagickFalse)
@@ -345,15 +358,15 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
       {
         if (LocaleCompare("alpha",option+1) == 0)
           {
-            long
+            ssize_t
               type;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
-            type=ParseMagickOption(MagickAlphaOptions,MagickFalse,argv[i]);
+            type=ParseCommandOption(MagickAlphaOptions,MagickFalse,argv[i]);
             if (type < 0)
               ThrowIdentifyException(OptionError,"UnrecognizedAlphaChannelType",
                 argv[i]);
@@ -366,7 +379,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             break;
           }
@@ -379,7 +392,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowIdentifyInvalidArgumentException(option,argv[i]);
@@ -387,13 +400,13 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("channel",option+1) == 0)
           {
-            long
+            ssize_t
               channel;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             channel=ParseChannelOption(argv[i]);
             if (channel < 0)
@@ -403,15 +416,15 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("colorspace",option+1) == 0)
           {
-            long
+            ssize_t
               colorspace;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowIdentifyException(OptionError,"MissingArgument",option);
-            colorspace=ParseMagickOption(MagickColorspaceOptions,
+            colorspace=ParseCommandOption(MagickColorspaceOptions,
               MagickFalse,argv[i]);
             if (colorspace < 0)
               ThrowIdentifyException(OptionError,"UnrecognizedColorspace",
@@ -423,28 +436,30 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowIdentifyInvalidArgumentException(option,argv[i]);
             image_info->ping=MagickFalse;
             break;
           }
+        if (LocaleCompare("concurrent",option+1) == 0)
+          break;
         ThrowIdentifyException(OptionError,"UnrecognizedOption",option)
       }
       case 'd':
       {
         if (LocaleCompare("debug",option+1) == 0)
           {
-            long
+            ssize_t
               event;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
-            event=ParseMagickOption(MagickLogEventOptions,MagickFalse,argv[i]);
+            event=ParseCommandOption(MagickLogEventOptions,MagickFalse,argv[i]);
             if (event < 0)
               ThrowIdentifyException(OptionError,"UnrecognizedEventType",
                 argv[i]);
@@ -454,7 +469,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
         if (LocaleCompare("define",option+1) == 0)
           {
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (*option == '+')
               {
@@ -473,7 +488,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowIdentifyInvalidArgumentException(option,argv[i]);
@@ -484,7 +499,18 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
+              ThrowIdentifyException(OptionError,"MissingArgument",option);
+            if (IsGeometry(argv[i]) == MagickFalse)
+              ThrowIdentifyInvalidArgumentException(option,argv[i]);
+            break;
+          }
+        if (LocaleCompare("duration",option+1) == 0)
+          {
+            if (*option == '+')
+              break;
+            i++;
+            if (i == (ssize_t) (argc-1))
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowIdentifyInvalidArgumentException(option,argv[i]);
@@ -494,13 +520,24 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
       }
       case 'f':
       {
+        if (LocaleCompare("features",option+1) == 0)
+          {
+            if (*option == '+')
+              break;
+            i++;
+            if (i == (ssize_t) (argc-1))
+              ThrowIdentifyException(OptionError,"MissingArgument",option);
+            if (IsGeometry(argv[i]) == MagickFalse)
+              ThrowIdentifyInvalidArgumentException(option,argv[i]);
+            break;
+          }
         if (LocaleCompare("format",option+1) == 0)
           {
             format=(char *) NULL;
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             format=argv[i];
             break;
@@ -510,7 +547,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowIdentifyInvalidArgumentException(option,argv[i]);
@@ -523,7 +560,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
         if (LocaleCompare("gamma",option+1) == 0)
           {
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowIdentifyInvalidArgumentException(option,argv[i]);
@@ -542,15 +579,15 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
       {
         if (LocaleCompare("interlace",option+1) == 0)
           {
-            long
+            ssize_t
               interlace;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
-            interlace=ParseMagickOption(MagickInterlaceOptions,MagickFalse,
+            interlace=ParseCommandOption(MagickInterlaceOptions,MagickFalse,
               argv[i]);
             if (interlace < 0)
               ThrowIdentifyException(OptionError,
@@ -559,15 +596,15 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("interpolate",option+1) == 0)
           {
-            long
+            ssize_t
               interpolate;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
-            interpolate=ParseMagickOption(MagickInterpolateOptions,MagickFalse,
+            interpolate=ParseCommandOption(MagickInterpolateOptions,MagickFalse,
               argv[i]);
             if (interpolate < 0)
               ThrowIdentifyException(OptionError,
@@ -586,52 +623,53 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
             double
               value;
 
-            long
+            ssize_t
               resource;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
-            resource=ParseMagickOption(MagickResourceOptions,MagickFalse,
+            resource=ParseCommandOption(MagickResourceOptions,MagickFalse,
               argv[i]);
             if (resource < 0)
               ThrowIdentifyException(OptionError,"UnrecognizedResourceType",
                 argv[i]);
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
-            value=strtod(argv[i],&p);
+            value=InterpretLocaleValue(argv[i],&p);
+            (void) value;
             if ((p == argv[i]) && (LocaleCompare("unlimited",argv[i]) != 0))
               ThrowIdentifyInvalidArgumentException(option,argv[i]);
             break;
           }
         if (LocaleCompare("list",option+1) == 0)
           {
-            long
+            ssize_t
               list;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
-            list=ParseMagickOption(MagickListOptions,MagickFalse,argv[i]);
+            list=ParseCommandOption(MagickListOptions,MagickFalse,argv[i]);
             if (list < 0)
               ThrowIdentifyException(OptionError,"UnrecognizedListType",
                 argv[i]);
-            (void) MogrifyImageInfo(image_info,(int) (i-j+1),(const char **)
+            status=MogrifyImageInfo(image_info,(int) (i-j+1),(const char **)
               argv+j,exception);
             DestroyIdentify();
-            return(MagickTrue);
+            return(status != 0 ? MagickFalse : MagickTrue);
           }
         if (LocaleCompare("log",option+1) == 0)
           {
             if (*option == '+')
               break;
             i++;
-            if ((i == (long) argc) ||
+            if ((i == (ssize_t) argc) ||
                 (strchr(argv[i],'%') == (char *) NULL))
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             break;
@@ -643,6 +681,12 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
         if (LocaleCompare("matte",option+1) == 0)
           break;
         if (LocaleCompare("monitor",option+1) == 0)
+          break;
+        ThrowIdentifyException(OptionError,"UnrecognizedOption",option)
+      }
+      case 'n':
+      {
+        if (LocaleCompare("negate",option+1) == 0)
           break;
         ThrowIdentifyException(OptionError,"UnrecognizedOption",option)
       }
@@ -676,7 +720,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowIdentifyInvalidArgumentException(option,argv[i]);
@@ -687,7 +731,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowIdentifyInvalidArgumentException(option,argv[i]);
@@ -696,12 +740,12 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
         if (LocaleCompare("set",option+1) == 0)
           {
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             break;
           }
@@ -710,7 +754,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowIdentifyInvalidArgumentException(option,argv[i]);
@@ -723,7 +767,7 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowIdentifyException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowIdentifyInvalidArgumentException(option,argv[i]);
@@ -733,17 +777,19 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
       }
       case 'u':
       {
+        if (LocaleCompare("unique",option+1) == 0)
+          break;
         if (LocaleCompare("units",option+1) == 0)
           {
-            long
+            ssize_t
               units;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowIdentifyException(OptionError,"MissingArgument",option);
-            units=ParseMagickOption(MagickResolutionOptions,MagickFalse,
+            units=ParseCommandOption(MagickResolutionOptions,MagickFalse,
               argv[i]);
             if (units < 0)
               ThrowIdentifyException(OptionError,"UnrecognizedUnitsType",
@@ -758,15 +804,15 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
           break;
         if (LocaleCompare("virtual-pixel",option+1) == 0)
           {
-            long
+            ssize_t
               method;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowIdentifyException(OptionError,"MissingArgument",option);
-            method=ParseMagickOption(MagickVirtualPixelOptions,MagickFalse,
+            method=ParseCommandOption(MagickVirtualPixelOptions,MagickFalse,
               argv[i]);
             if (method < 0)
               ThrowIdentifyException(OptionError,
@@ -780,14 +826,14 @@ WandExport MagickBooleanType IdentifyImageCommand(ImageInfo *image_info,
       default:
         ThrowIdentifyException(OptionError,"UnrecognizedOption",option)
     }
-    fire=ParseMagickOption(MagickImageListOptions,MagickFalse,option+1) < 0 ? 
-      MagickFalse : MagickTrue;
+    fire=(GetCommandOptionFlags(MagickCommandOptions,MagickFalse,option) &
+      FireOptionFlag) == 0 ?  MagickFalse : MagickTrue;
     if (fire != MagickFalse)
       FireImageStack(MagickFalse,MagickTrue,MagickTrue);
   }
   if (k != 0)
     ThrowIdentifyException(OptionError,"UnbalancedParenthesis",argv[i]);
-  if (i != argc)
+  if (i != (ssize_t) argc)
     ThrowIdentifyException(OptionError,"MissingAnImageFilename",argv[i]);
   DestroyIdentify();
   return(status != 0 ? MagickTrue : MagickFalse);

@@ -59,8 +59,8 @@
         <message name="UnableToGetCacheNexus">
           impossible de récupérer le nexus du cache
         </message>
-        <message name="UnableToOpenCache">
-          impossible d'ouvrir le cache
+        <message name="UnableToOpenPixelCache">
+          impossible d'ouvrir le cache pixels
         </message>
         <message name="UnableToPersistPixelCache">
           impossible de rendre persistant le cache pixels
@@ -267,6 +267,9 @@
           <message name="MaximumChannelsExceeded">
             maximum de canals dépassent les
           </message>
+          <message name="MissingImageChannel">
+            absence l'image canel
+          </message>
           <message name="NegativeOrZeroImageSize">
             Taille d'image négative ou nulle
           </message>
@@ -325,6 +328,12 @@
           </message>
         </fatalerror>
         <warning>
+          <message name="InsufficientImageDataInFile">
+            Pas assez de données d'image dans le fichier
+          </message>
+          <message name="LengthAndFilesizeDoNotMatch">
+            Longueur et taille du fichier ne correspondent pas
+          </message>
           <message name="SkipToSyncByte">
             Image PCD corrompue, saut à l'octet de synchronisation
           </message>
@@ -459,6 +468,13 @@
         </error>
       </open>
     </file>
+    <filter>
+      <error>
+        <message name="FilterFailed">
+          filter failed
+        </message>
+      </error>
+    </filter>
     <image>
       <error>
         <message name="AngleIsDiscontinuous">
@@ -585,9 +601,6 @@
         <message name="ImageSizeMustExceedBevelWidth">
           la taille doit être supérieure à la largeur de la facette
         </message>
-        <message name="ImageSmallerThanRadius">
-          image plus petite que le rayon
-        </message>
         <message name="ImageWidthsOrHeightsDiffer">
           différences dans la hauteur ou la largeur de l'image
         </message>
@@ -669,6 +682,9 @@
         <message name="UnableToParseExpression">
           impossible d'analyser l'expression
         </message>
+        <message name="UnableToParseKernel">
+          impossible d'analyser l'kernel string
+        </message>
         <message name="UnbalancedParenthesis">
           parenthèse non fermée
         </message>
@@ -729,6 +745,9 @@
         <message name="UnrecognizedImageMode">
           mode d'image non reconnu
         </message>
+        <message name="UnrecognizedMorphologyMethod">
+          morphology method d'image non reconnu
+        </message>
         <message name="UnrecognizedImageOrientation">
           orientation d'image non reconnue
         </message>
@@ -743,6 +762,9 @@
         </message>
         <message name="UnrecognizedInterpolateMethod">
           méthode d'interpolation non reconnnue
+        </message>
+        <message name="UnrecognizedKernelType">
+          type de kernel non reconnnue
         </message>
         <message name="UnrecognizedListType">
           type de liste non reconnu
@@ -809,7 +831,7 @@
         <message name="MissingAnImageFilename">
           nom de fichier d'image absent
         </message>
-        <message name="TruncatedFilename">
+        <message name="FilenameTruncated">
           image filename truncated
         </message>
         <message name="UnrecognizedColormapType">
@@ -1515,6 +1537,11 @@
         Effet vagues pour l'image
       </message>
     </Wave>
+    <Write>
+      <message name="Image">
+        write image
+      </message>
+    </Write>
     <XShear>
       <message name="Image">
         X Shear image

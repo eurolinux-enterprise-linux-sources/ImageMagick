@@ -17,7 +17,7 @@
 %                              July 1992                                      %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -45,6 +45,7 @@
 #include "wand/MagickWand.h"
 #include "wand/mogrify-private.h"
 #include "magick/xwindow-private.h"
+#include "magick/string-private.h"
 
 /*
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -108,11 +109,10 @@ static MagickBooleanType ImportUsage(void)
     {
       "-annotate geometry text",
       "                     annotate the image with text",
-      "-border              include image borders in the output image",
       "-colors value        preferred number of colors in the image",
       "-crop geometry       preferred size and location of the cropped image",
       "-encipher filename   convert plain pixels to cipher pixels",
-      "-geometry geometry   perferred size or location of the image",
+      "-geometry geometry   preferred size or location of the image",
       "-help                print program options",
       "-monochrome          transform image to black and white",
       "-negate              replace every pixel with its complementary color ",
@@ -130,6 +130,7 @@ static MagickBooleanType ImportUsage(void)
     *settings[]=
     {
       "-adjoin              join images into a single multi-image file",
+      "-border              include window border in the output image",
       "-channel type        apply option to select image channels",
       "-colorspace type     alternate image colorspace",
       "-comment string      annotate image with comment",
@@ -171,6 +172,8 @@ static MagickBooleanType ImportUsage(void)
       "-set property value  set an image property",
       "-silent              operate silently, i.e. don't ring any bells ",
       "-snaps value         number of screen snapshots",
+      "-synchronize         synchronize image to storage device",
+      "-taint               declare the image as modified",
       "-transparent-color color",
       "                     transparent color",
       "-treedepth value     color tree depth",
@@ -181,8 +184,9 @@ static MagickBooleanType ImportUsage(void)
       (char *) NULL
     };
 
-  (void) printf("Version: %s\n",GetMagickVersion((unsigned long *) NULL));
-  (void) printf("Copyright: %s\n\n",GetMagickCopyright());
+  (void) printf("Version: %s\n",GetMagickVersion((size_t *) NULL));
+  (void) printf("Copyright: %s\n",GetMagickCopyright());
+  (void) printf("Features: %s\n\n",GetMagickFeatures());
   (void) printf("Usage: %s [options ...] [ file ]\n",
     GetClientName());
   (void) printf("\nImage Settings:\n");
@@ -206,7 +210,7 @@ static MagickBooleanType ImportUsage(void)
   return(MagickFalse);
 }
 
-static inline long MagickMax(const long x,const long y)
+static inline ssize_t MagickMax(const ssize_t x,const ssize_t y)
 {
   if (x > y)
     return(x);
@@ -228,7 +232,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
   DestroyImageStack(); \
   if (target_window != (char *) NULL) \
     target_window=DestroyString(target_window); \
-  for (i=0; i < (long) argc; i++) \
+  for (i=0; i < (ssize_t) argc; i++) \
     argv[i]=DestroyString(argv[i]); \
   argv=(char **) RelinquishMagickMemory(argv); \
 }
@@ -263,14 +267,10 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
   ImageStack
     image_stack[MaxImageStackDepth+1];
 
-  long
-    j,
-    k,
-    snapshots;
-
   MagickBooleanType
     fire,
-    pend;
+    pend,
+    respect_parenthesis;
 
   MagickStatusType
     status;
@@ -278,8 +278,13 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
   QuantizeInfo
     *quantize_info;
 
-  register long
+  register ssize_t
     i;
+
+  ssize_t
+    j,
+    k,
+    snapshots;
 
   XImportInfo
     ximage_info;
@@ -304,9 +309,12 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
       if ((LocaleCompare("version",option+1) == 0) ||
           (LocaleCompare("-version",option+1) == 0))
         {
-          (void) fprintf(stdout,"Version: %s\n",
-            GetMagickVersion((unsigned long *) NULL));
-          (void) fprintf(stdout,"Copyright: %s\n\n",GetMagickCopyright());
+          (void) FormatLocaleFile(stdout,"Version: %s\n",
+            GetMagickVersion((size_t *) NULL));
+          (void) FormatLocaleFile(stdout,"Copyright: %s\n",
+            GetMagickCopyright());
+          (void) FormatLocaleFile(stdout,"Features: %s\n\n",
+            GetMagickFeatures());
           return(MagickFalse);
         }
     }
@@ -317,6 +325,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
   option=(char *) NULL;
   pend=MagickFalse;
   resource_database=(XrmDatabase) NULL;
+  respect_parenthesis=MagickFalse;
   (void) ResetMagickMemory(&resource_info,0,sizeof(resource_info));
   server_name=(char *) NULL;
   status=MagickTrue;
@@ -330,7 +339,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
   if (status == MagickFalse)
     ThrowImportException(ResourceLimitError,"MemoryAllocationFailed",
       GetExceptionMessage(errno));
-  for (i=1; i < (long) argc; i++)
+  for (i=1; i < (ssize_t) argc; i++)
   {
     /*
       Check command line for server name.
@@ -342,7 +351,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
           User specified server name.
         */
         i++;
-        if (i == (long) argc)
+        if (i == (ssize_t) argc)
           ThrowImportException(OptionError,"MissingArgument",option);
         server_name=argv[i];
       }
@@ -368,7 +377,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
   ximage_info.borders=IsMagickTrue(resource_value);
   resource_value=XGetResourceInstance(resource_database,GetClientName(),
     "delay","0");
-  resource_info.delay=(unsigned int) atoi(resource_value);
+  resource_info.delay=(unsigned int) StringToUnsignedLong(resource_value);
   image_info->density=XGetResourceInstance(resource_database,GetClientName(),
     "density",(char *) NULL);
   resource_value=XGetResourceInstance(resource_database,GetClientName(),
@@ -395,10 +404,10 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
     "pageGeometry",(char *) NULL);
   resource_value=XGetResourceInstance(resource_database,GetClientName(),
     "pause","0");
-  resource_info.pause=(unsigned int) atol(resource_value);
+  resource_info.pause=(unsigned int) StringToUnsignedLong(resource_value);
   resource_value=XGetResourceInstance(resource_database,GetClientName(),
     "quality","85");
-  image_info->quality=(unsigned long) atol(resource_value);
+  image_info->quality=StringToUnsignedLong(resource_value);
   resource_value=XGetResourceInstance(resource_database,GetClientName(),
     "screen","False");
   ximage_info.screen=IsMagickTrue(resource_value);
@@ -417,7 +426,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
   /*
     Check command syntax.
   */
-  for (i=1; i < (long) argc; i++)
+  for (i=1; i < (ssize_t) argc; i++)
   {
     option=argv[i];
     if (LocaleCompare(option,"(") == 0)
@@ -437,12 +446,12 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
         PopImageStack();
         continue;
       }
-    if (IsMagickOption(option) == MagickFalse)
+    if (IsCommandOption(option) == MagickFalse)
       {
         Image
           *images;
 
-        unsigned long
+        size_t
           scene;
 
         /*
@@ -453,7 +462,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
         if (target_window != (char *) NULL)
           (void) CopyMagickString(image_info->filename,target_window,
             MaxTextExtent);
-        for (scene=0; scene < (unsigned long) MagickMax(snapshots,1); scene++)
+        for (scene=0; scene < (size_t) MagickMax(snapshots,1); scene++)
         {
           (void) sleep(resource_info.pause);
           images=XImportImage(image_info,&ximage_info);
@@ -480,11 +489,11 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowImportException(OptionError,"MissingArgument",option);
             i++;
             break;
@@ -504,7 +513,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             break;
           }
@@ -517,7 +526,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -525,13 +534,13 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("channel",option+1) == 0)
           {
-            long
+            ssize_t
               channel;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowImportException(OptionError,"MissingArgument",option);
             channel=ParseChannelOption(argv[i]);
             if (channel < 0)
@@ -545,24 +554,24 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
-            quantize_info->number_colors=(unsigned long) atol(argv[i]);
+            quantize_info->number_colors=StringToUnsignedLong(argv[i]);
             break;
           }
         if (LocaleCompare("colorspace",option+1) == 0)
           {
-            long
+            ssize_t
               colorspace;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            colorspace=ParseMagickOption(MagickColorspaceOptions,MagickFalse,
+            colorspace=ParseCommandOption(MagickColorspaceOptions,MagickFalse,
               argv[i]);
             if (colorspace < 0)
               ThrowImportException(OptionError,"UnrecognizedColorspace",
@@ -574,7 +583,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             status=SetImageOption(image_info,"comment",argv[i]);
             if (status == MagickFalse)
@@ -583,27 +592,29 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("compress",option+1) == 0)
           {
-            long
+            ssize_t
               compress;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            compress=ParseMagickOption(MagickCompressOptions,MagickFalse,
+            compress=ParseCommandOption(MagickCompressOptions,MagickFalse,
               argv[i]);
             if (compress < 0)
               ThrowImportException(OptionError,"UnrecognizedImageCompression",
                 argv[i]);
             break;
           }
+        if (LocaleCompare("concurrent",option+1) == 0)
+          break;
         if (LocaleCompare("crop",option+1) == 0)
           {
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -615,15 +626,15 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
       {
         if (LocaleCompare("debug",option+1) == 0)
           {
-            long
+            ssize_t
               event;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            event=ParseMagickOption(MagickLogEventOptions,MagickFalse,argv[i]);
+            event=ParseCommandOption(MagickLogEventOptions,MagickFalse,argv[i]);
             if (event < 0)
               ThrowImportException(OptionError,"UnrecognizedEventType",argv[i]);
             (void) SetLogEventMask(argv[i]);
@@ -632,7 +643,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
         if (LocaleCompare("define",option+1) == 0)
           {
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (*option == '+')
               {
@@ -651,7 +662,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -665,7 +676,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -676,7 +687,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -692,21 +703,21 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             break;
           }
         if (LocaleCompare("dispose",option+1) == 0)
           {
-            long
+            ssize_t
               dispose;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            dispose=ParseMagickOption(MagickDisposeOptions,MagickFalse,argv[i]);
+            dispose=ParseCommandOption(MagickDisposeOptions,MagickFalse,argv[i]);
             if (dispose < 0)
               ThrowImportException(OptionError,"UnrecognizedDisposeMethod",
                 argv[i]);
@@ -714,21 +725,32 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("dither",option+1) == 0)
           {
-            long
+            ssize_t
               method;
 
             quantize_info->dither=MagickFalse;
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            method=ParseMagickOption(MagickDitherOptions,MagickFalse,argv[i]);
+            method=ParseCommandOption(MagickDitherOptions,MagickFalse,argv[i]);
             if (method < 0)
               ThrowImportException(OptionError,"UnrecognizedDitherMethod",
                 argv[i]);
             quantize_info->dither=MagickTrue;
             quantize_info->dither_method=(DitherMethod) method;
+            break;
+          }
+        if (LocaleCompare("duration",option+1) == 0)
+          {
+            if (*option == '+')
+              break;
+            i++;
+            if (i == (ssize_t) (argc-1))
+              ThrowImportException(OptionError,"MissingArgument",option);
+            if (IsGeometry(argv[i]) == MagickFalse)
+              ThrowImportInvalidArgumentException(option,argv[i]);
             break;
           }
         ThrowImportException(OptionError,"UnrecognizedOption",option);
@@ -740,7 +762,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowImportException(OptionError,"MissingArgument",option);
             break;
           }
@@ -749,21 +771,21 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             break;
           }
         if (LocaleCompare("endian",option+1) == 0)
           {
-            long
+            ssize_t
               endian;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            endian=ParseMagickOption(MagickEndianOptions,MagickFalse,
+            endian=ParseCommandOption(MagickEndianOptions,MagickFalse,
               argv[i]);
             if (endian < 0)
               ThrowImportException(OptionError,"UnrecognizedEndianType",
@@ -776,15 +798,15 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
       {
         if (LocaleCompare("filter",option+1) == 0)
           {
-            long
+            ssize_t
               filter;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowImportException(OptionError,"MissingArgument",option);
-            filter=ParseMagickOption(MagickFilterOptions,MagickFalse,argv[i]);
+            filter=ParseCommandOption(MagickFilterOptions,MagickFalse,argv[i]);
             if (filter < 0)
               ThrowImportException(OptionError,"UnrecognizedImageFilter",
                 argv[i]);
@@ -801,7 +823,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowImportException(OptionError,"MissingArgument",option);
             break;
           }
@@ -814,7 +836,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -822,15 +844,15 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("gravity",option+1) == 0)
           {
-            long
+            ssize_t
               gravity;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            gravity=ParseMagickOption(MagickGravityOptions,MagickFalse,argv[i]);
+            gravity=ParseCommandOption(MagickGravityOptions,MagickFalse,argv[i]);
             if (gravity < 0)
               ThrowImportException(OptionError,"UnrecognizedGravityType",
                 argv[i]);
@@ -850,15 +872,15 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
           break;
         if (LocaleCompare("interlace",option+1) == 0)
           {
-            long
+            ssize_t
               interlace;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            interlace=ParseMagickOption(MagickInterlaceOptions,MagickFalse,
+            interlace=ParseCommandOption(MagickInterlaceOptions,MagickFalse,
               argv[i]);
             if (interlace < 0)
               ThrowImportException(OptionError,"UnrecognizedInterlaceType",
@@ -867,15 +889,15 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("interpolate",option+1) == 0)
           {
-            long
+            ssize_t
               interpolate;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            interpolate=ParseMagickOption(MagickInterpolateOptions,MagickFalse,
+            interpolate=ParseCommandOption(MagickInterpolateOptions,MagickFalse,
               argv[i]);
             if (interpolate < 0)
               ThrowImportException(OptionError,"UnrecognizedInterpolateMethod",
@@ -891,7 +913,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             status=SetImageOption(image_info,"label",argv[i]);
             if (status == MagickFalse)
@@ -906,51 +928,52 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             double
               value;
 
-            long
+            ssize_t
               resource;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            resource=ParseMagickOption(MagickResourceOptions,MagickFalse,
+            resource=ParseCommandOption(MagickResourceOptions,MagickFalse,
               argv[i]);
             if (resource < 0)
               ThrowImportException(OptionError,"UnrecognizedResourceType",
                 argv[i]);
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            value=strtod(argv[i],&p);
+            value=InterpretLocaleValue(argv[i],&p);
+            (void) value;
             if ((p == argv[i]) && (LocaleCompare("unlimited",argv[i]) != 0))
               ThrowImportInvalidArgumentException(option,argv[i]);
             break;
           }
         if (LocaleCompare("list",option+1) == 0)
           {
-            long
+            ssize_t
               list;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            list=ParseMagickOption(MagickListOptions,MagickFalse,argv[i]);
+            list=ParseCommandOption(MagickListOptions,MagickFalse,argv[i]);
             if (list < 0)
               ThrowImportException(OptionError,"UnrecognizedListType",argv[i]);
-            (void) MogrifyImageInfo(image_info,(int) (i-j+1),(const char **)
+            status=MogrifyImageInfo(image_info,(int) (i-j+1),(const char **)
               argv+j,exception);
             DestroyImport();
-            return(MagickTrue);
+            return(status != 0 ? MagickFalse : MagickTrue);
           }
         if (LocaleCompare("log",option+1) == 0)
           {
             if (*option == '+')
               break;
             i++;
-            if ((i == (long) argc) || (strchr(argv[i],'%') == (char *) NULL))
+            if ((i == (ssize_t) argc) || (strchr(argv[i],'%') == (char *) NULL))
               ThrowImportException(OptionError,"MissingArgument",option);
             break;
           }
@@ -983,7 +1006,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             status=SetImageOption(image_info,"page",argv[i]);
             if (status == MagickFalse)
@@ -996,11 +1019,11 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
-            resource_info.pause=(unsigned int) atoi(argv[i]);
+            resource_info.pause=(unsigned int) StringToUnsignedLong(argv[i]);
             break;
           }
         if (LocaleCompare("ping",option+1) == 0)
@@ -1010,7 +1033,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -1025,7 +1048,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -1033,15 +1056,15 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
           }
         if (LocaleCompare("quantize",option+1) == 0)
           {
-            long
+            ssize_t
               colorspace;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowImportException(OptionError,"MissingArgument",option);
-            colorspace=ParseMagickOption(MagickColorspaceOptions,
+            colorspace=ParseCommandOption(MagickColorspaceOptions,
               MagickFalse,argv[i]);
             if (colorspace < 0)
               ThrowImportException(OptionError,"UnrecognizedColorspace",
@@ -1061,7 +1084,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -1072,7 +1095,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -1086,7 +1109,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
         if (LocaleCompare("rotate",option+1) == 0)
           {
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -1101,7 +1124,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -1112,7 +1135,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -1121,12 +1144,12 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
         if (LocaleCompare("set",option+1) == 0)
           {
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             break;
           }
@@ -1140,7 +1163,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -1155,11 +1178,11 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
           {
             (void) CopyMagickString(argv[i]+1,"sans",MaxTextExtent);
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
-            snapshots=atol(argv[i]);
+            snapshots=(ssize_t) StringToLong(argv[i]);
             break;
           }
         if (LocaleCompare("strip",option+1) == 0)
@@ -1169,16 +1192,20 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             i++;  /* deprecated */
             break;
           }
+        if (LocaleCompare("synchronize",option+1) == 0)
+          break;
         ThrowImportException(OptionError,"UnrecognizedOption",option);
       }
       case 't':
       {
-        if (LocaleCompare("thumnail",option+1) == 0)
+        if (LocaleCompare("taint",option+1) == 0)
+          break;
+        if (LocaleCompare("thumbnail",option+1) == 0)
           {
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
@@ -1187,7 +1214,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
         if (LocaleCompare("transparent",option+1) == 0)
           {
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             break;
           }
@@ -1196,7 +1223,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) (argc-1))
+            if (i == (ssize_t) (argc-1))
               ThrowImportException(OptionError,"MissingArgument",option);
             break;
           }
@@ -1206,26 +1233,26 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
             if (IsGeometry(argv[i]) == MagickFalse)
               ThrowImportInvalidArgumentException(option,argv[i]);
-            quantize_info->tree_depth=(unsigned long) atol(argv[i]);
+            quantize_info->tree_depth=StringToUnsignedLong(argv[i]);
             break;
           }
         if (LocaleCompare("trim",option+1) == 0)
           break;
         if (LocaleCompare("type",option+1) == 0)
           {
-            long
+            ssize_t
               type;
 
             if (*option == '+')
               break;
             i++;
-            if (i == (long) argc)
+            if (i == (ssize_t) argc)
               ThrowImportException(OptionError,"MissingArgument",option);
-            type=ParseMagickOption(MagickTypeOptions,MagickFalse,argv[i]);
+            type=ParseCommandOption(MagickTypeOptions,MagickFalse,argv[i]);
             if (type < 0)
               ThrowImportException(OptionError,"UnrecognizedImageType",argv[i]);
             break;
@@ -1235,7 +1262,7 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
       case 'w':
       {
         i++;
-        if (i == (long) argc)
+        if (i == (ssize_t) argc)
           ThrowImportException(OptionError,"MissingArgument",option);
         (void) CloneString(&target_window,argv[i]);
         break;
@@ -1247,9 +1274,12 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
         if ((LocaleCompare("version",option+1) == 0) ||
             (LocaleCompare("-version",option+1) == 0))
           {
-            (void) fprintf(stdout,"Version: %s\n",
-              GetMagickVersion((unsigned long *) NULL));
-            (void) fprintf(stdout,"Copyright: %s\n\n",GetMagickCopyright());
+            (void) FormatLocaleFile(stdout,"Version: %s\n",
+              GetMagickVersion((size_t *) NULL));
+            (void) FormatLocaleFile(stdout,"Copyright: %s\n",
+              GetMagickCopyright());
+            (void) FormatLocaleFile(stdout,"Features: %s\n\n",
+              GetMagickFeatures());
             break;
           }
         ThrowImportException(OptionError,"UnrecognizedOption",option);
@@ -1259,14 +1289,14 @@ WandExport MagickBooleanType ImportImageCommand(ImageInfo *image_info,
       default:
         ThrowImportException(OptionError,"UnrecognizedOption",option);
     }
-    fire=ParseMagickOption(MagickImageListOptions,MagickFalse,option+1) < 0 ? 
-      MagickFalse : MagickTrue;
+    fire=(GetCommandOptionFlags(MagickCommandOptions,MagickFalse,option) &
+      FireOptionFlag) == 0 ?  MagickFalse : MagickTrue;
     if (fire != MagickFalse)
       FireImageStack(MagickFalse,MagickTrue,MagickTrue);
   }
   if (k != 0)
     ThrowImportException(OptionError,"UnbalancedParenthesis",argv[i]);
-  if (i-- != argc)
+  if (i-- != (ssize_t) argc)
     ThrowImportException(OptionError,"MissingAnImageFilename",argv[i]);
   if (image == (Image *) NULL)
     ThrowImportException(OptionError,"MissingAnImageFilename",argv[argc-1]);

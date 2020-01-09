@@ -17,7 +17,7 @@
 %                                 July 1992                                   %
 %                                                                             %
 %                                                                             %
-%  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization      %
+%  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization      %
 %  dedicated to making software imaging solutions freely available.           %
 %                                                                             %
 %  You may not use this file except in compliance with the License.  You may  %
@@ -105,11 +105,11 @@ static Image *ReadINLINEImage(const ImageInfo *image_info,
   register size_t
     i;
 
-  ssize_t
-    count;
-
   size_t
     quantum;
+
+  ssize_t
+    count;
 
   unsigned char
     *inline_image;
@@ -186,17 +186,17 @@ static Image *ReadINLINEImage(const ImageInfo *image_info,
 %
 %  The format of the RegisterINLINEImage method is:
 %
-%      unsigned long RegisterINLINEImage(void)
+%      size_t RegisterINLINEImage(void)
 %
 */
-ModuleExport unsigned long RegisterINLINEImage(void)
+ModuleExport size_t RegisterINLINEImage(void)
 {
   MagickInfo
     *entry;
 
   entry=SetMagickInfo("INLINE");
   entry->decoder=(DecodeImageHandler *) ReadINLINEImage;
-  entry->format_type=ExplicitFormatType;
+  entry->format_type=ImplicitFormatType;
   entry->description=ConstantString("Base64-encoded inline images");
   entry->module=ConstantString("INLINE");
   (void) RegisterMagickInfo(entry);

@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-#  Copyright 1999-2009 ImageMagick Studio LLC, a non-profit organization
+#  Copyright 1999-2011 ImageMagick Studio LLC, a non-profit organization
 #  dedicated to making software imaging solutions freely available.
 #
 #  You may not use this file except in compliance with the License.  You may
@@ -198,25 +198,25 @@ testReadCompare('TILE:input.miff', 'reference/read/input_tile.miff',
 
 print("CMYK format ...\n");
 ++$test;
-testReadCompare('input_70x46.cmyk', 'reference/read/input_cmyk.miff',
+testReadCompare('cmyk:input_70x46.cmyk', 'reference/read/input_cmyk.miff',
                 q/size=>"70x46", depth=>8/, 0.0, 0.0);
 
 print("GRAY format ...\n");
 ++$test;
-testReadCompare('input_70x46.gray', 'reference/read/input_gray.miff',
+testReadCompare('gray:input_70x46.gray', 'reference/read/input_gray.miff',
                 q/size=>"70x46", depth=>8/, 0.0, 0.0);
 
 print("RGB format ...\n");
 ++$test;
-testReadCompare('input_70x46.rgb', 'reference/read/input_rgb.miff',
+testReadCompare('rgb:input_70x46.rgb', 'reference/read/input_rgb.miff',
                 q/size=>"70x46", depth=>8/, 0.0, 0.0);
 
 print("RGBA format ...\n");
 ++$test;
-testReadCompare('input_70x46.rgba', 'reference/read/input_rgba.miff',
+testReadCompare('rgba:input_70x46.rgba', 'reference/read/input_rgba.miff',
                 q/size=>"70x46", depth=>8/, 0.0, 0.0);
 
 print("UYVY format ...\n");
 ++$test;
-testReadCompare('input_70x46.uyvy', 'reference/read/input_uyvy.miff',
+testReadCompare('uyvy:input_70x46.uyvy', 'reference/read/input_uyvy.miff',
                 q/size=>"70x46", depth=>8/, 0.2, 1.02);
