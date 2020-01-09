@@ -3,7 +3,7 @@
 
 Name:           ImageMagick
 Version:        %{VER}.%{Patchlevel}
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        An X application for displaying and manipulating images
 Group:          Applications/Multimedia
 License:        ImageMagick
@@ -25,6 +25,7 @@ Patch10:       ImageMagick-null-pointer-access.patch
 Patch11:       ImageMagick-pict-doublefree.patch
 Patch12:       ImageMagick-splice-crash.patch
 Patch13:       ImageMagick-gnuplot-delegate-remove.diff
+Patch14:       rhbz-1380013-annotate-fix.patch
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires:  bzip2-devel, freetype-devel, libjpeg-devel, libpng-devel
@@ -144,6 +145,7 @@ however.
 %patch11 -p1 -b .pict-doublefree
 %patch12 -p1 -b .splice-crash
 %patch13 -p1 -b .gnuplot-delegate-remove
+%patch14 -p1 -b .1380013-annotate-fix
 
 
 sed -i 's/libltdl.la/libltdl.so/g' configure
@@ -311,6 +313,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Jan 11 2017 Jan Horak <jhorak@redhat.com> - 6.7.2.7-6
+- Add fix for rhbz#1380013
+
 * Thu May  5 2016 Jan Horak <jhorak@redhat.com> - 6.7.2.7-5
 - Add fix for CVE-2016-3714, CVE-2016-3715, CVE-2016-3716 and CVE-2016-3717
 
