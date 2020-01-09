@@ -3,7 +3,7 @@
 
 Name:           ImageMagick
 Version:        %{VER}.%{Patchlevel}
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        An X application for displaying and manipulating images
 Group:          Applications/Multimedia
 License:        ImageMagick
@@ -15,9 +15,16 @@ Patch1:         ImageMagick-6.4.0-multilib.patch
 # CVE-2012-0247 CVE-2012-0248 CVE-2012-1185 CVE-2012-1186
 Patch3: ImageMagick-6.7.2-cve-2012-0247-0248.patch
 # CVE-2012-0259 CVE-2012-0260 CVE-2012-1798
-Patch4: ImageMagick-6.7.2-cve-2012-0259-0260.patch
-Patch5: ImageMagick-6.7.2-7-multiarch-fix.patch
-Patch6: ImageMagick-cve-2016-3717.patch
+Patch4:        ImageMagick-6.7.2-cve-2012-0259-0260.patch
+Patch5:        ImageMagick-6.7.2-7-multiarch-fix.patch
+Patch6:        ImageMagick-cve-2016-3717.patch
+Patch7:        ImageMagick-cve-2016-5118.patch
+Patch8:        ImageMagick-cve-2016-5240.patch
+Patch9:        ImageMagick-icon-mem.patch
+Patch10:       ImageMagick-null-pointer-access.patch
+Patch11:       ImageMagick-pict-doublefree.patch
+Patch12:       ImageMagick-splice-crash.patch
+Patch13:       ImageMagick-gnuplot-delegate-remove.diff
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires:  bzip2-devel, freetype-devel, libjpeg-devel, libpng-devel
@@ -130,6 +137,15 @@ however.
 %patch4 -p1 -b .cve-2012-0259-0260
 %patch5 -p1 -b .multiarch-fix
 %patch6 -p1 -b .cve-2016-3717
+%patch7 -p1 -b .cve-2016-5118
+%patch8 -p1 -b .cve-2016-5240
+%patch9 -p1 -b .icon-mem
+%patch10 -p1 -b .null-pointer-access
+%patch11 -p1 -b .pict-doublefree
+%patch12 -p1 -b .splice-crash
+%patch13 -p1 -b .gnuplot-delegate-remove
+
+
 sed -i 's/libltdl.la/libltdl.so/g' configure
 iconv -f ISO-8859-1 -t UTF-8 README.txt > README.txt.tmp
 touch -r README.txt README.txt.tmp
@@ -295,7 +311,7 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Thu May  5 2016 Jan Horak <jhorak@redhat.com> - 6.7.2.7-4
+* Thu May  5 2016 Jan Horak <jhorak@redhat.com> - 6.7.2.7-5
 - Add fix for CVE-2016-3714, CVE-2016-3715, CVE-2016-3716 and CVE-2016-3717
 
 * Thu Feb 19 2015 Jan Horak <jhorak@redhat.com> - 6.7.2.7-2
